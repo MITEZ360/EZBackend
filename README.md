@@ -169,7 +169,7 @@ make help       # 查看全部目标
 | [docs/api.md](docs/api.md) | 统一响应、错误码、分页/过滤/排序约定、接口清单 |
 | [docs/microservices.md](docs/microservices.md) | 三种形态、服务发现、网关、服务间调用 |
 | [docs/deploy.md](docs/deploy.md) | 二进制/Docker/Compose/K8s 部署、可观测、备份、扩容 |
-| [docs/development.md](docs/development.md) | 新增业务模块的完整步骤（含权限点与前端页面） |
+| [docs/development.md](docs/development.md) | 新增业务模块的完整步骤、分支模型与提交规范 |
 
 ---
 

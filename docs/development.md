@@ -526,3 +526,84 @@ make test
 - [ ] 前端按钮用 `can()` 控制，后端仍然校验
 - [ ] 至少一个有权限用例 + 一个无权限用例
 - [ ] `gofmt`、`go vet` 干净
+
+---
+
+## 10. 分支模型与提交规范
+
+### 10.1 分支约定
+
+`main` 是唯一长期分支，存放**基础框架与核心功能**，任何提交都必须处于可编译、
+可启动、冒烟测试通过的状态。业务开发不在 `main` 上直接进行，而是从 `main`
+切出短生命周期的功能分支，完成后再合回。
+
+| 分支 | 用途 | 命名示例 |
+| --- | --- | --- |
+| `main` | 基础与核心功能基线，可随时发布 | `main` |
+| `feature/*` | 新模块、新页面、新能力 | `feature/customer-module` |
+| `fix/*` | 非紧急缺陷修复 | `fix/user-export-filter` |
+| `hotfix/*` | 生产问题紧急修复，从 `main` 切出 | `hotfix/login-lockout` |
+| `chore/*` | 依赖升级、构建脚本、文档调整 | `chore/upgrade-gorm` |
+
+命名统一小写中划线，`feature` 后跟模块名，必要时再加简述：
+`feature/message-batch-delete`。
+
+### 10.2 日常工作流
+
+```bash
+git switch main
+git pull --ff-only                 # 有远端时；本地仓库可跳过
+git switch -c feature/customer-module
+
+# ... 开发、自测 ...
+make test && make build
+git add -A
+git commit -m "feat(customer): 新增客户档案模块"
+
+# 合回 main，保留分支拓扑便于回溯
+git switch main
+git merge --no-ff feature/customer-module
+git branch -d feature/customer-module
+```
+
+合并前先同步 `main`，避免历史分叉过深：
+
+```bash
+git switch feature/customer-module
+git rebase main                    # 或 git merge main
+```
+
+### 10.3 提交信息
+
+采用 Conventional Commits，`type` 固定下列取值，`scope` 用模块或目录名：
+
+```
+feat(user): 新增批量导入与失败明细
+fix(auth): 修正刷新令牌并发续期产生的重复会话
+refactor(query): 抽取过滤参数白名单
+perf(cache): 字典加载改为一次性管道
+docs(api): 补充消息中心接口
+chore(deps): 升级 gorm 至 1.25.6
+```
+
+- 标题不超过 50 字，祈使句，不加句号
+- 正文说明**为什么改**与影响面，不重复代码里已能看出的内容
+- 一个提交只做一件事；格式化与逻辑改动分开提交
+
+### 10.4 版本标签
+
+发布在 `main` 上打 annotated tag，版本号遵循 `vMAJOR.MINOR.PATCH`：
+
+```bash
+git tag -a v1.1.0 -m "新增客户模块与消息批量操作"
+git push origin main --tags
+```
+
+`Makefile` 会把 `git rev-parse --short HEAD` 写入二进制的 `version.Commit`，
+构建产物与提交一一对应。
+
+### 10.5 保护建议
+
+推送到远端后，对 `main` 开启分支保护：禁止直接推送、要求线性历史与
+必要的检查（`make test`、`make build`）通过后再合并。本地仓库可跳过本节。
+
