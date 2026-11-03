@@ -285,6 +285,28 @@ engine = router.New(router.Deps{
 
 service 形态下想启用该模块，配置 `micro.modules` 里加上 `customer` 即可。
 
+### 5.1 接入一个新的外部依赖
+
+框架里所有中间件都遵循"未配置不创建、配置了自动激活"，新增依赖时保持同一模式：
+
+1. 配置项放在 `internal/platform/config`，关键字段留空即代表未配置；
+   需要三态时用 `*bool`（nil = 自动判断）。
+2. 在 `internal/platform/<name>` 提供接口与构造函数，构造函数返回 `(nil, nil)`
+   表示未启用；连接失败默认返回错误，不要静默降级。
+3. 在 `bootstrap.New` 里装配，并在 `logRuntime()` 中补充一行实现名，
+   让"实际连的是什么"出现在启动日志里。
+4. 如果是多实例下不能共享的本地实现，在 `checkStateless()` 里登记一条检查项。
+5. 健康检查：实现 `Health(ctx)`，并在 `router.healthRoutes` 的 `/healthz` 与
+   `/readyz` 中调用。
+
+```go
+// 示例：新增消息队列
+mq, err := mqclient.New(cfg.MQ, lg) // 未配置时返回 nil
+if err != nil {
+	return nil, err
+}
+```
+
 ---
 
 ## 6. 菜单与权限点

@@ -44,7 +44,7 @@ func (s *Service) System(ctx context.Context) map[string]any {
 	var version string
 	_ = s.db.WithContext(ctx).Raw("SELECT sqlite_version()").Scan(&version).Error
 	if version == "" {
-		version = s.cfg.DB.Driver
+		version = s.cfg.DB.ResolveDriver()
 	}
 	return map[string]any{
 		"app": map[string]any{
@@ -63,9 +63,11 @@ func (s *Service) System(ctx context.Context) map[string]any {
 			"heapMB":     float64(m.HeapAlloc) / 1024 / 1024,
 			"gcCount":    m.NumGC,
 		},
-		"database": map[string]any{"driver": s.cfg.DB.Driver, "version": version, "pool": sqlStats},
-		"cache":    map[string]any{"kind": s.cache.Kind()},
-		"http":     map[string]any{"routes": len(s.routes()), "port": s.cfg.Server.Port},
+		"database":  map[string]any{"driver": s.cfg.DB.ResolveDriver(), "version": version, "pool": sqlStats},
+		"cache":     map[string]any{"kind": s.cache.Kind()},
+		"ratelimit": map[string]any{"kind": s.cfg.CacheKindHint()},
+		"storage":   map[string]any{"kind": s.cfg.Storage.Kind()},
+		"http":      map[string]any{"routes": len(s.routes()), "port": s.cfg.Server.Port},
 	}
 }
 

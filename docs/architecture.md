@@ -116,12 +116,24 @@ key = authz:user:<uid>:v<authz:version>   ttl = 5min
 
 | 实现 | 触发条件 | 特点 |
 | --- | --- | --- |
-| `redisCache` | `redis.enabled: true` | 多实例共享，分布式锁用 `SET NX` + Lua 释放 |
-| `localCache` | 默认 | 进程内 LRU（10 万条）+ 惰性过期，零依赖 |
+| `redisCache` | `redis.addr` 非空（或 `enabled: true`） | 多实例共享，分布式锁用 `SET NX` + Lua 释放 |
+| `localCache` | `addr` 为空且未强制启用 | 进程内 LRU（10 万条）+ 惰性过期，零依赖 |
 
 上层不关心实现差异：`GetJSON/SetJSON/Remember/Lock` 对两者行为一致。
-**注意**：多实例部署（K8s 多副本、微服务拆分）必须启用 Redis，否则会话/权限/字典缓存不共享，
-表现为"有时登录状态丢失"。
+配置了地址却连不上时启动直接失败（`redis.optional: true` 才降级），避免"以为共享、
+其实各存各的"。
+
+限流与定时任务复用同一份缓存判断，不再单独配置：
+
+| 能力 | local | redis |
+| --- | --- | --- |
+| 限流 | `x/time/rate` 进程内令牌桶 | Lua 原子令牌桶，多实例共享配额 |
+| 定时任务 | 进程内互斥 + `running` 表 | `SET NX` 分布式锁，多实例只执行一份 |
+| 验证码 / 登录失败计数 | 本实例有效 | 全实例共享 |
+
+**注意**：多实例部署（K8s 多副本、微服务拆分）必须启用 Redis，否则验证码、登录失败
+计数、权限缓存、限流配额、任务锁都不共享，表现为"有时登录状态丢失""验证码总提示
+已过期""任务被执行 N 次"。
 
 典型缓存键：
 
@@ -252,3 +264,49 @@ SSR 只会把 Node 重新塞回运行时。
 | `service` | 全部基础设施，仅暴露 `micro.modules` 指定的模块 | 拆分热点模块独立扩容 |
 
 三者共用同一套中间件、错误模型与前端，业务代码零改动。详见 [microservices.md](microservices.md)。
+
+---
+
+## 12. 依赖装配与无状态
+
+### 装配顺序
+
+```
+配置加载 → 日志 → 数据库（迁移/种子）→ 缓存 → 限流器 → 文件存储 → 邮件
+        → 事件总线 → 业务服务 → 路由 → 无状态校验 → 启动
+```
+
+每个组件只在自己被配置时创建实例：未配 `mail.host` 就没有 Mailer，未配 `redis.addr`
+就用进程内缓存。装配结果写入启动日志：
+
+```json
+{"msg":"依赖组件已装配","mode":"mono","instance":"keel-1","db":"sqlite",
+ "cache":"local","ratelimit":"local","storage":"local","mailer":"disabled"}
+```
+
+`/healthz` 返回 `database` / `cache` / `storage` 的实时状态，`/readyz` 在任一依赖不可用时
+返回 503，可直接作为 K8s readiness 探针。
+
+### 无状态判定
+
+多实例形态下（`runtime.instances > 1` 或 `micro.mode=service`），启动时检查仍留在单机上的状态：
+
+| 检查项 | 影响 | 解决 |
+| --- | --- | --- |
+| `cache=local` | 验证码、失败计数、限流、任务锁不共享 | 配置 `redis.addr` |
+| `ratelimit=local` | 每个实例各放行一份配额 | 同上 |
+| `storage=local` | 其它实例读不到上传文件 | 配置 `storage.s3` |
+| `db=sqlite` | 多实例并发写锁库 | 换 MySQL / PostgreSQL |
+
+`runtime.stateless=auto` 仅打印 Warn，`strict` 直接拒绝启动（适合部署流水线做门禁），
+`off` 跳过检查。单实例 `mono` 不触发，保持零依赖开箱即用。
+
+### 无状态的前提
+
+- 会话与令牌状态在数据库（`sys_session`），任何实例都能校验；JWT 本身自包含。
+- 进程内只保存可丢失的派生数据（权限缓存、字典缓存），且都有 TTL 或版本号失效。
+- 定时任务通过 Redis 锁抢占，实例数量变化不影响执行次数。
+- 上传文件写对象存储，下载走 API（带权限校验），不依赖本地路径。
+
+> `db.auto_migrate` 在多实例下会并发执行。生产建议关闭它，在发布流程中用单独一步
+> 执行迁移，再滚动更新实例。

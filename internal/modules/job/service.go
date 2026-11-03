@@ -13,10 +13,11 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/keel-framework/keel/internal/model"
+	"github.com/keel-framework/keel/internal/platform/cache"
 	"github.com/keel-framework/keel/internal/platform/idgen"
 	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/utils"
 	"github.com/keel-framework/keel/pkg/query"
+	"github.com/keel-framework/keel/pkg/utils"
 )
 
 // HandlerFunc 任务处理函数，返回执行摘要。
@@ -25,6 +26,7 @@ type HandlerFunc func(ctx context.Context, params map[string]any) (string, error
 // Service 调度服务。
 type Service struct {
 	db       *gorm.DB
+	cache    cache.Cache
 	log      *zap.Logger
 	cron     *cron.Cron
 	mu       sync.Mutex
@@ -43,12 +45,13 @@ type Cleaner interface {
 }
 
 // NewService 创建调度服务。
-func NewService(db *gorm.DB, log *zap.Logger) *Service {
+// c 为缓存实现：启用 Redis 时任务通过分布式锁抢占，多实例只会执行一份。
+func NewService(db *gorm.DB, c cache.Cache, log *zap.Logger) *Service {
 	if log == nil {
 		log = zap.NewNop()
 	}
 	s := &Service{
-		db: db, log: log,
+		db: db, cache: c, log: log,
 		cron:     cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DiscardLogger))),
 		entries:  map[string]cron.EntryID{},
 		running:  map[string]bool{},
@@ -317,6 +320,18 @@ func (s *Service) RunNow(ctx context.Context, id string) (*model.JobLog, error) 
 }
 
 func (s *Service) execute(j *model.Job, manual bool) *model.JobLog {
+	// 跨实例互斥：抢不到锁说明别的实例正在跑同一个任务。
+	// 锁 TTL 覆盖单次执行上限（10 分钟）并留出余量，实例宕机后自动释放。
+	if s.cache != nil {
+		release, ok := cache.Lock(context.Background(), s.cache, "job:run:"+j.ID, 30*time.Minute)
+		if !ok {
+			s.log.Info("任务已在其它实例执行，本次跳过", zap.String("job", j.Name))
+			return &model.JobLog{ID: idgen.Next(), JobID: j.ID, JobName: j.Name, Status: 0,
+				Output: "任务已在其它实例执行中，本次跳过", StartedAt: time.Now()}
+		}
+		defer release()
+	}
+
 	s.mu.Lock()
 	if s.running[j.ID] {
 		s.mu.Unlock()

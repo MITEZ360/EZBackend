@@ -147,14 +147,39 @@ readinessProbe: { httpGet: { path: /readyz,  port: http }, periodSeconds: 10 }
 ```
 
 - `startupProbe` 给慢启动留 60s（首次建表 + 种子数据）。
-- `readinessProbe` 只看数据库连通，数据库抖动时不立刻重启 Pod，而是摘掉流量。
+- `readinessProbe` 依次检查数据库、缓存、文件存储，任一不可用即摘流量。
 
-**多副本注意**：
+**多副本注意**（`runtime.stateless=strict` 会在启动时直接拦截这些问题）：
 
-1. 必须启用 Redis（`KEEL_REDIS_ENABLED=true`），否则会话/权限缓存不共享。
-2. `storage.local_dir` 需要共享存储（RWX PVC / NFS），或改用对象存储。
-3. 定时任务需单实例运行：给 `job` 模块单独部署一个 `replicas: 1` 的服务，
-   或在其它副本上用 `KEEL_MICRO_MODULES` 排除 `job`。
+1. 配置 `KEEL_REDIS_ADDR=redis:6379` 即自动启用 Redis，验证码、登录失败计数、
+   权限缓存、限流配额、任务锁全部共享；无需再设 `KEEL_REDIS_ENABLED`。
+2. 文件改用对象存储（`KEEL_STORAGE_TYPE=auto` + `KEEL_STORAGE_S3_*`）。
+   继续用 `storage.local_dir` 必须挂 RWX 共享卷（NFS / CephFS / 阿里云 NAS），
+   且只适合小规模；`emptyDir` 会导致文件随机 404。
+3. SQLite 不适合多副本：并发写会锁库，改用 MySQL / PostgreSQL，并把
+   `KEEL_DB_AUTO_MIGRATE=false`，迁移放到发布流程的独立 Job 里执行一次。
+4. 定时任务已用 Redis 分布式锁抢占，多副本只会执行一份，不必再单独部署 `job` 服务。
+   若完全不用定时任务，可用 `KEEL_MICRO_MODULES` 排除。
+
+最小多副本配置：
+
+```yaml
+env:
+  - name: KEEL_DB_DSN
+    value: "keel:pass@tcp(mysql:3306)/keel?charset=utf8mb4&parseTime=True"
+  - name: KEEL_DB_AUTO_MIGRATE
+    value: "false"
+  - name: KEEL_REDIS_ADDR
+    value: "redis:6379"
+  - name: KEEL_STORAGE_S3_ENDPOINT
+    value: "minio:9000"
+  - name: KEEL_STORAGE_S3_BUCKET
+    value: "keel"
+  - name: KEEL_RUNTIME_INSTANCES
+    value: "3"
+  - name: KEEL_RUNTIME_STATELESS
+    value: "strict"
+```
 
 ---
 
@@ -277,11 +302,11 @@ mysqldump --single-transaction --quick keel | gzip > /backup/keel-$(date +%F).sq
 
 | 场景 | 措施 |
 | --- | --- |
-| QPS 上不去 | 换 MySQL/PostgreSQL；开启 Redis；增加副本（无状态） |
+| QPS 上不去 | 换 MySQL/PostgreSQL；配置 `redis.addr`；增加副本（无状态） |
 | 列表接口慢 | 确认 `slow_threshold` 日志，给过滤列加索引，避免深分页（改用游标） |
 | 登录慢 | bcrypt cost 固定为 10，属预期；高并发下可前置验证码或提高 Redis 命中率 |
 | 内存增长 | 检查本地缓存 `redis.local_size`，必要时启用 Redis 卸载 |
-| 上传慢 | `server.write_timeout` 调大；`storage.local_dir` 放大容量或换对象存储 |
+| 上传慢 | `server.write_timeout` 调大；换对象存储（多副本必须） |
 
 GOMEMLIMIT（Go 1.19+）可按容器限额设置，例如容器 512Mi：
 

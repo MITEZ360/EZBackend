@@ -34,13 +34,26 @@ type Cache interface {
 }
 
 // New 依据配置创建缓存实例。
+//
+// 启用规则：显式 enabled 优先，未配置时 addr 非空即启用。
+// 连接失败默认直接返回错误（配置了却连不上，静默降级会让多实例状态分裂）；
+// 只有 optional: true 时才退回进程内缓存。
 func New(cfg config.Redis, log *zap.Logger) (Cache, error) {
 	if log == nil {
 		log = zap.NewNop()
 	}
-	if cfg.Enabled {
+	size := cfg.LocalSize
+	if size <= 0 {
+		size = 100000
+	}
+	if !cfg.UseRedis() {
+		log.Info("缓存使用进程内 LRU（未配置 Redis）", zap.Int("capacity", size))
+		return newLocal(size), nil
+	}
+	{
+		addr := cfg.EffectiveAddr()
 		rdb := redis.NewClient(&redis.Options{
-			Addr:         cfg.Addr,
+			Addr:         addr,
 			Username:     cfg.Username,
 			Password:     cfg.Password,
 			DB:           cfg.DB,
@@ -49,20 +62,20 @@ func New(cfg config.Redis, log *zap.Logger) (Cache, error) {
 			ReadTimeout:  orDefaultDuration(cfg.ReadTimeout, 3*time.Second),
 			WriteTimeout: orDefaultDuration(cfg.ReadTimeout, 3*time.Second),
 		})
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), orDefaultDuration(cfg.DialTimeout, 3*time.Second))
 		defer cancel()
 		if err := rdb.Ping(ctx).Err(); err != nil {
-			return nil, fmt.Errorf("连接 Redis 失败: %w", err)
+			_ = rdb.Close()
+			if cfg.Optional {
+				log.Warn("Redis 连接失败，按 optional 配置降级为进程内缓存",
+					zap.String("addr", addr), zap.Error(err))
+				return newLocal(size), nil
+			}
+			return nil, fmt.Errorf("连接 Redis 失败（%s）: %w", addr, err)
 		}
-		log.Info("缓存已启用 Redis", zap.String("addr", cfg.Addr), zap.Int("db", cfg.DB))
+		log.Info("缓存已启用 Redis", zap.String("addr", addr), zap.Int("db", cfg.DB), zap.String("prefix", cfg.Prefix))
 		return &redisCache{rdb: rdb, prefix: cfg.Prefix}, nil
 	}
-	size := cfg.LocalSize
-	if size <= 0 {
-		size = 100000
-	}
-	log.Info("缓存使用进程内 LRU（未启用 Redis）", zap.Int("capacity", size))
-	return newLocal(size), nil
 }
 
 func atLeast(v, min int) int {
@@ -77,6 +90,15 @@ func orDefaultDuration(v, def time.Duration) time.Duration {
 		return def
 	}
 	return v
+}
+
+// RedisClient 返回底层 Redis 客户端；当前为进程内缓存时返回 false。
+// 限流、分布式锁等组件复用同一个连接池，避免重复建连。
+func RedisClient(c Cache) (*redis.Client, bool) {
+	if rc, ok := c.(*redisCache); ok {
+		return rc.rdb, true
+	}
+	return nil, false
 }
 
 // ---- Redis 实现 ----

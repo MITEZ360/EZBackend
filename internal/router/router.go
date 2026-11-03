@@ -36,6 +36,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/cache"
 	"github.com/keel-framework/keel/internal/platform/config"
 	"github.com/keel-framework/keel/internal/platform/database"
+	"github.com/keel-framework/keel/internal/platform/storage"
 	"github.com/keel-framework/keel/pkg/errs"
 	"github.com/keel-framework/keel/pkg/event"
 	"github.com/keel-framework/keel/pkg/response"
@@ -48,6 +49,8 @@ type Deps struct {
 	Log      *zap.Logger
 	DB       *gorm.DB
 	Cache    cache.Cache
+	Limiter  cache.Limiter
+	Storage  *storage.Manager
 	JWT      *authn.Manager
 	Authz    *authz.Loader
 	AuditSvc *audit.Service
@@ -118,12 +121,23 @@ func New(d Deps) *gin.Engine {
 		JWT: d.JWT, Authz: d.Authz, Sessions: sessionValidator{d.Auth},
 	})
 
-	// ---- 公开接口 ----
-	v1 := e.Group("/api/v1")
-	d.publicRoutes(v1)
+	// 限流实现由缓存决定：Redis 缓存对应跨实例共享配额，否则进程内令牌桶。
+	limiter := d.Limiter
+	if limiter == nil {
+		limiter = cache.NewLimiter(d.Cache, d.Cfg.RateLimit.RPS, d.Cfg.RateLimit.Burst)
+	}
 
-	// ---- 登录后接口 ----
-	authed := v1.Group("", authMW, middleware.Audit(d.AuditSvc, d.Events))
+	// ---- 公开接口：按 IP 限流，避免登录爆破把服务打满 ----
+	v1 := e.Group("/api/v1")
+	publicLimit := d.Cfg.RateLimit
+	publicLimit.ByUser = false
+	public := v1.Group("", middleware.RateLimit(publicLimit, limiter, d.Cfg.Server.TrustProxy))
+	d.publicRoutes(public)
+
+	// ---- 登录后接口：认证之后按用户维度限流 ----
+	authed := v1.Group("", authMW,
+		middleware.RateLimit(d.Cfg.RateLimit, limiter, d.Cfg.Server.TrustProxy),
+		middleware.Audit(d.AuditSvc, d.Events))
 	d.authRoutes(authed)
 	if d.on("dashboard") {
 		d.dashboardRoutes(authed)
@@ -211,6 +225,14 @@ func (d Deps) healthRoutes(e *gin.Engine) {
 		} else {
 			checks["cache"] = "up"
 		}
+		if d.Storage == nil {
+			checks["storage"] = "disabled"
+		} else if err := d.Storage.Health(ctx); err != nil {
+			checks["storage"] = "down: " + err.Error()
+			status = http.StatusServiceUnavailable
+		} else {
+			checks["storage"] = "up"
+		}
 		if d.Gateway != nil {
 			checks["mode"] = "gateway"
 		}
@@ -218,9 +240,22 @@ func (d Deps) healthRoutes(e *gin.Engine) {
 			"version": d.Cfg.App.Version, "checks": checks, "time": time.Now().Format(time.RFC3339)})
 	})
 	e.GET("/readyz", func(c *gin.Context) {
+		ctx := c.Request.Context()
 		if d.DB != nil {
-			if err := database.Health(c.Request.Context(), d.DB); err != nil {
-				c.JSON(http.StatusServiceUnavailable, gin.H{"ready": false, "error": err.Error()})
+			if err := database.Health(ctx, d.DB); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"ready": false, "error": "database: " + err.Error()})
+				return
+			}
+		}
+		if d.Cache != nil {
+			if _, err := d.Cache.Exists(ctx, "__ping__"); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"ready": false, "error": "cache: " + err.Error()})
+				return
+			}
+		}
+		if d.Storage != nil {
+			if err := d.Storage.Health(ctx); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"ready": false, "error": "storage: " + err.Error()})
 				return
 			}
 		}

@@ -29,6 +29,7 @@ type Config struct {
 	RateLimit RateLimit `mapstructure:"rate_limit"`
 	Metrics   Metrics   `mapstructure:"metrics"`
 	Micro     Micro     `mapstructure:"micro"`
+	Runtime   Runtime   `mapstructure:"runtime"`
 }
 
 // App 应用基础信息。
@@ -84,9 +85,33 @@ type DB struct {
 	Seed            bool          `mapstructure:"seed"`
 }
 
+// ResolveDriver 解析实际使用的数据库驱动：driver 留空时按 DSN 推断。
+// 这样只改一条 DSN 就能从 SQLite 切到 MySQL / PostgreSQL。
+func (d DB) ResolveDriver() string {
+	if driver := strings.ToLower(strings.TrimSpace(d.Driver)); driver != "" {
+		return driver
+	}
+	dsn := strings.ToLower(strings.TrimSpace(d.DSN))
+	switch {
+	case strings.HasPrefix(dsn, "mysql://"), strings.HasPrefix(dsn, "mysql:"),
+		strings.Contains(dsn, "@tcp("), strings.Contains(dsn, "@unix("):
+		return "mysql"
+	case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"),
+		strings.HasPrefix(dsn, "postgres:"):
+		return "postgres"
+	case strings.Contains(dsn, "host=") && strings.Contains(dsn, "dbname="):
+		return "postgres"
+	default:
+		return "sqlite"
+	}
+}
+
 // Redis 缓存参数。
+//
+// Enabled 为三态指针：nil 表示自动判断——Addr 非空即启用；
+// 显式 false 可强制使用进程内缓存，true 可在 Addr 留空时使用默认地址。
 type Redis struct {
-	Enabled     bool          `mapstructure:"enabled"`
+	Enabled     *bool         `mapstructure:"enabled"`
 	Addr        string        `mapstructure:"addr"`
 	Username    string        `mapstructure:"username"`
 	Password    string        `mapstructure:"password"`
@@ -96,6 +121,25 @@ type Redis struct {
 	DialTimeout time.Duration `mapstructure:"dial_timeout"`
 	ReadTimeout time.Duration `mapstructure:"read_timeout"`
 	LocalSize   int           `mapstructure:"local_size"` // 未启用 Redis 时的本地缓存容量
+	// Optional 为 true 时，Redis 连接失败会降级为进程内缓存；默认 false，
+	// 配置了就用不上不如直接启动失败，避免多实例状态悄悄分裂。
+	Optional bool `mapstructure:"optional"`
+}
+
+// UseRedis 判断是否启用 Redis：未显式配置时由 addr 是否为空决定。
+func (r Redis) UseRedis() bool {
+	if r.Enabled != nil {
+		return *r.Enabled
+	}
+	return strings.TrimSpace(r.Addr) != ""
+}
+
+// EffectiveAddr 返回实际使用的地址，启用但未填地址时回落本地默认端口。
+func (r Redis) EffectiveAddr() string {
+	if addr := strings.TrimSpace(r.Addr); addr != "" {
+		return addr
+	}
+	return "127.0.0.1:6379"
 }
 
 // JWT 令牌参数。
@@ -119,13 +163,31 @@ type Security struct {
 }
 
 // Storage 文件存储参数。
+//
+// Type 支持 auto / local / s3：auto 时根据 s3.bucket 是否配置自动选择，
+// 未配置对象存储就落到本地磁盘，零依赖也能跑。
 type Storage struct {
-	Type     string   `mapstructure:"type"` // local / s3
+	Type     string   `mapstructure:"type"`
 	LocalDir string   `mapstructure:"local_dir"`
 	BaseURL  string   `mapstructure:"base_url"`
 	MaxSize  int64    `mapstructure:"max_size"`
 	AllowExt []string `mapstructure:"allow_ext"`
 	S3       S3       `mapstructure:"s3"`
+}
+
+// Kind 解析最终生效的存储类型。
+func (s Storage) Kind() string {
+	switch strings.ToLower(strings.TrimSpace(s.Type)) {
+	case "", "auto":
+		if strings.TrimSpace(s.S3.Bucket) != "" && strings.TrimSpace(s.S3.Endpoint) != "" {
+			return "s3"
+		}
+		return "local"
+	case "s3", "oss", "minio", "cos":
+		return "s3"
+	default:
+		return strings.ToLower(strings.TrimSpace(s.Type))
+	}
 }
 
 // S3 兼容对象存储参数（MinIO、阿里云 OSS、AWS S3）。
@@ -140,14 +202,65 @@ type S3 struct {
 }
 
 // Mail 邮件通知参数。
+//
+// Enabled 同样是三态：nil 表示 host 非空即启用，显式 false 关闭。
 type Mail struct {
-	Enabled  bool   `mapstructure:"enabled"`
+	Enabled  *bool  `mapstructure:"enabled"`
 	Host     string `mapstructure:"host"`
 	Port     int    `mapstructure:"port"`
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 	From     string `mapstructure:"from"`
 	TLS      bool   `mapstructure:"tls"`
+}
+
+// UseSMTP 判断是否启用邮件：必须有 host，显式关闭时一律不启用。
+func (m Mail) UseSMTP() bool {
+	if strings.TrimSpace(m.Host) == "" {
+		return false
+	}
+	if m.Enabled != nil {
+		return *m.Enabled
+	}
+	return true
+}
+
+// Runtime 运行期行为参数。
+type Runtime struct {
+	// Stateless 无状态校验策略：auto 仅告警、strict 阻断启动、off 不检查。
+	Stateless string `mapstructure:"stateless"`
+	// Instances 计划运行的实例数，大于 1 时 auto 策略会启用无状态校验。
+	Instances int `mapstructure:"instances"`
+	// InstanceID 实例标识，留空时自动生成，用于日志与只跑一份的任务。
+	InstanceID string `mapstructure:"instance_id"`
+}
+
+// CacheKindHint 返回将使用的缓存实现，用于启动日志与无状态自检。
+func (c *Config) CacheKindHint() string {
+	if c.Redis.UseRedis() {
+		return "redis"
+	}
+	return "local"
+}
+
+// StatelessMode 归一化无状态校验策略。
+func (c *Config) StatelessMode() string {
+	switch strings.ToLower(strings.TrimSpace(c.Runtime.Stateless)) {
+	case "strict":
+		return "strict"
+	case "off":
+		return "off"
+	default:
+		return "auto"
+	}
+}
+
+// MultiInstance 判断是否按多实例部署运行：显式实例数优先，其次看微服务形态。
+func (c *Config) MultiInstance() bool {
+	if c.Runtime.Instances > 1 {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(c.Micro.Mode), "service")
 }
 
 // CORS 跨域参数。
@@ -238,7 +351,18 @@ func Load(path string) (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 	// 切片类型字段在配置文件中缺省时需要显式绑定，环境变量才会参与 Unmarshal
-	for _, key := range []string{"micro.modules", "micro.registry.endpoints", "storage.allow_ext", "cors.allow_origins"} {
+	for _, key := range []string{
+		"micro.modules", "micro.registry.endpoints", "storage.allow_ext", "cors.allow_origins",
+		// 敏感项与部署相关项显式绑定环境变量，容器里无需改配置文件
+		"db.driver", "db.dsn",
+		"redis.addr", "redis.password", "redis.username",
+		"storage.type", "storage.local_dir", "storage.base_url",
+		"storage.s3.endpoint", "storage.s3.region", "storage.s3.bucket",
+		"storage.s3.access_key", "storage.s3.secret_key", "storage.s3.public_url", "storage.s3.use_ssl",
+		"mail.host", "mail.username", "mail.password", "mail.from",
+		"runtime.stateless", "runtime.instance_id", "runtime.instances",
+		"db.auto_migrate", "db.seed", "security.captcha_enabled", "rate_limit.enabled",
+	} {
 		_ = v.BindEnv(key)
 	}
 
@@ -347,8 +471,22 @@ func (c *Config) Validate() error {
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("server.port 非法: %d", c.Server.Port)
 	}
-	if c.DB.Driver != "" && c.DB.Driver != "sqlite" && c.DB.Driver != "mysql" && c.DB.Driver != "postgres" {
-		return fmt.Errorf("不支持的数据库驱动: %s", c.DB.Driver)
+	switch c.DB.ResolveDriver() {
+	case "sqlite", "mysql", "postgres":
+	default:
+		return fmt.Errorf("不支持的数据库驱动: %s（可选 sqlite / mysql / postgres）", c.DB.Driver)
+	}
+	switch c.Storage.Kind() {
+	case "local", "s3":
+	default:
+		return fmt.Errorf("不支持的存储类型: %s（可选 auto / local / s3）", c.Storage.Type)
+	}
+	if mode := strings.ToLower(strings.TrimSpace(c.Runtime.Stateless)); mode != "" &&
+		mode != "auto" && mode != "strict" && mode != "off" {
+		return fmt.Errorf("runtime.stateless 非法: %s（可选 auto / strict / off）", c.Runtime.Stateless)
+	}
+	if c.Mail.Enabled != nil && *c.Mail.Enabled && strings.TrimSpace(c.Mail.Host) == "" {
+		return fmt.Errorf("mail.enabled 为 true 但 mail.host 为空")
 	}
 	if c.App.Env == "prod" {
 		if len(c.JWT.Secret) < 32 {
@@ -402,7 +540,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.console", true)
 	v.SetDefault("log.caller", true)
 
-	v.SetDefault("db.driver", "sqlite")
+	// driver 留空表示按 dsn 自动推断，单机默认落到 SQLite
+	v.SetDefault("db.driver", "")
 	v.SetDefault("db.dsn", "data/keel.db")
 	v.SetDefault("db.max_open_conns", 50)
 	v.SetDefault("db.max_idle_conns", 10)
@@ -413,8 +552,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("db.auto_migrate", true)
 	v.SetDefault("db.seed", true)
 
-	v.SetDefault("redis.enabled", false)
-	v.SetDefault("redis.addr", "127.0.0.1:6379")
+	// addr 留空表示使用进程内缓存；填写地址即自动启用 Redis
+	v.SetDefault("redis.addr", "")
 	v.SetDefault("redis.pool_size", 32)
 	v.SetDefault("redis.prefix", "keel")
 	v.SetDefault("redis.dial_timeout", "3s")
@@ -432,13 +571,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("security.password_strength", 2)
 	v.SetDefault("security.session_single", false)
 
-	v.SetDefault("storage.type", "local")
+	v.SetDefault("storage.type", "auto")
 	v.SetDefault("storage.local_dir", "data/uploads")
 	v.SetDefault("storage.base_url", "/uploads")
 	v.SetDefault("storage.max_size", 20<<20)
 
 	v.SetDefault("mail.port", 587)
 	v.SetDefault("mail.tls", true)
+	v.SetDefault("mail.from", "noreply@localhost")
 
 	v.SetDefault("cors.allow_origins", []string{"*"})
 	v.SetDefault("cors.allow_methods", []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
@@ -464,4 +604,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("micro.breaker.timeout", 15)
 	v.SetDefault("micro.registry.type", "static")
 	v.SetDefault("micro.registry.interval", "30s")
+
+	v.SetDefault("runtime.stateless", "auto")
+	v.SetDefault("runtime.instances", 1)
 }

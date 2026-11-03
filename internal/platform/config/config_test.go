@@ -24,8 +24,14 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.Port != 9000 {
 		t.Fatalf("默认端口错误: %d", cfg.Server.Port)
 	}
-	if cfg.DB.Driver != "sqlite" || cfg.Micro.Mode != "mono" {
-		t.Fatalf("默认驱动/形态错误: %s %s", cfg.DB.Driver, cfg.Micro.Mode)
+	if cfg.DB.ResolveDriver() != "sqlite" || cfg.Micro.Mode != "mono" {
+		t.Fatalf("默认驱动/形态错误: %s %s", cfg.DB.ResolveDriver(), cfg.Micro.Mode)
+	}
+	if cfg.CacheKindHint() != "local" {
+		t.Fatalf("默认应使用进程内缓存，实际: %s", cfg.CacheKindHint())
+	}
+	if cfg.Storage.Kind() != "local" {
+		t.Fatalf("默认应使用本地存储，实际: %s", cfg.Storage.Kind())
 	}
 	if cfg.JWT.AccessTTL != 2*time.Hour {
 		t.Fatalf("默认令牌有效期错误: %v", cfg.JWT.AccessTTL)
@@ -143,5 +149,76 @@ func TestMicroModulesFromEnv(t *testing.T) {
 	}
 	if len(cfg.Micro.Modules) != 3 || cfg.Micro.Modules[0] != "user" {
 		t.Fatalf("模块列表解析失败: %+v", cfg.Micro.Modules)
+	}
+}
+
+func TestAutoDetectDependencies(t *testing.T) {
+	p := writeConfig(t, `
+db:
+  driver: ""
+  dsn: "keel:pass@tcp(10.0.0.5:3306)/keel?charset=utf8mb4"
+redis:
+  addr: "10.0.0.6:6379"
+storage:
+  type: auto
+  s3:
+    endpoint: "minio.internal:9000"
+    bucket: "keel"
+mail:
+  host: "smtp.internal"
+  from: "keel@internal"
+`)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatalf("加载失败: %v", err)
+	}
+	if got := cfg.DB.ResolveDriver(); got != "mysql" {
+		t.Fatalf("DSN 应推断为 mysql，实际: %s", got)
+	}
+	if !cfg.Redis.UseRedis() || cfg.Redis.EffectiveAddr() != "10.0.0.6:6379" {
+		t.Fatalf("配置 addr 后应自动启用 Redis")
+	}
+	if cfg.Storage.Kind() != "s3" {
+		t.Fatalf("配置 bucket 后应自动切换对象存储，实际: %s", cfg.Storage.Kind())
+	}
+	if !cfg.Mail.UseSMTP() {
+		t.Fatal("配置 host 后应自动启用邮件")
+	}
+}
+
+func TestExplicitDisable(t *testing.T) {
+	p := writeConfig(t, `
+redis:
+  enabled: false
+  addr: "10.0.0.6:6379"
+mail:
+  enabled: false
+  host: "smtp.internal"
+`)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatalf("加载失败: %v", err)
+	}
+	if cfg.Redis.UseRedis() {
+		t.Fatal("显式 enabled: false 应关闭 Redis")
+	}
+	if cfg.Mail.UseSMTP() {
+		t.Fatal("显式 enabled: false 应关闭邮件")
+	}
+}
+
+func TestResolveDriverFromDSN(t *testing.T) {
+	cases := []struct{ driver, dsn, want string }{
+		{"", "data/keel.db", "sqlite"},
+		{"", "postgres://u:p@db:5432/keel", "postgres"},
+		{"", "host=db user=u dbname=keel port=5432", "postgres"},
+		{"", "u:p@tcp(db:3306)/keel", "mysql"},
+		{"mysql", "anything", "mysql"},
+	}
+	for _, c := range cases {
+		got := (DB{Driver: c.driver, DSN: c.dsn}).ResolveDriver()
+		if got != c.want {
+			t.Fatalf("driver=%q dsn=%q 期望 %s，实际 %s", c.driver, c.dsn, c.want, got)
+		}
 	}
 }

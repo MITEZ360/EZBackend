@@ -62,7 +62,6 @@ services:
       KEEL_SERVER_PORT: "9000"
       KEEL_DB_DRIVER: mysql
       KEEL_DB_DSN: "keel:Keel@123456@tcp(mysql:3306)/keel?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai"
-      KEEL_REDIS_ENABLED: "true"
       KEEL_REDIS_ADDR: "redis:6379"
       # 生产环境务必替换为 32 位以上随机串：openssl rand -base64 48
       KEEL_JWT_SECRET: "please-change-this-to-a-random-48-chars-secret-key"

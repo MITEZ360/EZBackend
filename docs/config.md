@@ -11,6 +11,39 @@
 
 ---
 
+## 0. 依赖自动装配
+
+所有外部依赖遵循同一条规则：**没配置就不用，配置了就自动激活**，不需要额外的
+开关。启动日志会打印实际生效的组合（`依赖组件已装配`），`/healthz` 同时返回各
+组件状态。
+
+| 依赖 | 判定方式 | 未配置时 | 配置后 |
+| --- | --- | --- | --- |
+| 数据库 | `db.driver`，留空按 `db.dsn` 推断 | SQLite 本地文件 | MySQL / PostgreSQL |
+| 缓存 | `redis.addr` 非空 | 进程内 LRU | Redis |
+| 限流 | 跟随缓存实现 | 进程内令牌桶 | Redis 令牌桶（跨实例共享配额） |
+| 任务锁 | 跟随缓存实现 | 进程内锁 | Redis 分布式锁（多实例只跑一份） |
+| 文件存储 | `storage.type=auto` 时看 `storage.s3.bucket` 与 `endpoint` | 本地磁盘 | MinIO / OSS / S3 / COS |
+| 邮件 | `mail.host` 非空 | 不创建实例 | SMTP |
+| 服务发现 | `micro.registry.type` | 静态列表 | DNS（K8s Headless） |
+
+显式关闭：`redis.enabled: false`、`mail.enabled: false`、`storage.type: local`。
+`enabled` 不写时按上述规则自动判断，写 `true` 也不会跳过连接检查。
+
+### runtime
+
+| 键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `stateless` | `auto` | 多实例无状态校验：`auto` 仅告警 / `strict` 拒绝启动 / `off` 不检查 |
+| `instances` | `1` | 计划实例数；大于 1 或 `micro.mode=service` 时触发校验 |
+| `instance_id` | 空 | 实例标识，留空自动生成 `hostname-pid`，写入启动日志 |
+
+校验项：进程内缓存、进程内限流、本地磁盘、SQLite。`strict` 适合 CI 的部署清单检查：
+
+```bash
+KEEL_RUNTIME_STATELESS=strict go run ./cmd/keel -config configs/config.service.yaml
+```
+
 ## 1. app
 
 | 键 | 默认值 | 说明 |
@@ -55,7 +88,7 @@
 
 | 键 | 默认值 | 说明 |
 | --- | --- | --- |
-| `driver` | `sqlite` | `sqlite` / `mysql` / `postgres` |
+| `driver` | 空 | `sqlite` / `mysql` / `postgres`；留空按 `dsn` 自动推断 |
 | `dsn` | `data/keel.db` | 见下方示例 |
 | `max_open_conns` | `50` | 连接池上限（实际最小值 10） |
 | `max_idle_conns` | `10` | 空闲连接（实际最小值 5） |
@@ -66,34 +99,42 @@
 | `auto_migrate` | `true` | 启动自动建表/加列（生产建议关掉，用脚本迁移） |
 | `seed` | `true` | 首次启动写入内置菜单/部门/字典/账号（有用户则跳过） |
 
-DSN 示例：
+DSN 示例（`driver` 均可省略）：
 
 ```yaml
-# SQLite（框架会自动附加 busy_timeout / WAL / synchronous=NORMAL）
+# SQLite：框架自动附加 busy_timeout / WAL / synchronous=NORMAL
 dsn: data/keel.db
 
-# MySQL
-driver: mysql
+# MySQL：DSN 含 @tcp( 或 @unix( 即识别
 dsn: keel:Keel@123456@tcp(127.0.0.1:3306)/keel?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai
 
-# PostgreSQL
-driver: postgres
+# PostgreSQL：以 postgres:// 开头，或含 host= 与 dbname=
+dsn: postgres://keel:Keel@123456@127.0.0.1:5432/keel?sslmode=disable
+# 也支持 key=value 形式
 dsn: host=127.0.0.1 user=keel password=Keel@123456 dbname=keel port=5432 sslmode=disable TimeZone=Asia/Shanghai
 ```
+
+推断规则：`mysql://`、`mysql:`、含 `@tcp(` / `@unix(` → MySQL；`postgres://`、
+`postgresql://`、含 `host=` 且含 `dbname=` → PostgreSQL；其余按 SQLite 处理。
 
 ## 5. redis
 
 | 键 | 默认值 | 说明 |
 | --- | --- | --- |
-| `enabled` | `false` | 关闭时自动降级为进程内 LRU 缓存 |
-| `addr` | `127.0.0.1:6379` | 地址，哨兵/集群请用支持多地址的客户端替换实现 |
+| `addr` | 空 | **填写地址即启用**；留空使用进程内 LRU 缓存 |
+| `enabled` | 空（自动） | 可选，显式 `false` 关闭；`true` 时 `addr` 留空则用 `127.0.0.1:6379` |
+| `optional` | `false` | 连接失败时是否降级为进程内缓存；默认直接启动失败 |
 | `password` / `db` | 空 / `0` | 认证与库号 |
-| `pool_size` | `32` | 连接池 |
+| `pool_size` | `32` | 连接池（实际最小值 16） |
 | `prefix` | `keel` | 键前缀，便于多环境共用实例 |
 | `dial_timeout` / `read_timeout` | `3s` | 超时 |
 | `local_size` | `100000` | 本地缓存容量（未启用 Redis 时生效） |
 
-> **多实例部署必须开启 Redis**：会话、权限、字典缓存不共享会导致"随机掉登录"。
+> 配置了 `addr` 却连不上时默认**启动失败**，而不是悄悄改用本地缓存——否则多实例
+> 下验证码、登录失败计数、限流、任务锁会各自为政。确实需要容错时显式设
+> `optional: true`，并在日志中确认降级。
+>
+> 启用 Redis 后，限流与定时任务锁自动切换为分布式实现，无需额外配置。
 
 ## 6. jwt
 
@@ -123,11 +164,49 @@ dsn: host=127.0.0.1 user=keel password=Keel@123456 dbname=keel port=5432 sslmode
 
 | 键 | 默认值 | 说明 |
 | --- | --- | --- |
-| `type` | `local` | 当前实现为本地磁盘，`s3` 字段已预留 |
-| `local_dir` | `data/uploads` | 存储根目录，按 `yyyy/MM/dd` 分目录 |
-| `base_url` | `/uploads` | 对外访问前缀 |
+| `type` | `auto` | `auto` / `local` / `s3`；`auto` 时看 `s3.endpoint` 与 `s3.bucket` |
+| `local_dir` | `data/uploads` | 本地存储根目录，按 `yyyy/MM/dd` 分目录 |
+| `base_url` | `/uploads` | 本地文件对外前缀 |
 | `max_size` | `20971520`（20MB） | 单文件上限 |
 | `allow_ext` | 图片/文档/压缩包/音视频常见后缀 | 扩展名白名单 |
+
+对象存储（`s3`）参数，兼容 MinIO、阿里云 OSS、AWS S3、腾讯云 COS：
+
+| 键 | 说明 |
+| --- | --- |
+| `endpoint` | `host:port`，也可写 `https://host`，会解析出 TLS 开关 |
+| `region` | 区域，MinIO 可留空，AWS 必填 |
+| `bucket` | 桶名，不存在时启动自动创建 |
+| `access_key` / `secret_key` | 访问密钥；都留空时使用云实例角色（IAM） |
+| `use_ssl` | 是否使用 HTTPS（`endpoint` 带 scheme 时以 scheme 为准） |
+| `public_url` | 对外访问前缀，如 CDN 域名；留空按 `endpoint/bucket` 拼接 |
+
+```yaml
+storage:
+  type: auto            # 填了 endpoint 与 bucket 就自动走对象存储
+  s3:
+    endpoint: "minio.internal:9000"
+    bucket: "keel"
+    access_key: "..."
+    secret_key: "..."
+    use_ssl: false
+```
+
+> 文件下载始终走 `GET /api/v1/files/:id/download`（带权限校验），`url` 字段仅用于
+> 展示；如果桶是私有的，直接访问该 URL 会 403。
+>
+> 多实例部署请使用对象存储：本地磁盘只有当前实例可见，`runtime.stateless` 会给出告警。
+
+### 8.1 mail
+
+| 键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `host` | 空 | **填写即启用**；留空不创建实例 |
+| `enabled` | 空（自动） | 可选，显式 `false` 关闭 |
+| `port` | `587` | 465 走隐式 TLS（SMTPS），其它端口按服务端能力 STARTTLS |
+| `username` / `password` | 空 | 留空表示不认证（内网中继） |
+| `from` | `noreply@host` | 发件人；账号是邮箱时默认取账号 |
+| `tls` | `true` | 是否启用 TLS |
 
 ## 9. cors
 
@@ -186,7 +265,8 @@ KEEL_GATEWAY_ROUTES="/api/v1=keel-core,/uploads=keel-file"
 1. 重新解析 → 2. 校验（失败则忽略本次变更，保留旧配置）→ 3. 替换全局配置 → 4. 触发 `OnChange` 回调。
 
 当前已支持热更新的项：日志级别、限流参数、CORS。
-**不支持**热更新的项（需要重启）：监听端口、数据库/Redis 连接、JWT 密钥、微服务形态。
+**不支持**热更新的项（需要重启）：监听端口、数据库/Redis 连接、文件存储、邮件、
+JWT 密钥、微服务形态。依赖实例在启动时装配，运行期不会因为改配置而重建连接。
 
 ---
 
@@ -196,9 +276,21 @@ KEEL_GATEWAY_ROUTES="/api/v1=keel-core,/uploads=keel-file"
 # 数据库
 KEEL_DB_DRIVER=mysql
 KEEL_DB_DSN="keel:pass@tcp(mysql:3306)/keel?charset=utf8mb4&parseTime=True"
-# 缓存
-KEEL_REDIS_ENABLED=true
+# 缓存（填地址即启用，无需 KEEL_REDIS_ENABLED）
 KEEL_REDIS_ADDR=redis:6379
+# 文件存储（填了 endpoint 与 bucket 即启用）
+KEEL_STORAGE_TYPE=auto
+KEEL_STORAGE_S3_ENDPOINT=minio:9000
+KEEL_STORAGE_S3_BUCKET=keel
+KEEL_STORAGE_S3_ACCESS_KEY=...
+KEEL_STORAGE_S3_SECRET_KEY=...
+# 邮件（填 host 即启用）
+KEEL_MAIL_HOST=smtp.example.com
+KEEL_MAIL_USERNAME=...
+KEEL_MAIL_PASSWORD=...
+# 多实例无状态校验
+KEEL_RUNTIME_STATELESS=strict
+KEEL_RUNTIME_INSTANCES=3
 # 安全
 KEEL_JWT_SECRET="$(openssl rand -base64 48)"
 KEEL_SECURITY_INTERNAL_TOKEN="$(openssl rand -hex 24)"

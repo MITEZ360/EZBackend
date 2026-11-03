@@ -147,7 +147,10 @@ onUnmounted(() => {
           <div><dt>运行环境</dt><dd><el-tag size="small" :type="info.app.env === 'prod' ? 'danger' : 'warning'" effect="light">{{ info.app.env }}</el-tag></dd></div>
           <div><dt>部署形态</dt><dd>{{ info.app.mode }}</dd></div>
           <div><dt>监听端口</dt><dd class="num">{{ info.http.port }}</dd></div>
+          <div><dt>数据库</dt><dd class="mono">{{ info.database.driver }}</dd></div>
           <div><dt>缓存类型</dt><dd class="mono">{{ info.cache.kind }}</dd></div>
+          <div><dt>限流实现</dt><dd class="mono">{{ info.ratelimit.kind }}</dd></div>
+          <div><dt>文件存储</dt><dd class="mono">{{ info.storage.kind }}</dd></div>
         </dl>
       </div>
 

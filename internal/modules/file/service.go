@@ -20,6 +20,7 @@ import (
 	"github.com/keel-framework/keel/internal/model"
 	"github.com/keel-framework/keel/internal/platform/config"
 	"github.com/keel-framework/keel/internal/platform/idgen"
+	"github.com/keel-framework/keel/internal/platform/storage"
 	"github.com/keel-framework/keel/pkg/errs"
 	"github.com/keel-framework/keel/pkg/query"
 	"github.com/keel-framework/keel/pkg/utils"
@@ -35,20 +36,23 @@ var defaultAllowExt = []string{
 
 // Service 文件业务。
 type Service struct {
-	db  *gorm.DB
-	cfg *config.Config
-	log *zap.Logger
+	db    *gorm.DB
+	cfg   *config.Config
+	store *storage.Manager
+	log   *zap.Logger
 }
 
 // NewService 创建文件服务。
-func NewService(db *gorm.DB, cfg *config.Config, log *zap.Logger) *Service {
+func NewService(db *gorm.DB, cfg *config.Config, store *storage.Manager, log *zap.Logger) *Service {
 	if log == nil {
 		log = zap.NewNop()
 	}
-	return &Service{db: db, cfg: cfg, log: log}
+	return &Service{db: db, cfg: cfg, store: store, log: log}
 }
 
 // Upload 保存上传文件并写入元数据。
+// 先落到临时文件，拿到准确大小与摘要后再交给存储实现，避免对象存储分片上传
+// 必须预先知道长度的问题，也不会把大文件整个读进内存。
 func (s *Service) Upload(ctx context.Context, fh *multipart.FileHeader, uploaderID string) (*model.File, error) {
 	maxSize := s.cfg.Storage.MaxSize
 	if maxSize <= 0 {
@@ -79,43 +83,51 @@ func (s *Service) Upload(ctx context.Context, fh *multipart.FileHeader, uploader
 	}
 	defer src.Close()
 
-	now := time.Now()
-	relDir := filepath.Join(now.Format("2006"), now.Format("01"), now.Format("02"))
-	dir := filepath.Join(s.cfg.Storage.LocalDir, relDir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, errs.Internal("创建存储目录失败")
-	}
-	name := idgen.Next() + ext
-	dstPath := filepath.Join(dir, name)
-
-	dst, err := os.Create(dstPath)
+	tmp, err := os.CreateTemp("", "keel-upload-*")
 	if err != nil {
-		return nil, errs.Internal("写入文件失败")
+		return nil, errs.Internal("创建临时文件失败")
 	}
+	tmpName := tmp.Name()
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+	}()
+
 	h := sha256.New()
-	written, err := io.Copy(io.MultiWriter(dst, h), io.LimitReader(src, maxSize+1))
-	closeErr := dst.Close()
-	if err != nil || closeErr != nil {
-		_ = os.Remove(dstPath)
-		return nil, errs.Internal("写入文件失败")
+	written, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(src, maxSize+1))
+	if err != nil {
+		return nil, errs.Internal("读取上传文件失败")
 	}
 	if written > maxSize {
-		_ = os.Remove(dstPath)
 		return nil, errs.BadRequest("文件大小超过限制")
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return nil, errs.Internal("读取上传文件失败")
 	}
 
 	mimeType := fh.Header.Get("Content-Type")
 	if mimeType == "" {
 		mimeType = mime.TypeByExtension(ext)
 	}
-	url := strings.TrimSuffix(s.cfg.Storage.BaseURL, "/") + "/" + filepath.ToSlash(filepath.Join(relDir, name))
+
+	now := time.Now()
+	relDir := filepath.ToSlash(filepath.Join(now.Format("2006"), now.Format("01"), now.Format("02")))
+	name := idgen.Next() + ext
+	key := relDir + "/" + name
+
+	url, err := s.store.Put(ctx, key, tmp, written, mimeType)
+	if err != nil {
+		s.log.Error("写入存储失败", zap.String("key", key), zap.Error(err))
+		return nil, errs.Internal("保存文件失败")
+	}
+
 	f := &model.File{
-		Name: utils.SafeFilename(fh.Filename), Path: dstPath, URL: url,
+		Name: utils.SafeFilename(fh.Filename), Path: key, URL: url,
 		Mime: mimeType, Ext: ext, Size: written,
-		Hash: hex.EncodeToString(h.Sum(nil)), UploaderID: uploaderID, Storage: "local",
+		Hash: hex.EncodeToString(h.Sum(nil)), UploaderID: uploaderID, Storage: s.store.Kind(),
 	}
 	if err := s.db.WithContext(ctx).Create(f).Error; err != nil {
-		_ = os.Remove(dstPath)
+		_ = s.store.For(f.Storage).Delete(context.Background(), key)
 		return nil, err
 	}
 	return f, nil
@@ -145,27 +157,26 @@ func (s *Service) Get(ctx context.Context, id string) (*model.File, error) {
 	return &f, nil
 }
 
-// Delete 删除文件（软删除元数据并移除磁盘文件）。
+// Delete 删除文件（软删除元数据并移除存储对象）。
 func (s *Service) Delete(ctx context.Context, id string) error {
 	f, err := s.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	if f.Storage == "local" {
-		if err := os.Remove(f.Path); err != nil && !os.IsNotExist(err) {
-			s.log.Warn("删除磁盘文件失败", zap.String("path", f.Path), zap.Error(err))
-		}
+	// 历史记录可能是本地磁盘写入的，按记录中的 storage 选择实现
+	if err := s.store.For(f.Storage).Delete(ctx, f.Path); err != nil {
+		s.log.Warn("删除存储对象失败", zap.String("path", f.Path), zap.String("storage", f.Storage), zap.Error(err))
 	}
 	return s.db.WithContext(ctx).Delete(&model.File{}, "id = ?", id).Error
 }
 
 // Open 打开文件用于下载。
-func (s *Service) Open(ctx context.Context, id string) (*os.File, *model.File, error) {
+func (s *Service) Open(ctx context.Context, id string) (io.ReadCloser, *model.File, error) {
 	f, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
-	fh, err := os.Open(f.Path)
+	fh, err := s.store.For(f.Storage).Open(ctx, f.Path)
 	if err != nil {
 		return nil, nil, errs.NotFound("文件已丢失")
 	}

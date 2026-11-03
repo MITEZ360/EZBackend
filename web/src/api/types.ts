@@ -283,6 +283,8 @@ export interface SystemInfo {
   }
   database: { driver: string; version: string; pool: PoolStats }
   cache: { kind: string }
+  ratelimit: { kind: string }
+  storage: { kind: string }
   http: { routes: number; port: number }
 }
 

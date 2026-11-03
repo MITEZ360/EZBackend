@@ -38,6 +38,8 @@ import (
 	"github.com/keel-framework/keel/internal/platform/database"
 	"github.com/keel-framework/keel/internal/platform/idgen"
 	"github.com/keel-framework/keel/internal/platform/logger"
+	"github.com/keel-framework/keel/internal/platform/mailer"
+	"github.com/keel-framework/keel/internal/platform/storage"
 	"github.com/keel-framework/keel/internal/router"
 	"github.com/keel-framework/keel/pkg/discovery"
 	"github.com/keel-framework/keel/pkg/event"
@@ -45,16 +47,20 @@ import (
 
 // App 是应用容器。
 type App struct {
-	Cfg     *config.Config
-	Log     *zap.Logger
-	DB      *gorm.DB
-	Cache   cache.Cache
-	Engine  *gin.Engine
-	Jobs    *job.Service
-	Audit   *audit.Service
-	Events  *event.Bus
-	Gateway *micro.Gateway
-	Started time.Time
+	Cfg      *config.Config
+	Log      *zap.Logger
+	DB       *gorm.DB
+	Cache    cache.Cache
+	Limiter  cache.Limiter
+	Storage  *storage.Manager
+	Mailer   mailer.Mailer
+	Engine   *gin.Engine
+	Jobs     *job.Service
+	Audit    *audit.Service
+	Events   *event.Bus
+	Gateway  *micro.Gateway
+	Instance string
+	Started  time.Time
 
 	server *http.Server
 }
@@ -105,6 +111,18 @@ func New(cfgPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	limiter := cache.NewLimiter(ch, cfg.RateLimit.RPS, cfg.RateLimit.Burst)
+
+	store, err := storage.New(cfg.Storage, lg)
+	if err != nil {
+		return nil, err
+	}
+	// 未配置 mail.host 时返回 nil，不建立任何连接
+	mail, err := mailer.New(cfg.Mail, lg)
+	if err != nil {
+		_ = store.Close()
+		return nil, err
+	}
 
 	bus := event.New(event.Options{
 		QueueSize: 2048,
@@ -141,10 +159,10 @@ func New(cfgPath string) (*App, error) {
 	// 公告发布后同步投递站内信；message.Service 实现 system.NoticeNotifier。
 	noticeSvc := system.NewNoticeService(db, msgSvc, lg)
 	auditSvc := audit.NewService(db, ch, lg)
-	jobSvc := job.NewService(db, lg)
+	jobSvc := job.NewService(db, ch, lg)
 	jobSvc.SetCleaner(auditSvc)
 	jobSvc.SetMessageCleaner(msgSvc)
-	fileSvc := file.NewService(db, cfg, lg)
+	fileSvc := file.NewService(db, cfg, store, lg)
 	dashSvc := dashboard.NewService(db, ch)
 
 	var engine *gin.Engine
@@ -161,7 +179,8 @@ func New(cfgPath string) (*App, error) {
 	})
 
 	engine = router.New(router.Deps{
-		Cfg: cfg, Log: lg, DB: db, Cache: ch, JWT: jwtMgr, Authz: authzLoader, AuditSvc: auditSvc,
+		Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
+		JWT: jwtMgr, Authz: authzLoader, AuditSvc: auditSvc,
 		Modules:   moduleSet(cfg.Micro),
 		Events:    bus,
 		Auth:      auth.NewHandler(authSvc, cfg.Security.CaptchaEnabled, cfg.Server.TrustProxy),
@@ -180,10 +199,28 @@ func New(cfgPath string) (*App, error) {
 		Monitor:   monitor.NewHandler(monitorSvc),
 	})
 
-	app := &App{Cfg: cfg, Log: lg, DB: db, Cache: ch, Engine: engine, Jobs: jobSvc,
-		Audit: auditSvc, Events: bus, Started: time.Now()}
+	app := &App{Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
+		Mailer: mail, Engine: engine, Jobs: jobSvc,
+		Audit: auditSvc, Events: bus, Instance: resolveInstanceID(cfg), Started: time.Now()}
+	if err := app.checkStateless(); err != nil {
+		return nil, err
+	}
 	app.server = newServer(cfg, engine)
+	app.logRuntime()
 	return app, nil
+}
+
+// resolveInstanceID 返回实例标识：优先使用配置，否则用 hostname-pid，
+// 便于在日志聚合与多实例排障时区分请求来自哪个进程。
+func resolveInstanceID(cfg *config.Config) string {
+	if id := strings.TrimSpace(cfg.Runtime.InstanceID); id != "" {
+		return id
+	}
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "keel"
+	}
+	return fmt.Sprintf("%s-%d", host, os.Getpid())
 }
 
 func models() []any {
@@ -212,7 +249,10 @@ func (a *App) Run() error {
 			zap.Int("routes", len(a.Engine.Routes())),
 		}
 		if a.DB != nil {
-			fields = append(fields, zap.String("db", a.Cfg.DB.Driver))
+			fields = append(fields, zap.String("db", a.Cfg.DB.ResolveDriver()))
+		}
+		if a.Storage != nil {
+			fields = append(fields, zap.String("storage", a.Storage.Kind()))
 		}
 		if a.Cache != nil {
 			fields = append(fields, zap.String("cache", a.Cache.Kind()))
@@ -257,6 +297,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 	if a.Events != nil {
 		a.Events.Close()
+	}
+	if a.Storage != nil {
+		_ = a.Storage.Close()
 	}
 	if a.Cache != nil {
 		_ = a.Cache.Close()

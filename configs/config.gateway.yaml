@@ -9,11 +9,7 @@ log:
   level: info
   dir: logs
   filename: keel-gateway.log
-db:
-  driver: sqlite
-  dsn: data/gateway.db
-redis:
-  enabled: false
+# 网关不连数据库、不加载业务模块，只做转发。
 security:
   internal_token: "keel-internal-token-change-me"
 micro:

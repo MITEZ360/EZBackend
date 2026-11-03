@@ -6,15 +6,14 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"golang.org/x/time/rate"
 
+	"github.com/keel-framework/keel/internal/platform/cache"
 	"github.com/keel-framework/keel/internal/platform/config"
 	"github.com/keel-framework/keel/pkg/response"
 	"github.com/keel-framework/keel/pkg/utils"
@@ -127,57 +126,12 @@ func SecurityHeaders() gin.HandlerFunc {
 	}
 }
 
-// limiter 是按 key 隔离的令牌桶集合，定期清理空闲条目防止内存膨胀。
-type limiter struct {
-	mu      sync.Mutex
-	buckets map[string]*bucket
-	rps     rate.Limit
-	burst   int
-	lastGC  time.Time
-}
-
-type bucket struct {
-	l *rate.Limiter
-	t time.Time
-}
-
-func newLimiter(rps float64, burst int) *limiter {
-	if rps <= 0 {
-		rps = 100
-	}
-	if burst <= 0 {
-		burst = int(rps * 2)
-	}
-	return &limiter{buckets: map[string]*bucket{}, rps: rate.Limit(rps), burst: burst, lastGC: time.Now()}
-}
-
-func (l *limiter) allow(key string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	now := time.Now()
-	if now.Sub(l.lastGC) > 5*time.Minute {
-		for k, b := range l.buckets {
-			if now.Sub(b.t) > 10*time.Minute {
-				delete(l.buckets, k)
-			}
-		}
-		l.lastGC = now
-	}
-	b, ok := l.buckets[key]
-	if !ok {
-		b = &bucket{l: rate.NewLimiter(l.rps, l.burst)}
-		l.buckets[key] = b
-	}
-	b.t = now
-	return b.l.Allow()
-}
-
 // RateLimit 全局限流，支持按用户或 IP 维度。
-func RateLimit(cfg config.RateLimit, trustProxy bool) gin.HandlerFunc {
-	if !cfg.Enabled {
+// lim 由缓存实现决定是进程内还是 Redis 分布式限流。
+func RateLimit(cfg config.RateLimit, lim cache.Limiter, trustProxy bool) gin.HandlerFunc {
+	if !cfg.Enabled || lim == nil {
 		return func(c *gin.Context) { c.Next() }
 	}
-	lim := newLimiter(cfg.RPS, cfg.Burst)
 	return func(c *gin.Context) {
 		key := utils.ClientIP(c, trustProxy)
 		if cfg.ByUser {
@@ -185,7 +139,13 @@ func RateLimit(cfg config.RateLimit, trustProxy bool) gin.HandlerFunc {
 				key = "u:" + uid
 			}
 		}
-		if !lim.allow(key) {
+		allowed, err := lim.Allow(c.Request.Context(), key)
+		if err != nil {
+			// 限流存储不可用时放行，避免把缓存故障放大成业务不可用
+			c.Next()
+			return
+		}
+		if !allowed {
 			c.Header("Retry-After", "1")
 			response.FailMsg(c, http.StatusTooManyRequests, 42900, "请求过于频繁，请稍后再试")
 			return

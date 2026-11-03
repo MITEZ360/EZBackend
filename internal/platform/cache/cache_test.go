@@ -10,7 +10,8 @@ import (
 
 func newLocalCache(t *testing.T) Cache {
 	t.Helper()
-	c, err := New(config.Redis{Enabled: false, LocalSize: 100}, nil)
+	disabled := false
+	c, err := New(config.Redis{Enabled: &disabled, LocalSize: 100}, nil)
 	if err != nil {
 		t.Fatalf("创建本地缓存失败: %v", err)
 	}

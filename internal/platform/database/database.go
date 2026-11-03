@@ -65,7 +65,7 @@ func Open(cfg config.DB, log *zap.Logger) (*gorm.DB, error) {
 }
 
 func dialectorFor(cfg config.DB) (gorm.Dialector, error) {
-	switch cfg.Driver {
+	switch cfg.ResolveDriver() {
 	case "mysql":
 		dsn := cfg.DSN
 		if !strings.Contains(dsn, "parseTime") {
@@ -91,7 +91,7 @@ func dialectorFor(cfg config.DB) (gorm.Dialector, error) {
 		// _pragma 参数提升并发写入稳定性
 		return sqlite.Open(path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)"), nil
 	}
-	return nil, fmt.Errorf("不支持的数据库驱动: %s", cfg.Driver)
+	return nil, fmt.Errorf("不支持的数据库驱动: %s", cfg.ResolveDriver())
 }
 
 func atLeast(v, min int) int {

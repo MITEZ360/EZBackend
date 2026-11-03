@@ -19,8 +19,13 @@ data:
   KEEL_DB_DRIVER: "mysql"
   KEEL_DB_MAX_OPEN_CONNS: "100"
   KEEL_DB_MAX_IDLE_CONNS: "20"
-  KEEL_REDIS_ENABLED: "true"
   KEEL_REDIS_ADDR: "keel-redis:6379"
+  # 多副本必须使用对象存储：本地磁盘只有当前 Pod 可见
+  KEEL_STORAGE_TYPE: "auto"
+  KEEL_STORAGE_S3_ENDPOINT: "keel-minio:9000"
+  KEEL_STORAGE_S3_BUCKET: "keel"
+  KEEL_STORAGE_S3_USE_SSL: "false"
+  KEEL_RUNTIME_INSTANCES: "2"
   KEEL_LOG_LEVEL: "info"
   KEEL_LOG_CONSOLE: "false"
   KEEL_MICRO_MODE: "mono"
@@ -37,6 +42,9 @@ stringData:
   KEEL_JWT_SECRET: "please-change-this-to-a-random-48-chars-secret-key"
   KEEL_SECURITY_INTERNAL_TOKEN: "please-change-this-internal-token"
   KEEL_DB_DSN: "keel:Keel@123456@tcp(keel-mysql:3306)/keel?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai"
+  # 对象存储密钥，替换为真实值
+  KEEL_STORAGE_S3_ACCESS_KEY: "keel"
+  KEEL_STORAGE_S3_SECRET_KEY: "keel-secret"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -118,27 +126,17 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            # 文件走对象存储后，容器内不再需要持久卷；/app/data 仅放临时文件
             - name: data
               mountPath: /app/data
             - name: logs
               mountPath: /app/logs
       volumes:
         - name: data
-          persistentVolumeClaim:
-            claimName: keel-data
+          emptyDir: {}
         - name: logs
           emptyDir: {}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: keel-data
-  namespace: keel
-spec:
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: 10Gi
+
 ---
 apiVersion: v1
 kind: Service
