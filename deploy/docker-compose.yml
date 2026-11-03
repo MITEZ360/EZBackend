@@ -1,0 +1,94 @@
+# ============================================================================
+# 单机编排：MySQL 8 + Redis 7 + Keel
+# 启动：docker compose -f deploy/docker-compose.yml up -d
+# 访问：http://localhost:9000  默认账号 admin / Admin@123456
+# ============================================================================
+name: keel
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: keel-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: keel-root-2026
+      MYSQL_DATABASE: keel
+      MYSQL_USER: keel
+      MYSQL_PASSWORD: Keel@123456
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+      - --max_connections=500
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ukeel", "-pKeel@123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [keel]
+
+  redis:
+    image: redis:7-alpine
+    container_name: keel-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [keel]
+
+  keel:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: keel:latest
+    container_name: keel-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      KEEL_APP_ENV: prod
+      KEEL_SERVER_PORT: "9000"
+      KEEL_DB_DRIVER: mysql
+      KEEL_DB_DSN: "keel:Keel@123456@tcp(mysql:3306)/keel?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai"
+      KEEL_REDIS_ENABLED: "true"
+      KEEL_REDIS_ADDR: "redis:6379"
+      # 生产环境务必替换为 32 位以上随机串：openssl rand -base64 48
+      KEEL_JWT_SECRET: "please-change-this-to-a-random-48-chars-secret-key"
+      KEEL_SECURITY_INTERNAL_TOKEN: "please-change-this-internal-token"
+      KEEL_SECURITY_CAPTCHA_ENABLED: "false"
+      KEEL_LOG_LEVEL: info
+      KEEL_LOG_CONSOLE: "false"
+    ports:
+      - "9000:9000"
+    volumes:
+      - keel-data:/app/data
+      - keel-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9000/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    networks: [keel]
+
+volumes:
+  mysql-data:
+  redis-data:
+  keel-data:
+  keel-logs:
+
+networks:
+  keel:
+    driver: bridge

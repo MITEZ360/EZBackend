@@ -1,0 +1,275 @@
+// Package router 组装 Gin 引擎、全局中间件与全部业务路由。
+//
+// 三种形态共用同一套引擎：
+//   - mono：全部业务路由挂载在一个进程内；
+//   - gateway：只保留健康检查、指标、静态资源与反向代理；
+//   - service：按 micro.modules 裁剪业务路由，一个进程只暴露部分模块。
+package router
+
+import (
+	"context"
+	"io/fs"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"github.com/keel-framework/keel/internal/micro"
+	"github.com/keel-framework/keel/internal/middleware"
+	"github.com/keel-framework/keel/internal/modules/audit"
+	"github.com/keel-framework/keel/internal/modules/auth"
+	"github.com/keel-framework/keel/internal/modules/dashboard"
+	"github.com/keel-framework/keel/internal/modules/dept"
+	"github.com/keel-framework/keel/internal/modules/file"
+	"github.com/keel-framework/keel/internal/modules/job"
+	"github.com/keel-framework/keel/internal/modules/menu"
+	"github.com/keel-framework/keel/internal/modules/message"
+	"github.com/keel-framework/keel/internal/modules/monitor"
+	"github.com/keel-framework/keel/internal/modules/role"
+	"github.com/keel-framework/keel/internal/modules/system"
+	"github.com/keel-framework/keel/internal/modules/user"
+	"github.com/keel-framework/keel/internal/platform/authn"
+	"github.com/keel-framework/keel/internal/platform/authz"
+	"github.com/keel-framework/keel/internal/platform/cache"
+	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/keel-framework/keel/internal/platform/database"
+	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/event"
+	"github.com/keel-framework/keel/pkg/response"
+	"github.com/keel-framework/keel/web"
+)
+
+// Deps 路由依赖集合。
+type Deps struct {
+	Cfg      *config.Config
+	Log      *zap.Logger
+	DB       *gorm.DB
+	Cache    cache.Cache
+	JWT      *authn.Manager
+	Authz    *authz.Loader
+	AuditSvc *audit.Service
+	// Gateway 非空时按网关模式装配：仅保留健康检查、指标、静态资源与转发规则。
+	Gateway *micro.Gateway
+	// Modules 为 service 模式下启用的业务模块；为空表示全部启用。
+	Modules map[string]bool
+	// Events 进程内事件总线，可为空；用于发布审计等业务事件。
+	Events *event.Bus
+
+	Auth      *auth.Handler
+	User      *user.Handler
+	Role      *role.Handler
+	Menu      *menu.Handler
+	Dept      *dept.Handler
+	Dict      *system.DictHandler
+	Config    *system.ConfigHandler
+	Notice    *system.NoticeHandler
+	Message   *message.Handler
+	Audit     *audit.Handler
+	Job       *job.Handler
+	File      *file.Handler
+	Dashboard *dashboard.Handler
+	Monitor   *monitor.Handler
+}
+
+// New 创建 HTTP 引擎。
+func New(d Deps) *gin.Engine {
+	if d.Cfg.Server.Mode == "release" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+	e := gin.New()
+	e.RedirectTrailingSlash = true
+	e.RemoveExtraSlash = true
+	e.ContextWithFallback = true
+	_ = e.SetTrustedProxies(nil)
+	if d.Cfg.Server.TrustProxy {
+		_ = e.SetTrustedProxies([]string{"0.0.0.0/0"})
+	}
+
+	e.Use(
+		middleware.Recovery(d.Log),
+		middleware.Trace(),
+		middleware.AccessLog(d.Log, 500*time.Millisecond),
+		middleware.CORS(d.Cfg.CORS),
+		middleware.SecurityHeaders(),
+		middleware.BodyLimit(d.Cfg.Server.MaxBodySize),
+		middleware.Metrics(),
+	)
+
+	// ---- 健康检查与监控 ----
+	d.healthRoutes(e)
+	if d.Cfg.Metrics.Enabled {
+		e.GET(d.Cfg.Metrics.Path, middleware.MetricsHandler(d.Cfg.Metrics.Token))
+	}
+
+	// ---- 静态资源与单页应用 ----
+	mountSPA(e)
+
+	// ---- 网关形态：只做转发 ----
+	if d.Gateway != nil {
+		e.Any("/api/*path", d.Gateway.Handler())
+		e.NoRoute(d.notFound)
+		return e
+	}
+
+	authMW := middleware.Auth(middleware.AuthDeps{
+		JWT: d.JWT, Authz: d.Authz, Sessions: sessionValidator{d.Auth},
+	})
+
+	// ---- 公开接口 ----
+	v1 := e.Group("/api/v1")
+	d.publicRoutes(v1)
+
+	// ---- 登录后接口 ----
+	authed := v1.Group("", authMW, middleware.Audit(d.AuditSvc, d.Events))
+	d.authRoutes(authed)
+	if d.on("dashboard") {
+		d.dashboardRoutes(authed)
+	}
+	if d.on("user") {
+		d.userRoutes(authed)
+	}
+	if d.on("role") {
+		d.roleRoutes(authed)
+	}
+	if d.on("menu") {
+		d.menuRoutes(authed)
+	}
+	if d.on("dept") {
+		d.deptRoutes(authed)
+	}
+	if d.on("dict") {
+		d.dictRoutes(authed)
+	}
+	if d.on("config") {
+		d.configRoutes(authed)
+	}
+	if d.on("notice") {
+		d.noticeRoutes(authed)
+	}
+	if d.on("message") {
+		d.messageRoutes(authed)
+	}
+	if d.on("audit") {
+		d.auditRoutes(authed)
+	}
+	if d.on("job") {
+		d.jobRoutes(authed)
+	}
+	if d.on("file") {
+		d.fileRoutes(authed)
+	}
+	if d.on("monitor") {
+		d.monitorRoutes(authed)
+	}
+
+	e.NoRoute(d.notFound)
+	return e
+}
+
+// on 判断某业务模块在当前进程是否启用。
+func (d Deps) on(module string) bool {
+	if len(d.Modules) == 0 {
+		return true
+	}
+	return d.Modules[module]
+}
+
+// publicRoutes 注册无需登录的接口。
+func (d Deps) publicRoutes(v1 *gin.RouterGroup) {
+	v1.GET("/auth/captcha", d.Auth.Captcha)
+	v1.POST("/auth/login", d.Auth.Login)
+	v1.POST("/auth/refresh", d.Auth.Refresh)
+	v1.GET("/public/config", d.Auth.PublicConfig)
+	v1.GET("/public/configs", d.Config.Public)
+	v1.GET("/public/dicts/:code", d.Dict.Data)
+	v1.GET("/public/notices", d.Notice.Latest)
+}
+
+// healthRoutes 注册存活与就绪探针。
+func (d Deps) healthRoutes(e *gin.Engine) {
+	e.GET("/healthz", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+		status := http.StatusOK
+		checks := map[string]string{"self": "up"}
+		if d.DB == nil {
+			checks["database"] = "disabled"
+		} else if err := database.Health(ctx, d.DB); err != nil {
+			checks["database"] = "down: " + err.Error()
+			status = http.StatusServiceUnavailable
+		} else {
+			checks["database"] = "up"
+		}
+		if d.Cache == nil {
+			checks["cache"] = "disabled"
+		} else if _, err := d.Cache.Exists(ctx, "__ping__"); err != nil {
+			checks["cache"] = "down: " + err.Error()
+			status = http.StatusServiceUnavailable
+		} else {
+			checks["cache"] = "up"
+		}
+		if d.Gateway != nil {
+			checks["mode"] = "gateway"
+		}
+		c.JSON(status, gin.H{"status": map[bool]string{true: "up", false: "down"}[status == http.StatusOK],
+			"version": d.Cfg.App.Version, "checks": checks, "time": time.Now().Format(time.RFC3339)})
+	})
+	e.GET("/readyz", func(c *gin.Context) {
+		if d.DB != nil {
+			if err := database.Health(c.Request.Context(), d.DB); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"ready": false, "error": err.Error()})
+				return
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"ready": true})
+	})
+}
+
+// notFound 统一 404：接口返回 JSON，其余回退单页应用。
+func (d Deps) notFound(c *gin.Context) {
+	if strings.HasPrefix(c.Request.URL.Path, "/api/") || strings.HasPrefix(c.Request.URL.Path, "/uploads/") {
+		response.Fail(c, errs.NotFound("接口不存在"))
+		return
+	}
+	serveIndex(c)
+}
+
+type sessionValidator struct{ h *auth.Handler }
+
+func (s sessionValidator) ValidateSession(ctx context.Context, sid, uid string) (bool, error) {
+	if s.h == nil {
+		return true, nil
+	}
+	return s.h.ValidateSession(ctx, sid, uid)
+}
+
+// mountSPA 托管 Vite 产物：带 hash 的静态资源长缓存，其余交给单页应用兜底。
+func mountSPA(e *gin.Engine) {
+	sub, err := fs.Sub(web.FS, "dist")
+	if err != nil {
+		return
+	}
+	fileServer := http.FileServer(http.FS(sub))
+
+	e.GET("/assets/*filepath", func(c *gin.Context) {
+		// 文件名含内容 hash，可安全长缓存
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		fileServer.ServeHTTP(c.Writer, c.Request)
+	})
+	e.GET("/favicon.svg", gin.WrapH(fileServer))
+	e.GET("/favicon.ico", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+}
+
+func serveIndex(c *gin.Context) {
+	data, err := fs.ReadFile(web.FS, "dist/index.html")
+	if err != nil {
+		c.String(http.StatusNotFound, "前端资源未打包")
+		return
+	}
+	c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+}

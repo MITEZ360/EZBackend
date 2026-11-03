@@ -1,0 +1,29 @@
+# 网关形态：只做转发，不连数据库，单进程约 20MB 内存
+app:
+  name: Keel 网关
+  env: prod
+server:
+  port: 9100
+  mode: release
+log:
+  level: info
+  dir: logs
+  filename: keel-gateway.log
+db:
+  driver: sqlite
+  dsn: data/gateway.db
+redis:
+  enabled: false
+security:
+  internal_token: "keel-internal-token-change-me"
+micro:
+  mode: gateway
+  timeout: 5s
+  retries: 2
+  registry:
+    type: static
+    endpoints:
+      - "keel-core=127.0.0.1:9000"
+  routes:
+    - prefix: /api/v1
+      service: keel-core

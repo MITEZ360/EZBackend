@@ -1,0 +1,14 @@
+# 构建上下文瘦身
+.git
+.gitignore
+bin/
+web/node_modules
+web/dist
+dist/
+data/
+logs/
+docs/
+deploy/
+coverage.out
+*.md
+!README.md

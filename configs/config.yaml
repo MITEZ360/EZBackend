@@ -1,0 +1,138 @@
+# ============================================================================
+# Keel 企业服务端框架 - 主配置文件
+# 优先级：默认值 < 本文件 < 环境变量（KEEL_SERVER_PORT 对应 server.port）
+# ============================================================================
+app:
+  name: Keel 企业管理平台
+  env: dev                 # dev / test / prod
+  version: 1.0.0
+  timezone: Asia/Shanghai
+
+server:
+  host: 0.0.0.0
+  port: 9000
+  mode: release            # debug / release
+  read_timeout: 30s
+  write_timeout: 60s
+  idle_timeout: 120s
+  shutdown_timeout: 15s
+  max_body_size: 33554432  # 32MB
+  trust_proxy: true        # 部署在网关/Nginx 之后时开启
+  web_dir: web
+
+log:
+  level: info              # debug / info / warn / error
+  format: json             # json（便于采集）/ console
+  dir: logs
+  filename: keel.log
+  max_size_mb: 64
+  max_age_days: 14
+  max_backups: 30
+  compress: true
+  console: true
+  caller: true
+
+db:
+  driver: sqlite           # sqlite / mysql / postgres
+  dsn: data/keel.db
+  # MySQL 示例：
+  # driver: mysql
+  # dsn: keel:Keel@123456@tcp(127.0.0.1:3306)/keel?charset=utf8mb4
+  # PostgreSQL 示例：
+  # driver: postgres
+  # dsn: host=127.0.0.1 user=keel password=Keel@123456 dbname=keel port=5432 sslmode=disable TimeZone=Asia/Shanghai
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: 1h
+  conn_max_idle_time: 10m
+  slow_threshold: 200ms
+  log_level: warn
+  auto_migrate: true
+  seed: true               # 首次启动写入内置数据
+
+redis:
+  enabled: false           # 单机可直接用进程内缓存；集群/多实例建议开启
+  addr: 127.0.0.1:6379
+  password: ""
+  db: 0
+  pool_size: 32
+  prefix: keel
+  dial_timeout: 3s
+  read_timeout: 3s
+  local_size: 100000
+
+jwt:
+  secret: "请务必在生产环境替换为至少32位的随机字符串-keel-default-secret"
+  issuer: keel
+  access_ttl: 2h
+  refresh_ttl: 168h
+
+security:
+  captcha_enabled: false   # 生产建议开启
+  max_login_fail: 5
+  lock_duration: 15m
+  password_min_len: 8
+  password_strength: 2     # 1 长度 / 2 字母+数字 / 3 四类字符
+  data_encrypt_key: ""     # 为空则复用 jwt.secret，用于加密 TOTP 密钥与敏感配置
+  session_single: false    # 是否只允许单处登录
+  internal_token: "keel-internal-token-change-me"
+
+storage:
+  type: local
+  local_dir: data/uploads
+  base_url: /uploads
+  max_size: 20971520       # 20MB
+  allow_ext: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".pdf", ".doc", ".docx",
+              ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".md", ".zip", ".rar", ".7z",
+              ".mp4", ".mp3"]
+  s3:
+    endpoint: ""
+    bucket: ""
+    access_key: ""
+    secret_key: ""
+    use_ssl: true
+
+mail:
+  enabled: false
+  host: smtp.example.com
+  port: 587
+  username: ""
+  password: ""
+  from: noreply@example.com
+  tls: true
+
+cors:
+  allow_origins: ["*"]
+  allow_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+  allow_headers: ["Origin", "Content-Type", "Authorization", "X-Requested-With", "X-Trace-Id"]
+  expose_headers: ["X-Trace-Id", "Content-Disposition"]
+  allow_credentials: false
+  max_age: 86400
+
+rate_limit:
+  enabled: true
+  rps: 200
+  burst: 400
+  by_user: true
+
+metrics:
+  enabled: true
+  path: /metrics
+  token: ""
+
+micro:
+  mode: mono               # mono / gateway / service
+  modules: []              # service 模式下启用的模块，空表示全部
+  timeout: 5s
+  retries: 2
+  registry:
+    type: static
+    endpoints: []
+    dns_suffix: ""
+    interval: 30s
+  routes: []
+  breaker:
+    enabled: true
+    max_failed: 10
+    interval: 30
+    timeout: 15

@@ -1,0 +1,310 @@
+/* ==========================================================================
+   基础层：重置、排版、通用布局与工具类
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-800);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+p,
+figure,
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+a {
+  color: var(--brand-600);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--brand-700);
+  }
+}
+
+/* 数字统一等宽，表格与统计里对齐全靠它 */
+.num,
+.el-table td .num,
+.stat-value,
+.mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+/* ---------------------------------------------------------------- 滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ink-300);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--r-full);
+
+  &:hover {
+    background: var(--ink-400);
+    background-clip: content-box;
+  }
+}
+
+/* 管理端外壳存在时锁死文档级滚动：滚动只发生在内容区，
+   即便某页出现意外的溢出元素，也不会把整页顶出可视区域。
+   登录 / 403 / 404 不含 .shell，不受影响。 */
+body:has(.shell) {
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------ 页面骨架 */
+/* 只做透明度过渡：带 transform 的动画会让元素成为 fixed 子元素的包含块，
+   导致弹窗遮罩按内容高度而非视口高度计算（表现为弹窗被裁切）。 */
+.page {
+  padding: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  animation: page-in 0.2s ease;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+  line-height: 1.3;
+}
+
+.page-desc {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--ink-500);
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------- 卡片 */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-xs);
+}
+
+.card-pad {
+  padding: 20px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line-soft);
+
+  h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-900);
+  }
+}
+
+.card-body {
+  padding: 20px;
+}
+
+/* -------------------------------------------------------------- 工具栏 */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  flex-wrap: wrap;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* -------------------------------------------------------------- 工具类 */
+.muted {
+  color: var(--ink-500);
+}
+
+.dim {
+  color: var(--ink-400);
+}
+
+.strong {
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.fs-12 {
+  font-size: 12px;
+}
+
+.fs-13 {
+  font-size: 13px;
+}
+
+.flex {
+  display: flex;
+  align-items: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gap-4 {
+  gap: 4px;
+}
+
+.gap-8 {
+  gap: 8px;
+}
+
+.gap-12 {
+  gap: 12px;
+}
+
+.mt-8 {
+  margin-top: 8px;
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
+
+.mt-24 {
+  margin-top: 24px;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 头像圆点（表格里的用户列） */
+.avatar-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--brand-500);
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+
+/* 状态点 */
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-700);
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ink-400);
+  }
+
+  &.is-on::before {
+    background: var(--ok);
+    box-shadow: 0 0 0 3px rgba(18, 183, 106, 0.14);
+  }
+
+  &.is-off::before {
+    background: var(--ink-300);
+  }
+}
+
+/* ------------------------------------------------------------ 路由过渡 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.16s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}

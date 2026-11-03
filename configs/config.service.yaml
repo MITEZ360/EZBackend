@@ -1,0 +1,26 @@
+# 服务形态：只暴露指定业务模块，可横向扩展成独立服务
+app:
+  name: Keel 用户服务
+  env: dev
+server:
+  port: 9001
+  mode: release
+log:
+  level: info
+  dir: logs
+  filename: keel-user.log
+jwt:
+  secret: "请务必在生产环境替换为至少32位的随机字符串-keel-default-secret"
+  issuer: keel
+db:
+  driver: sqlite
+  dsn: data/keel.db
+redis:
+  enabled: false
+micro:
+  mode: service
+  modules: [user, role, dept, monitor]
+  registry:
+    type: static
+    endpoints:
+      - "keel-core=127.0.0.1:9000"
