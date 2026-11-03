@@ -155,6 +155,8 @@ export const api = {
     request<T>({ ...cfg, url, method: 'POST', data }),
   put: <T>(url: string, data?: unknown, cfg?: AxiosRequestConfig) =>
     request<T>({ ...cfg, url, method: 'PUT', data }),
+  patch: <T>(url: string, data?: unknown, cfg?: AxiosRequestConfig) =>
+    request<T>({ ...cfg, url, method: 'PATCH', data }),
   del: <T>(url: string, cfg?: AxiosRequestConfig) =>
     request<T>({ ...cfg, url, method: 'DELETE' }),
   /** 文件下载：返回 Blob */

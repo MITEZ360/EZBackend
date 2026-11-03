@@ -39,6 +39,7 @@ export const menuIcons: Record<string, Component> = {
   clock: Clock,
   folder: Folder,
   login: Key,
+  key: Key,
   'file-text': Document,
   wifi: Connection,
   activity: TrendCharts,

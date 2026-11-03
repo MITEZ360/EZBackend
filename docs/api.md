@@ -39,6 +39,7 @@
 | `40104` | 401 | 账号已开启两步验证，需要补充动态码 |
 | `40105` | 401 | 动态验证码错误 |
 | `40106` | 401 | 恢复码无效或已被使用 |
+| `40107` | 401 | API 密钥缺失、无效、已停用或已过期 |
 | `40300` | 403 | 无权限 |
 | `40400` | 404 | 资源不存在 |
 | `40500` | 405 | 方法不允许 |
@@ -86,6 +87,22 @@ Content-Type: application/json
 - 两步验证流程：账号开启 TOTP 后，首次提交不携带第二因子会返回 `401 + code 40104`，
   前端据此进入第二步，再带 `totpCode`（6 位动态码）或 `recoveryCode`（10 位恢复码）重新提交。
   两次提交可复用同一个图形验证码（有效期 5 分钟），失败一次即作废。
+
+### 机器身份（API 密钥）
+
+`/api/v1/*` 面向后台用户，用登录令牌；`/api/open/v1/*` 面向程序调用方，用 API 密钥。
+两套凭证互不通用——拿着用户令牌无法调用开放接口，反之亦然。
+
+```http
+GET /api/open/v1/whoami
+X-API-Key: ak_s_8fQ2mN...
+```
+
+- 密钥仅在签发与轮换时返回一次，库中只存 SHA-256 哈希与前 12 位前缀。
+- 失败统一返回 `401 + code 40107`，不区分「不存在」与「已停用」，避免被用来枚举凭证。
+- 每次调用按凭证独立的速率与日配额限流；缓存故障时放行，不把缓存问题放大成业务不可用。
+- `kind=service` 的服务端密钥可当作秘密保管；`kind=client` 随安装包分发，只能视为来源标识。
+- 可配置 IP / CIDR 白名单，命中失败的请求返回 `403`。
 
 ---
 
@@ -419,6 +436,46 @@ Content-Type: application/json
 | GET | `/healthz` | 存活检查：自身 + 数据库 + 缓存 |
 | GET | `/readyz` | 就绪检查：数据库连通 |
 | GET | `/metrics` | Prometheus 指标（可加 token 保护） |
+
+### 4.17 API 密钥（后台管理）
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| GET | `/api-keys` | 分页；支持 `keyword`、`kind`、`status`，返回时附当日用量 | `system:apikey:list` |
+| GET | `/api-keys/scopes` | 可授予的权限点清单（取自菜单） | `system:apikey:list` |
+| POST | `/api-keys` | 签发，返回 `{key, plain}`，`plain` 仅此一次 | `system:apikey:create` |
+| PUT | `/api-keys/:id` | 编辑名称/范围/白名单/配额/有效期；类型不可改 | `system:apikey:update` |
+| POST | `/api-keys/:id/rotate` | 轮换，旧密钥立即失效 | `system:apikey:rotate` |
+| PATCH | `/api-keys/:id/status` | `{"status": 0\|1}` 启用或停用 | `system:apikey:update` |
+| DELETE | `/api-keys/:id` | 软删除，保留审计轨迹 | `system:apikey:delete` |
+
+签发入参：
+
+```json
+{
+  "name": "资讯爬虫-生产",
+  "kind": "service",
+  "scopes": ["news:ingest"],
+  "ipAllow": ["10.0.0.0/8", "203.0.113.7"],
+  "rateRps": 50,
+  "rateBurst": 100,
+  "dailyQuota": 200000,
+  "expireAt": "2027-01-01T00:00:00+08:00",
+  "remark": "生产环境采集"
+}
+```
+
+- `rateRps`/`rateBurst` 为 0 时取默认值（服务端 60 rps，客户端 10 rps）。
+- `dailyQuota` 为 0 表示不限额；用量按自然日统计，跨实例共享。
+- 非超管只能授予自己已拥有的权限点，`*` 仅超管可签发。
+
+### 4.18 开放接口（`/api/open/v1`）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/whoami` | 返回凭证身份、scope、日配额与当日用量，用于接入自检 |
+
+请求头二选一：`X-API-Key: <plain>` 或 `Authorization: ApiKey <plain>`。
 
 ---
 

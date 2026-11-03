@@ -16,6 +16,7 @@ const (
 	CodeTokenExpired    = 40101
 	CodeTokenInvalid    = 40102
 	CodeAccountLocked   = 40103
+	CodeAPIKeyInvalid   = 40107
 	CodeForbidden       = 40300
 	CodeNotFound        = 40400
 	CodeMethodNotAllow  = 40500
@@ -72,13 +73,19 @@ func Newf(status, code int, format string, args ...any) *Error {
 // 常用构造器，覆盖 90% 的业务场景。
 func BadRequest(msg string) *Error   { return New(http.StatusBadRequest, CodeBadRequest, msg) }
 func Unauthorized(msg string) *Error { return New(http.StatusUnauthorized, CodeUnauthorized, msg) }
-func Forbidden(msg string) *Error    { return New(http.StatusForbidden, CodeForbidden, msg) }
-func NotFound(msg string) *Error     { return New(http.StatusNotFound, CodeNotFound, msg) }
-func Conflict(msg string) *Error     { return New(http.StatusConflict, CodeConflict, msg) }
-func Internal(msg string) *Error     { return New(http.StatusInternalServerError, CodeInternal, msg) }
-func TooMany(msg string) *Error      { return New(http.StatusTooManyRequests, CodeTooManyRequests, msg) }
-func Unavailable(msg string) *Error  { return New(http.StatusServiceUnavailable, CodeUnavailable, msg) }
-func Validation(msg string) *Error   { return New(http.StatusBadRequest, CodeValidation, msg) }
+
+// APIKeyInvalid 凭证缺失、无效、停用或过期。与登录态失效分开编码，
+// 方便调用方区分是「密钥问题」还是「用户会话问题」。
+func APIKeyInvalid(msg string) *Error {
+	return New(http.StatusUnauthorized, CodeAPIKeyInvalid, msg)
+}
+func Forbidden(msg string) *Error   { return New(http.StatusForbidden, CodeForbidden, msg) }
+func NotFound(msg string) *Error    { return New(http.StatusNotFound, CodeNotFound, msg) }
+func Conflict(msg string) *Error    { return New(http.StatusConflict, CodeConflict, msg) }
+func Internal(msg string) *Error    { return New(http.StatusInternalServerError, CodeInternal, msg) }
+func TooMany(msg string) *Error     { return New(http.StatusTooManyRequests, CodeTooManyRequests, msg) }
+func Unavailable(msg string) *Error { return New(http.StatusServiceUnavailable, CodeUnavailable, msg) }
+func Validation(msg string) *Error  { return New(http.StatusBadRequest, CodeValidation, msg) }
 
 // Wrap 包装底层错误并对外隐藏细节。
 func Wrap(status, code int, msg string, err error) *Error {

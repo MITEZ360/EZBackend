@@ -60,6 +60,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '消息中心' },
       },
       {
+        path: 'system/apikey',
+        name: 'system-apikey',
+        component: () => import('@/pages/system/apikey/index.vue'),
+        meta: { title: 'API 密钥' },
+      },
+      {
         path: 'system/dept',
         name: 'system-dept',
         component: () => import('@/pages/system/dept/index.vue'),

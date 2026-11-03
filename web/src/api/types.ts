@@ -381,3 +381,25 @@ export interface MessageSentRow {
   read: number
   refType?: string
 }
+
+/** 机器身份：服务端密钥可用于爬虫/服务间调用，客户端标识仅用于识别来源 */
+export interface APIKeyRow {
+  id: string
+  createdAt: string
+  updatedAt: string
+  name: string
+  prefix: string
+  kind: 'service' | 'client'
+  scopes: string[]
+  ipAllow: string[]
+  rateRps: number
+  rateBurst: number
+  dailyQuota: number
+  expireAt?: string
+  lastUsedAt?: string
+  lastUsedIp?: string
+  status: number
+  remark?: string
+  creatorName?: string
+  todayUsage: number
+}

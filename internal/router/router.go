@@ -19,6 +19,7 @@ import (
 
 	"github.com/keel-framework/keel/internal/micro"
 	"github.com/keel-framework/keel/internal/middleware"
+	"github.com/keel-framework/keel/internal/modules/apikey"
 	"github.com/keel-framework/keel/internal/modules/audit"
 	"github.com/keel-framework/keel/internal/modules/auth"
 	"github.com/keel-framework/keel/internal/modules/dashboard"
@@ -72,6 +73,8 @@ type Deps struct {
 	Notice     *system.NoticeHandler
 	Message    *message.Handler
 	Membership *membership.Handler
+	APIKey     *apikey.Handler
+	APIKeySvc  *apikey.Service
 	Audit      *audit.Handler
 	Job        *job.Handler
 	File       *file.Handler
@@ -150,6 +153,9 @@ func New(d Deps) *gin.Engine {
 	if d.on("membership") {
 		d.membershipRoutes(authed)
 	}
+	if d.on("apikey") {
+		d.apiKeyRoutes(authed)
+	}
 	if d.on("role") {
 		d.roleRoutes(authed)
 	}
@@ -182,6 +188,13 @@ func New(d Deps) *gin.Engine {
 	}
 	if d.on("monitor") {
 		d.monitorRoutes(authed)
+	}
+
+	// ---- 开放接口：面向程序调用方，用 API 密钥认证，不经过用户会话 ----
+	if d.APIKeySvc != nil {
+		open := e.Group("/api/open/v1",
+			middleware.APIKeyAuth(d.APIKeySvc, d.Cfg.Server.TrustProxy))
+		open.GET("/whoami", d.APIKey.Whoami)
 	}
 
 	e.NoRoute(d.notFound)

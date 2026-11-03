@@ -30,7 +30,7 @@
 | 资源占用 | 单二进制、纯 Go SQLite 驱动（零 CGO）、静态资源内嵌 | 空闲进程约 **26MB** 内存、**18** 个 goroutine |
 | 请求速度 | 权限点/字典/参数短时缓存、批量填充避免 N+1、预编译语句 | 列表接口约 **0.45ms**（SQLite，单核） |
 | 日志记录全 | Zap JSON 结构化日志 + 访问日志 + 慢请求 + 操作审计 + 登录日志 | 可落到 ELK/Loki，按 traceId 串联 |
-| 业务覆盖 | 14 个业务模块、114 条 REST 路由、15 个管理页面、4 个内置任务执行器 | 覆盖中小企业通用后台需求 |
+| 业务覆盖 | 15 个业务模块、116 条 REST 接口、16 个管理页面、4 个内置任务执行器 | 覆盖中小企业通用后台需求 |
 | 部署弹性 | `mono` / `gateway` / `service` 三种形态同一份代码 | 从 1 台机器平滑演进到微服务 |
 
 **所有能力都基于成熟组件**：HTTP 用 Gin、ORM 用 GORM、配置用 Viper、日志用 Zap + lumberjack、
@@ -74,6 +74,7 @@ go run ./cmd/keel -config configs/config.yaml
 | 组织 | 无限级部门树、负责人、成员数统计、防环校验 |
 | 用户 | 增删改查、状态启停、重置密码、分配角色、手机号脱敏、Excel 导入 / 导出（含失败明细）、批量删除 |
 | 会员 | 多等级配置（名称/权重/标识色/默认时长）、等级权益键值对、开通/续费/取消、永久或指定到期日、到期自动降级、用户侧权益展示、按会员状态筛选、权益中间件 |
+| 对外接入 | API 密钥（服务端 / 客户端两类）、scope 与 RBAC 同构、IP 网段白名单、独立速率与日配额、一键轮换、签发时仅回显一次明文 |
 | 角色 | 数据范围、菜单授权、内置角色保护 |
 | 菜单 | 目录/菜单/按钮三级、导航树、权限点自动收集、拖拽排序字段 |
 | 字典 | 字典类型 + 字典项、前端 `PublicData` 一次性拉取、10 分钟缓存 |
@@ -102,7 +103,7 @@ go run ./cmd/keel -config configs/config.yaml
 │   ├── middleware/          # trace/日志/恢复/CORS/限流/审计/指标/鉴权鉴权点
 │   ├── micro/               # 网关：前缀路由 + 服务发现 + 重试 + 熔断
 │   ├── model/               # GORM 模型（用户/角色/菜单/部门/字典/参数/日志/任务/文件/消息）
-│   ├── modules/             # 14 个业务模块，统一 service.go + handler.go
+│   ├── modules/             # 15 个业务模块，统一 service.go + handler.go
 │   └── platform/            # 基础设施：config logger database cache authn authz crypto idgen httpx
 ├── pkg/                     # 通用库：errs response query utils event client discovery version
 ├── web/                     # 管理控制台：Vue 3 + TS + Element Plus + Vite

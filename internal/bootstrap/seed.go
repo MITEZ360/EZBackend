@@ -90,6 +90,12 @@ var menuSeeds = []menuSeed{
 			{ID: "m_membership_edit", Name: "编辑等级", Type: model.MenuButton, Perm: "system:membership:update"},
 			{ID: "m_membership_del", Name: "删除等级", Type: model.MenuButton, Perm: "system:membership:delete"},
 		}},
+		{ID: "m_apikey", Name: "API 密钥", Type: model.MenuPage, Path: "/system/apikey", Icon: "key", Perm: "system:apikey:list", Sort: 10, Children: []menuSeed{
+			{ID: "m_apikey_add", Name: "签发密钥", Type: model.MenuButton, Perm: "system:apikey:create"},
+			{ID: "m_apikey_edit", Name: "编辑密钥", Type: model.MenuButton, Perm: "system:apikey:update"},
+			{ID: "m_apikey_rotate", Name: "轮换密钥", Type: model.MenuButton, Perm: "system:apikey:rotate"},
+			{ID: "m_apikey_del", Name: "删除密钥", Type: model.MenuButton, Perm: "system:apikey:delete"},
+		}},
 	}},
 	{ID: "m_ops", Name: "运维中心", Type: model.MenuDir, Path: "/ops", Icon: "server", Sort: 20, Children: []menuSeed{
 		{ID: "m_job", Name: "定时任务", Type: model.MenuPage, Path: "/ops/job", Icon: "clock", Perm: "ops:job:list", Sort: 1, Children: []menuSeed{

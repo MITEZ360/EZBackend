@@ -94,6 +94,14 @@ func (m *Manager) Parse(tokenStr string) (*Claims, error) {
 }
 
 // Identity 是请求上下文中的登录主体。
+// 身份类型。零值按后台用户处理，兼容既有调用点。
+const (
+	KindUser    = "user"
+	KindService = "service"
+)
+
+// Identity 是请求主体，登录用户与机器身份共用同一结构，
+// 因此下游的 RequirePerm 无需区分调用方是人还是程序。
 type Identity struct {
 	UserID    string              `json:"userId"`
 	Username  string              `json:"username"`
@@ -102,7 +110,14 @@ type Identity struct {
 	Roles     []string            `json:"roles"`
 	Super     bool                `json:"super"`
 	SessionID string              `json:"sessionId,omitempty"`
+	Kind      string              `json:"kind,omitempty"`
+	APIKeyID  string              `json:"apiKeyId,omitempty"`
 	Perms     map[string]struct{} `json:"-"`
+}
+
+// IsService 判断是否为机器身份（API 密钥调用）。
+func (i *Identity) IsService() bool {
+	return i != nil && i.Kind == KindService
 }
 
 // Has 判断是否具备权限点。

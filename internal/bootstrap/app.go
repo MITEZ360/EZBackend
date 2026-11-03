@@ -19,6 +19,7 @@ import (
 	"github.com/keel-framework/keel/internal/micro"
 	"github.com/keel-framework/keel/internal/middleware"
 	"github.com/keel-framework/keel/internal/model"
+	"github.com/keel-framework/keel/internal/modules/apikey"
 	"github.com/keel-framework/keel/internal/modules/audit"
 	"github.com/keel-framework/keel/internal/modules/auth"
 	"github.com/keel-framework/keel/internal/modules/dashboard"
@@ -161,6 +162,7 @@ func New(cfgPath string) (*App, error) {
 	// 公告发布后同步投递站内信；message.Service 实现 system.NoticeNotifier。
 	noticeSvc := system.NewNoticeService(db, msgSvc, lg)
 	auditSvc := audit.NewService(db, ch, lg)
+	apiKeySvc := apikey.NewService(db, ch, lg)
 	jobSvc := job.NewService(db, ch, lg)
 	jobSvc.SetCleaner(auditSvc)
 	jobSvc.SetMessageCleaner(msgSvc)
@@ -195,6 +197,8 @@ func New(cfgPath string) (*App, error) {
 		Notice:     system.NewNoticeHandler(noticeSvc),
 		Message:    message.NewHandler(msgSvc),
 		Membership: membership.NewHandler(membershipSvc),
+		APIKey:     apikey.NewHandler(apiKeySvc),
+		APIKeySvc:  apiKeySvc,
 		Audit:      audit.NewHandler(auditSvc),
 		Job:        job.NewHandler(jobSvc),
 		File:       file.NewHandler(fileSvc),
@@ -232,7 +236,7 @@ func models() []any {
 		&model.Dept{}, &model.Session{}, &model.DictType{}, &model.DictItem{}, &model.SysConfig{},
 		&model.Notice{}, &model.LoginLog{}, &model.OperationLog{}, &model.Job{}, &model.JobLog{},
 		&model.File{}, &model.Message{}, &model.MessageRecipient{},
-		&model.MembershipLevel{},
+		&model.MembershipLevel{}, &model.APIKey{},
 	}
 }
 
