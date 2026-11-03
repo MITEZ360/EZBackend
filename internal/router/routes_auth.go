@@ -13,6 +13,7 @@ func (d Deps) authRoutes(g *gin.RouterGroup) {
 	g.POST("/auth/totp/setup", d.Auth.SetupTOTP)
 	g.POST("/auth/totp/enable", d.Auth.EnableTOTP)
 	g.POST("/auth/totp/disable", d.Auth.DisableTOTP)
+	g.POST("/auth/totp/recovery", d.Auth.RegenerateRecoveryCodes)
 	g.GET("/auth/sessions", d.Auth.Sessions)
 	g.DELETE("/auth/sessions/:id", d.Auth.RevokeSession)
 }

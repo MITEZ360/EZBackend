@@ -131,6 +131,16 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 	response.OK(c, gin.H{"message": "密码已重置"})
 }
 
+// ResetTOTP 重置指定用户的两步验证。
+func (h *Handler) ResetTOTP(c *gin.Context) {
+	if err := h.svc.ResetTOTP(c.Request.Context(), c.Param("id"), middleware.UserID(c)); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	middleware.AuditInfo(c, "用户管理", "重置两步验证")
+	response.OK(c, gin.H{"message": "两步验证已重置"})
+}
+
 // RolesInput 角色分配入参。
 type RolesInput struct {
 	RoleIDs []string `json:"roleIds"`

@@ -3,6 +3,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/http"
@@ -57,24 +58,35 @@ type LoginInput struct {
 	CaptchaID   string `json:"captchaId"`
 	CaptchaCode string `json:"captchaCode"`
 	TOTPCode    string `json:"totpCode"`
+	// RecoveryCode 恢复码，与 TOTPCode 二选一；手机丢失时使用。
+	RecoveryCode string `json:"recoveryCode"`
 }
+
+// 两步验证相关业务码，前端据此区分登录步骤而不是靠文案匹配。
+const (
+	CodeTOTPRequired    = 40104 // 该账号已开启两步验证，需要补充动态码
+	CodeTOTPInvalid     = 40105 // 动态码错误
+	CodeRecoveryInvalid = 40106 // 恢复码错误或已使用
+)
 
 // UserInfo 登录用户信息。
 type UserInfo struct {
-	ID          string   `json:"id"`
-	Username    string   `json:"username"`
-	Nickname    string   `json:"nickname"`
-	RealName    string   `json:"realName,omitempty"`
-	Avatar      string   `json:"avatar,omitempty"`
-	Email       string   `json:"email,omitempty"`
-	Phone       string   `json:"phone,omitempty"`
-	DeptID      string   `json:"deptId,omitempty"`
-	DeptName    string   `json:"deptName,omitempty"`
-	IsSuper     bool     `json:"isSuper"`
-	TOTPEnabled bool     `json:"totpEnabled"`
-	Roles       []string `json:"roles"`
-	Perms       []string `json:"perms"`
-	LastLoginAt string   `json:"lastLoginAt,omitempty"`
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	RealName    string `json:"realName,omitempty"`
+	Avatar      string `json:"avatar,omitempty"`
+	Email       string `json:"email,omitempty"`
+	Phone       string `json:"phone,omitempty"`
+	DeptID      string `json:"deptId,omitempty"`
+	DeptName    string `json:"deptName,omitempty"`
+	IsSuper     bool   `json:"isSuper"`
+	TOTPEnabled bool   `json:"totpEnabled"`
+	// RecoveryCodesLeft 剩余可用恢复码数量，仅在个人中心返回
+	RecoveryCodesLeft int      `json:"recoveryCodesLeft,omitempty"`
+	Roles             []string `json:"roles"`
+	Perms             []string `json:"perms"`
+	LastLoginAt       string   `json:"lastLoginAt,omitempty"`
 	// SessionID 当前请求所属会话，前端据此标记"当前会话"
 	SessionID string `json:"sessionId,omitempty"`
 }
@@ -95,8 +107,18 @@ type Profile struct {
 
 // Login 校验凭据并签发令牌。
 func (s *Service) Login(ctx context.Context, in *LoginInput, meta ClientMeta) (*TokenPair, *UserInfo, error) {
-	if s.cfg.Security.CaptchaEnabled && !s.captcha.Verify(in.CaptchaID, in.CaptchaCode) {
+	// 先只校验不消费：开启两步验证时，密码通过后还要用同一个验证码提交动态码。
+	// 若在这里就作废，第二次提交必然报"验证码已过期"。
+	if s.cfg.Security.CaptchaEnabled && !s.captcha.Peek(in.CaptchaID, in.CaptchaCode) {
 		return nil, nil, errs.BadRequest("验证码错误或已过期")
+	}
+	keepCaptcha := false
+	if s.cfg.Security.CaptchaEnabled {
+		defer func() {
+			if !keepCaptcha {
+				s.captcha.Drop(in.CaptchaID)
+			}
+		}()
 	}
 	if locked, ttl := s.isLocked(ctx, in.Username); locked {
 		return nil, nil, errs.New(http.StatusLocked, errs.CodeAccountLocked,
@@ -121,13 +143,14 @@ func (s *Service) Login(ctx context.Context, in *LoginInput, meta ClientMeta) (*
 		return nil, nil, errs.Forbidden("账号已被禁用，请联系管理员")
 	}
 	if user.TOTPEnabled {
-		if strings.TrimSpace(in.TOTPCode) == "" {
-			return nil, nil, errs.New(http.StatusUnauthorized, 40104, "请输入动态验证码")
-		}
-		secret, err := crypto.Decrypt(user.TOTPSecret, s.cfg.Security.DataEncryptKey)
-		if err != nil || !authn.ValidateTOTP(secret, in.TOTPCode) {
-			s.onLoginFail(ctx, user.ID, in.Username, meta, "动态验证码错误")
-			return nil, nil, errs.New(http.StatusUnauthorized, 40105, "动态验证码错误")
+		if err := s.verifySecondFactor(ctx, &user, in); err != nil {
+			var e *errs.Error
+			if errors.As(err, &e) && e.Code == CodeTOTPRequired {
+				keepCaptcha = true // 留给第二次提交
+			} else if errors.As(err, &e) {
+				s.onLoginFail(ctx, user.ID, in.Username, meta, e.Message)
+			}
+			return nil, nil, err
 		}
 	}
 
@@ -343,6 +366,9 @@ func (s *Service) Profile(ctx context.Context, identity *authn.Identity) (*Profi
 		info.Perms = []string{"*"}
 	}
 	info.SessionID = identity.SessionID
+	if user.TOTPEnabled {
+		info.RecoveryCodesLeft = s.countRecoveryCodes(ctx, user.ID)
+	}
 	return &Profile{User: info, Menus: menus}, nil
 }
 
@@ -437,9 +463,16 @@ func (s *Service) checkPasswordPolicy(pw string) error {
 }
 
 // TOTPSetupOutput 动态口令初始化结果。
+// QRCode 是 PNG 的 data URI，前端直接渲染，不依赖外网二维码服务。
 type TOTPSetupOutput struct {
 	Secret string `json:"secret"`
 	URL    string `json:"url"`
+	QRCode string `json:"qrCode"`
+}
+
+// TOTPEnableOutput 启用结果。恢复码只在启用时明文返回一次，服务端仅存哈希。
+type TOTPEnableOutput struct {
+	RecoveryCodes []string `json:"recoveryCodes"`
 }
 
 // SetupTOTP 生成动态口令密钥（尚未启用）。
@@ -448,41 +481,81 @@ func (s *Service) SetupTOTP(ctx context.Context, userID string) (*TOTPSetupOutpu
 	if err := s.db.WithContext(ctx).First(&user, "id = ?", userID).Error; err != nil {
 		return nil, errs.NotFound("用户不存在")
 	}
+	// 已开启时不允许重新生成：否则任何已登录会话都能悄悄换绑认证器，
+	// 二次验证就失去了"必须持有原设备"的意义。
+	if user.TOTPEnabled {
+		return nil, errs.Conflict("两步验证已开启，请先关闭后再重新绑定")
+	}
 	secret, url, err := authn.GenerateTOTP(s.cfg.App.Name, user.Username)
 	if err != nil {
-		return nil, err
+		return nil, errs.Internal("动态口令生成失败")
+	}
+	qr, err := authn.QRCodeDataURI(url)
+	if err != nil {
+		return nil, errs.Internal("二维码生成失败")
 	}
 	enc, err := crypto.Encrypt(secret, s.cfg.Security.DataEncryptKey)
 	if err != nil {
 		return nil, err
 	}
+	// 只写密钥、不置 enabled：必须再提交一次动态码，确认认证器已正确添加。
 	if err := s.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).
 		Updates(map[string]any{"totp_secret": enc, "totp_enabled": false}).Error; err != nil {
 		return nil, err
 	}
-	return &TOTPSetupOutput{Secret: secret, URL: url}, nil
+	return &TOTPSetupOutput{Secret: secret, URL: url, QRCode: qr}, nil
 }
 
-// EnableTOTP 校验并启用动态口令。
-func (s *Service) EnableTOTP(ctx context.Context, userID, code string) error {
+// EnableTOTP 校验并启用两步验证，同时下发一次性恢复码。
+func (s *Service) EnableTOTP(ctx context.Context, userID, code string) (*TOTPEnableOutput, error) {
 	var user model.User
 	if err := s.db.WithContext(ctx).First(&user, "id = ?", userID).Error; err != nil {
-		return errs.NotFound("用户不存在")
+		return nil, errs.NotFound("用户不存在")
+	}
+	if user.TOTPEnabled {
+		return nil, errs.Conflict("两步验证已开启")
 	}
 	if user.TOTPSecret == "" {
-		return errs.BadRequest("请先获取密钥")
+		return nil, errs.BadRequest("请先获取密钥")
 	}
 	secret, err := crypto.Decrypt(user.TOTPSecret, s.cfg.Security.DataEncryptKey)
 	if err != nil {
-		return errs.Internal("密钥解析失败")
+		return nil, errs.Internal("密钥解析失败")
 	}
 	if !authn.ValidateTOTP(secret, code) {
-		return errs.BadRequest("动态验证码错误")
+		return nil, errs.BadRequest("动态验证码错误，请确认认证器中的验证码与手机时间")
 	}
-	return s.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Update("totp_enabled", true).Error
+
+	codes, err := authn.GenerateRecoveryCodes(authn.RecoveryCodeCount)
+	if err != nil {
+		return nil, errs.Internal("恢复码生成失败")
+	}
+	now := time.Now()
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.User{}).Where("id = ?", userID).
+			Update("totp_enabled", true).Error; err != nil {
+			return err
+		}
+		// 重新绑定会覆盖旧密钥，旧恢复码必须一并作废
+		if err := tx.Where("user_id = ?", userID).Delete(&model.UserRecoveryCode{}).Error; err != nil {
+			return err
+		}
+		rows := make([]model.UserRecoveryCode, 0, len(codes))
+		for _, c := range codes {
+			rows = append(rows, model.UserRecoveryCode{
+				ID: idgen.Next(), UserID: userID,
+				CodeHash: authn.HashRecoveryCode(c, s.recoveryKey()), CreatedAt: now,
+			})
+		}
+		return tx.Create(&rows).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &TOTPEnableOutput{RecoveryCodes: codes}, nil
 }
 
-// DisableTOTP 关闭动态口令。
+// DisableTOTP 关闭两步验证。code 既可以是 6 位动态码，也可以是恢复码。
 func (s *Service) DisableTOTP(ctx context.Context, userID, code string) error {
 	var user model.User
 	if err := s.db.WithContext(ctx).First(&user, "id = ?", userID).Error; err != nil {
@@ -491,12 +564,132 @@ func (s *Service) DisableTOTP(ctx context.Context, userID, code string) error {
 	if !user.TOTPEnabled {
 		return nil
 	}
-	secret, err := crypto.Decrypt(user.TOTPSecret, s.cfg.Security.DataEncryptKey)
-	if err != nil || !authn.ValidateTOTP(secret, code) {
-		return errs.BadRequest("动态验证码错误")
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return errs.BadRequest("请输入动态验证码或恢复码")
 	}
-	return s.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).
-		Updates(map[string]any{"totp_enabled": false, "totp_secret": ""}).Error
+	if isRecoveryCode(code) {
+		if err := s.consumeRecoveryCode(ctx, &user, code); err != nil {
+			return err
+		}
+	} else {
+		secret, err := crypto.Decrypt(user.TOTPSecret, s.cfg.Security.DataEncryptKey)
+		if err != nil || !authn.ValidateTOTP(secret, code) {
+			return errs.BadRequest("动态验证码错误")
+		}
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.User{}).Where("id = ?", userID).
+			Updates(map[string]any{"totp_enabled": false, "totp_secret": ""}).Error; err != nil {
+			return err
+		}
+		return tx.Where("user_id = ?", userID).Delete(&model.UserRecoveryCode{}).Error
+	})
+}
+
+// RegenerateRecoveryCodes 重新生成恢复码，旧码立即失效。
+func (s *Service) RegenerateRecoveryCodes(ctx context.Context, userID, code string) (*TOTPEnableOutput, error) {
+	var user model.User
+	if err := s.db.WithContext(ctx).First(&user, "id = ?", userID).Error; err != nil {
+		return nil, errs.NotFound("用户不存在")
+	}
+	if !user.TOTPEnabled {
+		return nil, errs.BadRequest("请先开启两步验证")
+	}
+	secret, err := crypto.Decrypt(user.TOTPSecret, s.cfg.Security.DataEncryptKey)
+	if err != nil {
+		return nil, errs.Internal("密钥解析失败")
+	}
+	if !authn.ValidateTOTP(secret, code) {
+		return nil, errs.BadRequest("动态验证码错误")
+	}
+	codes, err := authn.GenerateRecoveryCodes(authn.RecoveryCodeCount)
+	if err != nil {
+		return nil, errs.Internal("恢复码生成失败")
+	}
+	now := time.Now()
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", userID).Delete(&model.UserRecoveryCode{}).Error; err != nil {
+			return err
+		}
+		rows := make([]model.UserRecoveryCode, 0, len(codes))
+		for _, c := range codes {
+			rows = append(rows, model.UserRecoveryCode{
+				ID: idgen.Next(), UserID: userID,
+				CodeHash: authn.HashRecoveryCode(c, s.recoveryKey()), CreatedAt: now,
+			})
+		}
+		return tx.Create(&rows).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &TOTPEnableOutput{RecoveryCodes: codes}, nil
+}
+
+// verifySecondFactor 校验登录的第二因子：优先恢复码，其次动态码。
+func (s *Service) verifySecondFactor(ctx context.Context, user *model.User, in *LoginInput) error {
+	code := strings.TrimSpace(in.TOTPCode)
+	recovery := strings.TrimSpace(in.RecoveryCode)
+	switch {
+	case code == "" && recovery == "":
+		return errs.New(http.StatusUnauthorized, CodeTOTPRequired, "该账号已开启两步验证，请输入动态验证码")
+	case recovery != "":
+		return s.consumeRecoveryCode(ctx, user, recovery)
+	default:
+		secret, err := crypto.Decrypt(user.TOTPSecret, s.cfg.Security.DataEncryptKey)
+		if err != nil || !authn.ValidateTOTP(secret, code) {
+			return errs.New(http.StatusUnauthorized, CodeTOTPInvalid, "动态验证码错误")
+		}
+		return nil
+	}
+}
+
+// consumeRecoveryCode 校验并消费一个恢复码。条件更新保证并发下同一码只能用一次。
+func (s *Service) consumeRecoveryCode(ctx context.Context, user *model.User, code string) error {
+	if len(authn.NormalizeRecoveryCode(code)) != authn.RecoveryCodeLength {
+		return errs.New(http.StatusUnauthorized, CodeRecoveryInvalid, "恢复码格式不正确")
+	}
+	hash := authn.HashRecoveryCode(code, s.recoveryKey())
+	var rows []model.UserRecoveryCode
+	if err := s.db.WithContext(ctx).
+		Where("user_id = ? AND used_at IS NULL", user.ID).Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if subtle.ConstantTimeCompare([]byte(row.CodeHash), []byte(hash)) != 1 {
+			continue
+		}
+		res := s.db.WithContext(ctx).Model(&model.UserRecoveryCode{}).
+			Where("id = ? AND used_at IS NULL", row.ID).Update("used_at", time.Now())
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			break // 并发下已被其它请求消费
+		}
+		s.log.Warn("使用恢复码完成二次验证", zap.String("userId", user.ID))
+		return nil
+	}
+	return errs.New(http.StatusUnauthorized, CodeRecoveryInvalid, "恢复码无效或已被使用")
+}
+
+// countRecoveryCodes 统计剩余可用恢复码，用于个人中心提示。
+func (s *Service) countRecoveryCodes(ctx context.Context, userID string) int {
+	var n int64
+	if err := s.db.WithContext(ctx).Model(&model.UserRecoveryCode{}).
+		Where("user_id = ? AND used_at IS NULL", userID).Count(&n).Error; err != nil {
+		return 0
+	}
+	return int(n)
+}
+
+// recoveryKey 恢复码哈希使用的密钥；未单独配置时与加密密钥一致。
+func (s *Service) recoveryKey() string { return s.cfg.Security.DataEncryptKey }
+
+// isRecoveryCode 区分恢复码与 6 位动态码。
+func isRecoveryCode(code string) bool {
+	return len(authn.NormalizeRecoveryCode(code)) == authn.RecoveryCodeLength
 }
 
 // SessionInfo 在线会话信息。

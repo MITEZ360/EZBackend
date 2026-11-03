@@ -20,6 +20,7 @@ func (d Deps) userRoutes(g *gin.RouterGroup) {
 	g.DELETE("/users/:id", middleware.RequirePerm("system:user:delete"), d.User.Delete)
 	g.PUT("/users/:id/status", middleware.RequirePerm("system:user:update"), d.User.SetStatus)
 	g.PUT("/users/:id/password", middleware.RequirePerm("system:user:reset"), d.User.ResetPassword)
+	g.DELETE("/users/:id/totp", middleware.RequirePerm("system:user:reset-totp"), d.User.ResetTOTP)
 	g.PUT("/users/:id/roles", middleware.RequirePerm("system:user:update"), d.User.SetRoles)
 	g.GET("/options/users", middleware.RequirePerm("system:user:list"), d.User.Options)
 	g.GET("/exports/users", middleware.RequirePerm("system:user:export"), d.User.Export)

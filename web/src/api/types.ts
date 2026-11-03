@@ -36,6 +36,8 @@ export interface UserInfo {
   deptName?: string
   isSuper: boolean
   totpEnabled?: boolean
+  /** 剩余可用恢复码数量（仅个人中心接口返回） */
+  recoveryCodesLeft?: number
   roles: string[]
   perms: string[]
   lastLoginAt?: string

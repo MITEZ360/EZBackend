@@ -103,7 +103,11 @@ http.interceptors.response.use(
     const status = error.response?.status ?? 0
     const body = error.response?.data
 
-    if (status === 401 && cfg && !cfg._retried) {
+    // 登录接口的 401 是业务失败（密码错误、需要动态码），不是会话过期：
+    // 不能走刷新令牌逻辑，否则错误码会被改写成 40100，前端无法区分登录步骤。
+    const isLoginCall = (cfg?.url ?? '').includes('/auth/login')
+
+    if (status === 401 && cfg && !cfg._retried && !isLoginCall) {
       cfg._retried = true
       if (!refreshing) {
         refreshing = refreshToken().finally(() => {

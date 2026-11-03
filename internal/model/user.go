@@ -39,6 +39,20 @@ type UserRole struct {
 // TableName 指定表名。
 func (UserRole) TableName() string { return "sys_user_role" }
 
+// UserRecoveryCode 两步验证的一次性恢复码。
+// 只存哈希，验证通过后写入 used_at；不设软删除与 Base ——
+// 恢复码是消耗型记录，保留行才能统计"已用/未用"，软删除会让唯一性判断变形。
+type UserRecoveryCode struct {
+	ID        string     `gorm:"primaryKey;size:32" json:"id"`
+	UserID    string     `gorm:"size:32;index:idx_recovery_user" json:"userId"`
+	CodeHash  string     `gorm:"size:64;not null" json:"-"`
+	UsedAt    *time.Time `json:"usedAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+}
+
+// TableName 指定表名。
+func (UserRecoveryCode) TableName() string { return "sys_user_recovery_code" }
+
 // Role 角色。
 type Role struct {
 	Base

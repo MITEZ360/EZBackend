@@ -252,8 +252,24 @@ async function removeUser(row: UserRow) {
 
 function onCommand(cmd: string, row: UserRow) {
   if (cmd === 'reset') return resetPassword(row)
+  if (cmd === 'totp') return resetTOTP(row)
   if (cmd === 'status') return toggleStatus(row)
   if (cmd === 'delete') return removeUser(row)
+}
+
+async function resetTOTP(row: UserRow) {
+  try {
+    await ElMessageBox.confirm(
+      `将清除「${row.nickname}」的两步验证配置，并强制其重新登录后重新绑定认证器。确定继续吗？`,
+      '重置两步验证',
+      { confirmButtonText: '重置', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  await userApi.resetTOTP(row.id)
+  ElMessage.success('已重置两步验证')
+  await load()
 }
 
 /* ---------------------------------------------------------- 导入 / 批量 */
@@ -514,6 +530,14 @@ onMounted(async () => {
                 <el-dropdown-menu>
                   <el-dropdown-item command="reset" :disabled="!auth.can('system:user:reset')">
                     重置密码
+                  </el-dropdown-item>
+                  <el-dropdown-item
+                    command="totp"
+                    :disabled="
+                      !auth.can('system:user:reset-totp') || !row.totpEnabled || row.isSuper
+                    "
+                  >
+                    重置两步验证
                   </el-dropdown-item>
                   <el-dropdown-item
                     command="status"

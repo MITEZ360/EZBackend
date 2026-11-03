@@ -144,32 +144,36 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	response.OK(c, gin.H{"message": "密码已修改，其它设备已退出登录"})
 }
 
-// SetupTOTP 生成动态口令密钥。
+// SetupTOTP 生成动态口令密钥与二维码（尚未启用）。
 func (h *Handler) SetupTOTP(c *gin.Context) {
 	out, err := h.svc.SetupTOTP(c.Request.Context(), middleware.UserID(c))
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
+	middleware.AuditInfo(c, "账号安全", "生成两步验证密钥")
 	response.OK(c, out)
 }
 
 // TOTPCodeInput 动态口令验证码入参。
+// code 既接受 6 位动态码，也接受恢复码（关闭两步验证时可用）。
 type TOTPCodeInput struct {
-	Code string `json:"code" binding:"required,len=6" label:"动态验证码"`
+	Code string `json:"code" binding:"required,max=32" label:"动态验证码或恢复码"`
 }
 
-// EnableTOTP 启用动态口令。
+// EnableTOTP 启用动态口令，返回一次性恢复码。
 func (h *Handler) EnableTOTP(c *gin.Context) {
 	var in TOTPCodeInput
 	if !httpx.BindJSON(c, &in) {
 		return
 	}
-	if err := h.svc.EnableTOTP(c.Request.Context(), middleware.UserID(c), in.Code); err != nil {
+	out, err := h.svc.EnableTOTP(c.Request.Context(), middleware.UserID(c), in.Code)
+	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"message": "已启用动态口令"})
+	middleware.AuditInfo(c, "账号安全", "开启两步验证")
+	response.OK(c, gin.H{"message": "两步验证已开启", "recoveryCodes": out.RecoveryCodes})
 }
 
 // DisableTOTP 关闭动态口令。
@@ -182,7 +186,23 @@ func (h *Handler) DisableTOTP(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"message": "已关闭动态口令"})
+	middleware.AuditInfo(c, "账号安全", "关闭两步验证")
+	response.OK(c, gin.H{"message": "两步验证已关闭"})
+}
+
+// RegenerateRecoveryCodes 重新生成恢复码。
+func (h *Handler) RegenerateRecoveryCodes(c *gin.Context) {
+	var in TOTPCodeInput
+	if !httpx.BindJSON(c, &in) {
+		return
+	}
+	out, err := h.svc.RegenerateRecoveryCodes(c.Request.Context(), middleware.UserID(c), in.Code)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	middleware.AuditInfo(c, "账号安全", "重新生成恢复码")
+	response.OK(c, gin.H{"recoveryCodes": out.RecoveryCodes})
 }
 
 // Sessions 查看我的登录设备。

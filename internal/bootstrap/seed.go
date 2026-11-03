@@ -47,6 +47,7 @@ var menuSeeds = []menuSeed{
 			{ID: "m_user_edit", Name: "编辑用户", Type: model.MenuButton, Perm: "system:user:update"},
 			{ID: "m_user_del", Name: "删除用户", Type: model.MenuButton, Perm: "system:user:delete"},
 			{ID: "m_user_reset", Name: "重置密码", Type: model.MenuButton, Perm: "system:user:reset"},
+			{ID: "m_user_totp", Name: "重置两步验证", Type: model.MenuButton, Perm: "system:user:reset-totp"},
 			{ID: "m_user_export", Name: "导出用户", Type: model.MenuButton, Perm: "system:user:export"},
 		}},
 		{ID: "m_role", Name: "角色管理", Type: model.MenuPage, Path: "/system/role", Icon: "shield", Perm: "system:role:list", Sort: 2, Children: []menuSeed{

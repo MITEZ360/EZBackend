@@ -36,6 +36,9 @@
 | `40101` | 401 | 令牌过期（前端应触发刷新） |
 | `40102` | 401 | 令牌无效 / 会话已失效 |
 | `40103` | 401 | 账号被锁定 |
+| `40104` | 401 | 账号已开启两步验证，需要补充动态码 |
+| `40105` | 401 | 动态验证码错误 |
+| `40106` | 401 | 恢复码无效或已被使用 |
 | `40300` | 403 | 无权限 |
 | `40400` | 404 | 资源不存在 |
 | `40500` | 405 | 方法不允许 |
@@ -80,6 +83,9 @@ Content-Type: application/json
 - 后续请求携带 `Authorization: Bearer <accessToken>`（也支持 `?token=` 与 `keel_token` Cookie，便于下载/预览场景）。
 - `POST /auth/refresh` 请求体 `{"refreshToken": "..."}`，返回同上（`refreshToken` 每次轮换）。
 - 验证码流程：`GET /auth/captcha` 返回 `{captchaId, imageBase64}`，登录时带上 `captchaId/captchaCode`。
+- 两步验证流程：账号开启 TOTP 后，首次提交不携带第二因子会返回 `401 + code 40104`，
+  前端据此进入第二步，再带 `totpCode`（6 位动态码）或 `recoveryCode`（10 位恢复码）重新提交。
+  两次提交可复用同一个图形验证码（有效期 5 分钟），失败一次即作废。
 
 ---
 
@@ -132,9 +138,10 @@ Content-Type: application/json
 | GET | `/auth/profile` | 个人资料 + 菜单树 + 权限点 | 登录 |
 | PUT | `/auth/profile` | 修改个人资料 | 登录 |
 | PUT | `/auth/password` | 修改密码（其他设备下线） | 登录 |
-| POST | `/auth/totp/setup` | 生成 TOTP 密钥与二维码 | 登录 |
-| POST | `/auth/totp/enable` | 启用二次验证 | 登录 |
-| POST | `/auth/totp/disable` | 关闭二次验证 | 登录 |
+| POST | `/auth/totp/setup` | 生成 TOTP 密钥、`otpauth` 链接与二维码（PNG data URI） | 登录 |
+| POST | `/auth/totp/enable` | 校验动态码并启用，返回 10 个一次性恢复码 | 登录 |
+| POST | `/auth/totp/disable` | 关闭（接受动态码或恢复码） | 登录 |
+| POST | `/auth/totp/recovery` | 重新生成恢复码（旧码立即失效） | 登录 |
 | GET | `/auth/sessions` | 我的登录设备 | 登录 |
 | DELETE | `/auth/sessions/:id` | 下线指定设备 | 登录 |
 
@@ -155,6 +162,7 @@ Content-Type: application/json
 | DELETE | `/users/:id` | 删除（软删） | `system:user:delete` |
 | PUT | `/users/:id/status` | 启用/禁用 | `system:user:update` |
 | PUT | `/users/:id/password` | 重置密码（强制下线） | `system:user:reset` |
+| DELETE | `/users/:id/totp` | 重置两步验证（清密钥与恢复码，强制下线） | `system:user:reset-totp` |
 | PUT | `/users/:id/roles` | 分配角色 | `system:user:update` |
 | GET | `/options/users` | 下拉选项 | `system:user:list` |
 | GET | `/exports/users` | 导出 Excel（xlsx，遵循当前筛选条件） | `system:user:export` |
@@ -177,6 +185,22 @@ Content-Type: application/json
 - `row` 为 Excel 中的真实行号，便于定位修改。
 - 单行失败不影响其余行；`errors` 最多返回 100 条，超出时 `truncated=true`。
 - 用户名、手机号、密码策略与普通创建接口一致，重复用户名直接判为失败而非覆盖。
+
+两步验证相关字段约定：
+
+```json
+// POST /auth/totp/setup
+{ "secret": "JBSWY3DPEHPK3PXP", "url": "otpauth://totp/...", "qrCode": "data:image/png;base64,..." }
+
+// POST /auth/totp/enable
+{ "message": "两步验证已开启", "recoveryCodes": ["7K3M9-QP2XR", "..."] }
+```
+
+- `qrCode` 由服务端生成，可直接作为 `<img src>`，不依赖外网二维码服务。
+- 参数固定 30 秒 / 6 位 / SHA1，兼容 Google Authenticator、Microsoft Authenticator、
+  Duo Mobile、Bitwarden、1Password、Authy 等。
+- 恢复码仅在启用时明文返回一次，服务端只保存 HMAC 哈希；每个恢复码只能成功使用一次。
+- 管理员重置不能作用于自己与超级管理员：前者应走个人中心，后者是兜底通道。
 
 ### 4.4 角色
 

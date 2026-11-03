@@ -2,7 +2,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Lock, Refresh, User } from '@element-plus/icons-vue'
+import { ArrowLeft, Key, Lock, Refresh, User } from '@element-plus/icons-vue'
+import OtpInput from '@/components/OtpInput.vue'
 import { authApi } from '@/api/auth'
 import { ApiError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
@@ -17,6 +18,13 @@ const loading = ref(false)
 const errorMsg = ref('')
 
 const captcha = reactive({ enabled: false, id: '', image: '' })
+
+/** credential：账号密码；totp：第二步动态码 */
+const step = ref<'credential' | 'totp'>('credential')
+const totpCode = ref('')
+const recoveryMode = ref(false)
+const recoveryCode = ref('')
+const verifying = ref(false)
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
@@ -41,6 +49,50 @@ async function loadCaptcha() {
   }
 }
 
+/** 两步登录共用的凭据部分 */
+function credentials(extra: { totpCode?: string; recoveryCode?: string }) {
+  return {
+    username: form.username.trim(),
+    password: form.password,
+    captchaId: captcha.enabled ? captcha.id : undefined,
+    captchaCode: captcha.enabled ? form.captchaCode : undefined,
+    ...extra,
+  }
+}
+
+function finish() {
+  ElMessage.success(`欢迎回来，${auth.displayName}`)
+  router.replace(redirect.value)
+}
+
+/** 统一处理登录失败：40104 进入第二步，其余展示后端文案 */
+function handleFailure(err: unknown) {
+  if (err instanceof ApiError && err.code === 40104) {
+    step.value = 'totp'
+    totpCode.value = ''
+    recoveryCode.value = ''
+    recoveryMode.value = false
+    errorMsg.value = ''
+    return
+  }
+
+  if (err instanceof ApiError) {
+    errorMsg.value = err.message
+    // 第二步失败时动态码已用掉，清空让用户重新输入
+    if (step.value === 'totp') {
+      totpCode.value = ''
+      recoveryCode.value = ''
+    }
+    // 验证码被消费或过期，回到第一步重新取一张
+    if (step.value === 'totp' && captcha.enabled && err.code === 40000) {
+      backToCredential()
+      errorMsg.value = '验证已超时，请重新登录'
+    }
+    return
+  }
+  errorMsg.value = '登录失败，请稍后重试'
+}
+
 async function submit() {
   errorMsg.value = ''
   const valid = await formRef.value?.validate().catch(() => false)
@@ -48,20 +100,57 @@ async function submit() {
 
   loading.value = true
   try {
-    await auth.login({
-      username: form.username.trim(),
-      password: form.password,
-      captchaId: captcha.enabled ? captcha.id : undefined,
-      captchaCode: captcha.enabled ? form.captchaCode : undefined,
-    })
-    ElMessage.success(`欢迎回来，${auth.displayName}`)
-    router.replace(redirect.value)
+    await auth.login(credentials({}))
+    finish()
   } catch (err) {
-    errorMsg.value = err instanceof ApiError ? err.message : '登录失败，请稍后重试'
-    if (captcha.enabled) await loadCaptcha()
+    handleFailure(err)
+    if (captcha.enabled && step.value === 'credential') await loadCaptcha()
   } finally {
     loading.value = false
   }
+}
+
+async function verify() {
+  const value = (recoveryMode.value ? recoveryCode.value : totpCode.value).trim()
+  if (!value) {
+    errorMsg.value = recoveryMode.value ? '请输入恢复码' : '请输入 6 位动态验证码'
+    return
+  }
+  if (!recoveryMode.value && !/^\d{6}$/.test(value)) {
+    errorMsg.value = '动态验证码为 6 位数字'
+    return
+  }
+
+  errorMsg.value = ''
+  verifying.value = true
+  try {
+    await auth.login(
+      credentials(
+        recoveryMode.value ? { recoveryCode: value } : { totpCode: value },
+      ),
+    )
+    finish()
+  } catch (err) {
+    handleFailure(err)
+  } finally {
+    verifying.value = false
+  }
+}
+
+function backToCredential() {
+  step.value = 'credential'
+  errorMsg.value = ''
+  totpCode.value = ''
+  recoveryCode.value = ''
+  recoveryMode.value = false
+  if (captcha.enabled) void loadCaptcha()
+}
+
+function toggleRecovery() {
+  recoveryMode.value = !recoveryMode.value
+  errorMsg.value = ''
+  totpCode.value = ''
+  recoveryCode.value = ''
 }
 
 onMounted(loadCaptcha)
@@ -120,11 +209,18 @@ onMounted(loadCaptcha)
     <section class="form-side">
       <div class="form-inner">
         <header class="form-head">
-          <h2>欢迎回来</h2>
-          <p>登录以继续管理你的服务</p>
+          <h2>{{ step === 'credential' ? '欢迎回来' : '两步验证' }}</h2>
+          <p>
+            {{
+              step === 'credential'
+                ? '登录以继续管理你的服务'
+                : '该账号已开启两步验证，请完成安全校验'
+            }}
+          </p>
         </header>
 
         <el-form
+          v-if="step === 'credential'"
           ref="formRef"
           :model="form"
           :rules="rules"
@@ -175,7 +271,55 @@ onMounted(loadCaptcha)
           </el-button>
         </el-form>
 
-        <div class="hint">
+        <!-- 第二步：动态码 / 恢复码 -->
+        <div v-else class="totp-panel">
+          <button type="button" class="back" @click="backToCredential">
+            <el-icon :size="13"><ArrowLeft /></el-icon>
+            返回重新登录
+          </button>
+
+          <div class="totp-hint">
+            <div class="totp-icon"><el-icon :size="18"><Key /></el-icon></div>
+            <div class="totp-copy">
+              <strong>{{ recoveryMode ? '输入恢复码' : '输入 6 位动态码' }}</strong>
+              <p v-if="!recoveryMode">
+                打开 Google Authenticator、Microsoft Authenticator、Duo、Bitwarden
+                等认证器查看当前验证码。
+              </p>
+              <p v-else>恢复码为 10 位，格式如 7K3M9-QP2XR，每个只能使用一次。</p>
+            </div>
+          </div>
+
+          <OtpInput
+            v-if="!recoveryMode"
+            v-model="totpCode"
+            class="otp-wrap"
+            autofocus
+            :disabled="verifying"
+            @complete="verify"
+          />
+          <el-input
+            v-else
+            v-model="recoveryCode"
+            class="recovery-input"
+            size="large"
+            maxlength="12"
+            placeholder="XXXXX-XXXXX"
+            @keyup.enter="verify"
+          />
+
+          <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
+
+          <el-button type="primary" class="submit" :loading="verifying" @click="verify">
+            {{ verifying ? '验证中…' : '验证并登录' }}
+          </el-button>
+
+          <button type="button" class="switch-mode" @click="toggleRecovery">
+            {{ recoveryMode ? '使用动态验证码' : '无法使用认证器？改用恢复码' }}
+          </button>
+        </div>
+
+        <div v-if="step === 'credential'" class="hint">
           默认账号 <code>admin</code> / <code>Admin@123456</code>，登录后请尽快修改密码
         </div>
       </div>
@@ -436,6 +580,99 @@ onMounted(loadCaptcha)
   font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.04em;
+}
+
+/* ------------------------------------------------------------ 两步验证 */
+.totp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  .error {
+    margin: 0;
+  }
+}
+
+.back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12.5px;
+  color: var(--ink-500);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--ink-800);
+  }
+}
+
+.totp-hint {
+  display: flex;
+  gap: 11px;
+  padding: 13px 14px;
+  border-radius: var(--r-md);
+  background: var(--ink-50);
+}
+
+.totp-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #4338ca);
+  box-shadow: 0 3px 10px rgba(79, 70, 229, 0.24);
+}
+
+.totp-copy {
+  min-width: 0;
+
+  strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-900);
+  }
+
+  p {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--ink-500);
+  }
+}
+
+.otp-wrap {
+  justify-content: space-between;
+}
+
+.recovery-input {
+  :deep(.el-input__inner) {
+    font-family: var(--font-mono);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+}
+
+.switch-mode {
+  align-self: center;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  font-size: 12.5px;
+  color: var(--brand-600);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--brand-700);
+    text-decoration: underline;
+  }
 }
 
 .hint {

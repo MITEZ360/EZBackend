@@ -61,6 +61,9 @@ export const userApi = {
 
   setRoles: (id: string, roleIds: string[]) => api.put<void>(`/users/${id}/roles`, { roleIds }),
 
+  /** 管理员重置两步验证：清除密钥与恢复码，并让该用户重新登录 */
+  resetTOTP: (id: string) => api.del<void>(`/users/${id}/totp`),
+
   options: () => api.get<{ id: string; username: string; nickname: string }[]>('/options/users'),
 
   exportExcel: (query: ListQuery) => api.download('/exports/users', query),

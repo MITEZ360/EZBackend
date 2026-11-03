@@ -188,7 +188,7 @@ func New(cfgPath string) (*App, error) {
 
 func models() []any {
 	return []any{
-		&model.User{}, &model.UserRole{}, &model.Role{}, &model.RoleMenu{}, &model.Menu{},
+		&model.User{}, &model.UserRole{}, &model.UserRecoveryCode{}, &model.Role{}, &model.RoleMenu{}, &model.Menu{},
 		&model.Dept{}, &model.Session{}, &model.DictType{}, &model.DictItem{}, &model.SysConfig{},
 		&model.Notice{}, &model.LoginLog{}, &model.OperationLog{}, &model.Job{}, &model.JobLog{},
 		&model.File{}, &model.Message{}, &model.MessageRecipient{},

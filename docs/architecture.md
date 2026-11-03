@@ -151,7 +151,8 @@ key = authz:user:<uid>:v<authz:version>   ttl = 5min
 
 | 表 | 说明 |
 | --- | --- |
-| `sys_user` | 用户（含部门、状态、TOTP、最后登录信息） |
+| `sys_user` | 用户（含部门、状态、TOTP 密钥、最后登录信息） |
+| `sys_user_recovery_code` | 两步验证恢复码（HMAC 哈希、使用时间；不设软删除） |
 | `sys_role` | 角色（编码、数据范围、内置标记） |
 | `sys_user_role` | 用户-角色关联 |
 | `sys_menu` | 菜单/按钮（类型、路由、权限点、排序、可见性） |

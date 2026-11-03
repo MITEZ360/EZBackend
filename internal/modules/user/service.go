@@ -237,8 +237,8 @@ type CreateInput struct {
 	RoleIDs  []string `json:"roleIds" label:"角色"`
 	Gender   int8     `json:"gender" binding:"oneof=0 1 2" label:"性别"`
 	// Status 用指针区分"未传"与"显式禁用"：int8 的零值会让禁用账号被静默改成启用。
-	Status *int8 `json:"status" binding:"omitempty,oneof=0 1" label:"状态"`
-	Remark   string   `json:"remark" binding:"max=255" label:"备注"`
+	Status *int8  `json:"status" binding:"omitempty,oneof=0 1" label:"状态"`
+	Remark string `json:"remark" binding:"max=255" label:"备注"`
 }
 
 // Create 创建用户。
@@ -409,6 +409,39 @@ func (s *Service) ResetPassword(ctx context.Context, id, password string) error 
 	}
 	s.db.WithContext(ctx).Model(&model.Session{}).Where("user_id = ?", id).Update("revoked", true)
 	return nil
+}
+
+// ResetTOTP 管理员重置指定用户的两步验证配置。
+// 用于员工更换手机、认证器被卸载等无法自助关闭的场景；
+// 重置后该用户所有会话失效，需要用密码重新登录并重新绑定。
+func (s *Service) ResetTOTP(ctx context.Context, id, operatorID string) error {
+	if id == operatorID {
+		return errs.BadRequest("请在个人中心关闭自己的两步验证")
+	}
+	var u model.User
+	if err := s.db.WithContext(ctx).First(&u, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errs.NotFound("用户不存在")
+		}
+		return err
+	}
+	if !u.TOTPEnabled {
+		return errs.BadRequest("该用户未开启两步验证")
+	}
+	// 超管是最後的兜底通道，不能被其他管理员顺手关掉二次验证
+	if u.IsSuper {
+		return errs.Forbidden("不能重置超级管理员的两步验证")
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.User{}).Where("id = ?", id).
+			Updates(map[string]any{"totp_enabled": false, "totp_secret": ""}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", id).Delete(&model.UserRecoveryCode{}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Session{}).Where("user_id = ?", id).Update("revoked", true).Error
+	})
 }
 
 // SetStatus 启用/禁用用户。
