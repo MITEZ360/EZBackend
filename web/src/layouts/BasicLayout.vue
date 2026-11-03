@@ -1,18 +1,29 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { ArrowDown, Expand, Fold, SwitchButton, User } from '@element-plus/icons-vue'
 import SideMenuItem from '@/components/SideMenuItem.vue'
 import MessageBell from '@/components/MessageBell.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { MenuNode } from '@/api/types'
+import { membershipApi } from '@/api/membership'
+import type { MembershipSnapshot, MenuNode } from '@/api/types'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
 const mini = ref(localStorage.getItem('keel.side.mini') === '1')
+
+// 会员徽章：会员模块未启用时静默忽略，不影响其余功能。
+const membership = ref<MembershipSnapshot | null>(null)
+onMounted(async () => {
+  try {
+    membership.value = await membershipApi.me()
+  } catch {
+    membership.value = null
+  }
+})
 
 const navMenus = computed(() =>
   (auth.menus ?? []).filter((m) => m.type !== 'button' && m.visible !== false),
@@ -129,7 +140,16 @@ watch(
             <div class="user-chip">
               <div class="avatar">{{ auth.initial }}</div>
               <div class="user-meta">
-                <span class="user-name">{{ auth.displayName }}</span>
+                <span class="user-name">
+                  {{ auth.displayName }}
+                  <em
+                    v-if="membership?.member && membership.level"
+                    class="member-badge"
+                    :style="{ '--lv-color': membership.level.color || 'var(--brand-500)' }"
+                  >
+                    {{ membership.level.name }}
+                  </em>
+                </span>
                 <span class="user-role">{{ auth.isSuper ? '超级管理员' : '普通用户' }}</span>
               </div>
               <el-icon class="caret" :size="12"><ArrowDown /></el-icon>
@@ -376,9 +396,25 @@ watch(
 }
 
 .user-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 500;
   color: var(--ink-800);
+}
+
+.member-badge {
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--lv-color);
+  background: color-mix(in srgb, var(--lv-color) 13%, white);
+  border: 1px solid color-mix(in srgb, var(--lv-color) 25%, white);
+  white-space: nowrap;
 }
 
 .user-role {

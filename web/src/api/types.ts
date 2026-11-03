@@ -114,6 +114,53 @@ export interface UserRow {
   totpEnabled?: boolean
   roles?: RoleBrief[]
   dept?: { id: string; name: string }
+  /* 会员信息 */
+  membershipLevelId?: string
+  membershipStartAt?: string | null
+  membershipExpireAt?: string | null
+  membership?: MembershipLevel | null
+  membershipState?: MembershipState
+}
+
+/* ---------------------------------------------------------------- 会员 */
+export type MembershipState = 'none' | 'active' | 'expired' | 'disabled'
+
+export interface MembershipBenefit {
+  key: string
+  label: string
+  value: string
+}
+
+export interface MembershipLevel {
+  id: string
+  code: string
+  name: string
+  rank: number
+  status: number
+  description?: string
+  /** 开通时的默认天数，0 表示长期有效 */
+  defaultDays: number
+  /** 徽章标识色 #RRGGBB */
+  color?: string
+  benefits: MembershipBenefit[]
+  /** 当前有效会员数（列表接口返回） */
+  userCount?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface MembershipSnapshot {
+  member: boolean
+  state: MembershipState
+  level?: MembershipLevel | null
+  levelId?: string
+  startAt?: string | null
+  expireAt?: string | null
+  /** 剩余天数，-1 表示长期有效 */
+  daysLeft: number
+  benefits: Record<string, string>
+  /** 可对比的等级目录（仅 /membership/me 返回） */
+  levels?: MembershipLevel[]
 }
 
 /* ------------------------------------------------------------------ 字典 */

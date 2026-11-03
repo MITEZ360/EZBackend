@@ -48,6 +48,7 @@ var menuSeeds = []menuSeed{
 			{ID: "m_user_del", Name: "删除用户", Type: model.MenuButton, Perm: "system:user:delete"},
 			{ID: "m_user_reset", Name: "重置密码", Type: model.MenuButton, Perm: "system:user:reset"},
 			{ID: "m_user_totp", Name: "重置两步验证", Type: model.MenuButton, Perm: "system:user:reset-totp"},
+			{ID: "m_user_member", Name: "设置会员", Type: model.MenuButton, Perm: "system:user:grant-membership"},
 			{ID: "m_user_export", Name: "导出用户", Type: model.MenuButton, Perm: "system:user:export"},
 		}},
 		{ID: "m_role", Name: "角色管理", Type: model.MenuPage, Path: "/system/role", Icon: "shield", Perm: "system:role:list", Sort: 2, Children: []menuSeed{
@@ -84,6 +85,11 @@ var menuSeeds = []menuSeed{
 			{ID: "m_message_sent", Name: "查看发送记录", Type: model.MenuButton, Perm: "system:message:list"},
 			{ID: "m_message_del", Name: "撤回消息", Type: model.MenuButton, Perm: "system:message:delete"},
 		}},
+		{ID: "m_membership", Name: "会员等级", Type: model.MenuPage, Path: "/system/membership", Icon: "trophy", Perm: "system:membership:list", Sort: 9, Children: []menuSeed{
+			{ID: "m_membership_add", Name: "新增等级", Type: model.MenuButton, Perm: "system:membership:create"},
+			{ID: "m_membership_edit", Name: "编辑等级", Type: model.MenuButton, Perm: "system:membership:update"},
+			{ID: "m_membership_del", Name: "删除等级", Type: model.MenuButton, Perm: "system:membership:delete"},
+		}},
 	}},
 	{ID: "m_ops", Name: "运维中心", Type: model.MenuDir, Path: "/ops", Icon: "server", Sort: 20, Children: []menuSeed{
 		{ID: "m_job", Name: "定时任务", Type: model.MenuPage, Path: "/ops/job", Icon: "clock", Perm: "ops:job:list", Sort: 1, Children: []menuSeed{
@@ -103,8 +109,37 @@ var menuSeeds = []menuSeed{
 	}},
 }
 
-var deptSeeds = []struct{ ID, ParentID, Name, Leader string }{
-	{"d_root", "0", "Keel 科技", "管理员"},
+// levelSeeds 内置会员等级示例。权益标识是业务侧判断的依据，
+// 换成自己的业务时改这里即可；已存在的等级不会被覆盖。
+var levelSeeds = []struct {
+	ID, Code, Name, Description, Color string
+	Rank, DefaultDays                  int
+	Benefits                           []model.Benefit
+}{
+	{ID: "lv_silver", Code: "silver", Name: "白银会员", Description: "基础权益，适合个人用户",
+		Color: "#8A94A6", Rank: 10, DefaultDays: 365, Benefits: []model.Benefit{
+			{Key: "report.export", Label: "导出报表", Value: "true"},
+			{Key: "project.max", Label: "项目数量", Value: "5"},
+			{Key: "storage.gb", Label: "存储空间", Value: "5 GB"},
+		}},
+	{ID: "lv_gold", Code: "gold", Name: "黄金会员", Description: "面向成长型团队，含优先支持",
+		Color: "#C08A2E", Rank: 20, DefaultDays: 365, Benefits: []model.Benefit{
+			{Key: "report.export", Label: "导出报表", Value: "true"},
+			{Key: "project.max", Label: "项目数量", Value: "50"},
+			{Key: "storage.gb", Label: "存储空间", Value: "50 GB"},
+			{Key: "support.priority", Label: "优先支持", Value: "true"},
+		}},
+	{ID: "lv_platinum", Code: "platinum", Name: "铂金会员", Description: "不限项目数量，开放更高接口配额",
+		Color: "#6D5BD0", Rank: 30, DefaultDays: 365, Benefits: []model.Benefit{
+			{Key: "report.export", Label: "导出报表", Value: "true"},
+			{Key: "project.max", Label: "项目数量", Value: "-1（不限）"},
+			{Key: "storage.gb", Label: "存储空间", Value: "500 GB"},
+			{Key: "support.priority", Label: "优先支持", Value: "true"},
+			{Key: "api.qps", Label: "接口配额", Value: "200 QPS"},
+		}},
+}
+
+var deptSeeds = []struct{ ID, ParentID, Name, Leader string }{{"d_root", "0", "Keel 科技", "管理员"},
 	{"d_tech", "d_root", "技术中心", "张工"},
 	{"d_product", "d_root", "产品中心", "李产品"},
 	{"d_ops", "d_root", "运营中心", "王运营"},
@@ -196,6 +231,36 @@ func syncBuiltinMenus(db *gorm.DB, log *zap.Logger) error {
 	return nil
 }
 
+// syncBuiltinLevels 幂等补齐内置会员等级。已删除的等级不会重建，
+// 避免管理员清理示例数据后每次启动又冒出来。
+func syncBuiltinLevels(db *gorm.DB, log *zap.Logger) error {
+	created := 0
+	for _, seed := range levelSeeds {
+		var exists int64
+		if err := db.Unscoped().Model(&model.MembershipLevel{}).
+			Where("id = ?", seed.ID).Count(&exists).Error; err != nil {
+			return err
+		}
+		if exists > 0 {
+			continue
+		}
+		lv := model.MembershipLevel{
+			Code: seed.Code, Name: seed.Name, Rank: seed.Rank,
+			Status: model.StatusEnabled, Description: seed.Description,
+			DefaultDays: seed.DefaultDays, Color: seed.Color, Benefits: seed.Benefits,
+		}
+		lv.ID = seed.ID
+		if err := db.Create(&lv).Error; err != nil {
+			return fmt.Errorf("初始化会员等级失败: %w", err)
+		}
+		created++
+	}
+	if created > 0 {
+		log.Info("已补齐内置会员等级", zap.Int("count", created))
+	}
+	return nil
+}
+
 // seed 初始化基础数据；已有用户则跳过，保证幂等。
 func seed(db *gorm.DB, log *zap.Logger) error {
 	var count int64
@@ -205,12 +270,15 @@ func seed(db *gorm.DB, log *zap.Logger) error {
 	if count > 0 {
 		// 已初始化的库也要能拿到后续版本新增的内置菜单，否则升级后功能
 		// 有接口却没有入口。
-		return syncBuiltinMenus(db, log)
+		if err := syncBuiltinMenus(db, log); err != nil {
+			return err
+		}
+		return syncBuiltinLevels(db, log)
 	}
 	log.Info("首次启动，开始初始化基础数据")
 	now := time.Now()
 
-	return db.Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		for _, d := range deptSeeds {
 			dept := model.Dept{ParentID: d.ParentID, Name: d.Name, Leader: d.Leader, Status: model.StatusEnabled}
 			dept.ID, dept.CreatedAt, dept.UpdatedAt = d.ID, now, now
@@ -343,4 +411,8 @@ func seed(db *gorm.DB, log *zap.Logger) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return syncBuiltinLevels(db, log)
 }

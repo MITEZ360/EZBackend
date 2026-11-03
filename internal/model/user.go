@@ -22,9 +22,16 @@ type User struct {
 	LoginCount  int64      `gorm:"default:0" json:"loginCount"`
 	TOTPSecret  string     `gorm:"size:255" json:"-"`
 	TOTPEnabled bool       `gorm:"default:false" json:"totpEnabled"`
-	Roles       []Role     `gorm:"-" json:"roles,omitempty"`
-	Dept        *Dept      `gorm:"-" json:"dept,omitempty"`
-	RoleIDs     []string   `gorm:"-" json:"roleIds,omitempty"`
+	// 会员信息。LevelID 为空即非会员；到期不清理数据，由 Evaluate 按时间判定，
+	// 这样运营仍能看到"开通过什么等级、何时到期"。
+	MembershipLevelID  string           `gorm:"size:32;index" json:"membershipLevelId,omitempty"`
+	MembershipStartAt  *time.Time       `json:"membershipStartAt,omitempty"`
+	MembershipExpireAt *time.Time       `gorm:"index" json:"membershipExpireAt,omitempty"`
+	Membership         *MembershipLevel `gorm:"-" json:"membership,omitempty"`
+	MembershipState    string           `gorm:"-" json:"membershipState,omitempty"`
+	Roles              []Role           `gorm:"-" json:"roles,omitempty"`
+	Dept               *Dept            `gorm:"-" json:"dept,omitempty"`
+	RoleIDs            []string         `gorm:"-" json:"roleIds,omitempty"`
 }
 
 // TableName 指定表名。

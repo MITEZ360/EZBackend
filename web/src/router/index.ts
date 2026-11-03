@@ -48,6 +48,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '菜单管理' },
       },
       {
+        path: 'system/membership',
+        name: 'system-membership',
+        component: () => import('@/pages/system/membership/index.vue'),
+        meta: { title: '会员等级' },
+      },
+      {
         path: 'system/message',
         name: 'system-message',
         component: () => import('@/pages/system/message/index.vue'),

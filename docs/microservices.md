@@ -31,7 +31,7 @@ micro:
   mode: mono
 ```
 
-- 13 个模块全部挂载，103 条路由。
+- 14 个模块全部挂载，114 条路由。
 - 数据库、缓存、定时任务都在本进程。
 - 只有 1 个进程时，默认的 SQLite + 进程内缓存即可，无需外部依赖。
 
@@ -86,7 +86,7 @@ KEEL_MICRO_REGISTRY_ENDPOINTS="keel-core=127.0.0.1:9000" \
 ```yaml
 micro:
   mode: service
-  modules: [user, role, dept, monitor]   # 只暴露这些模块的接口
+  modules: [user, role, dept, membership, monitor]   # 只暴露这些模块的接口
 ```
 
 - 未列出的模块**不注册路由**，访问返回 404（而不是 403），减少攻击面。
@@ -104,7 +104,7 @@ auth  user  role  menu  dept  dict  config  notice  audit  job  file  dashboard 
 | 服务 | modules | 说明 |
 | --- | --- | --- |
 | keel-auth | `[auth, menu]` | 登录、令牌、导航树 |
-| keel-user | `[user, role, dept]` | 组织与账号 |
+| keel-user | `[user, role, dept, membership]` | 组织、账号与会员等级 |
 | keel-ops | `[audit, job, file, monitor]` | 运维能力，可单独限流 |
 | keel-core | 全部 | 兜底，未拆分部分 |
 

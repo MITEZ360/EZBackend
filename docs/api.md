@@ -202,6 +202,62 @@ Content-Type: application/json
 - 恢复码仅在启用时明文返回一次，服务端只保存 HMAC 哈希；每个恢复码只能成功使用一次。
 - 管理员重置不能作用于自己与超级管理员：前者应走个人中心，后者是兜底通道。
 
+### 4.3.1 会员体系
+
+角色决定"能进哪些后台页面"，会员等级决定"能享受哪些业务权益"，两者互不替代。
+
+- **非会员**：`membershipLevelId` 为空。新用户默认即非会员。
+- **有效会员**：等级启用、且未到期（`expireAt` 为空表示长期有效）。
+- **到期/停用**：到期不清理数据，读取时按当前时间判定，状态变为 `expired`；
+  等级被停用后，该等级用户状态为 `disabled`。两种情况均按非会员处理，权益立即失效。
+- **续费**：同等级且未到期时，在原到期日上顺延；切换等级则从当前时间重新计算。
+- **权益**：等级上的 `benefits` 是 `{key, label, value}` 数组。业务侧按 `key` 判断，
+  值为空、`false`、`0`、`off`、`no` 时视为未开通。框架提供
+  `membership.Service.RequireBenefit("report.export")` 中间件用于保护衍生业务接口。
+- **内置示例**：首次启动（`db.seed=true`）会补齐白银/黄金/铂金三个示例等级，
+  已存在或已删除的等级不会被重建。
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| GET | `/membership/levels` | 等级分页列表，附各等级当前有效会员数 | `system:membership:list` |
+| POST | `/membership/levels` | 新增等级 | `system:membership:create` |
+| PUT | `/membership/levels/:id` | 修改等级（编码可改，需保持唯一） | `system:membership:update` |
+| DELETE | `/membership/levels/:id` | 删除等级；仍有用户引用时返回 409，请改用停用 | `system:membership:delete` |
+| GET | `/membership/catalog` | 启用中的等级目录（登录即可读） | - |
+| GET | `/membership/me` | 当前用户的会员状态、权益与等级目录（登录即可读） | - |
+| PUT | `/users/:id/membership` | 开通 / 续费会员 | `system:user:grant-membership` |
+| DELETE | `/users/:id/membership` | 取消会员（幂等） | `system:user:grant-membership` |
+
+开通入参的优先级为 `expireAt` > `days` > `permanent` > 等级 `defaultDays`：
+
+```json
+// PUT /users/:id/membership
+{ "levelId": "lv_gold", "days": 365 }
+{ "levelId": "lv_gold", "expireAt": "2027-12-31" }   // 只给日期时按当天 23:59:59 截止
+{ "levelId": "lv_gold", "permanent": true }
+```
+
+`GET /membership/me` 返回：
+
+```json
+{
+  "member": true,
+  "state": "active",
+  "level": { "id": "lv_gold", "code": "gold", "name": "黄金会员", "rank": 20, "color": "#C08A2E", "benefits": [] },
+  "levelId": "lv_gold",
+  "startAt": "2026-11-03T10:00:00+08:00",
+  "expireAt": "2027-11-03T10:00:00+08:00",
+  "daysLeft": 365,
+  "benefits": { "report.export": "true", "project.max": "50" },
+  "levels": [{ "code": "platinum", "name": "铂金会员" }]
+}
+```
+
+- `state` 取值：`none` / `active` / `expired` / `disabled`。
+- `daysLeft` 为 `-1` 表示长期有效。
+- 列表接口 `/users` 额外支持 `membershipState=member|none|expired|disabled` 与
+  `membershipLevelId`，其中 `member + none` 覆盖全量用户。
+
 ### 4.4 角色
 
 | 方法 | 路径 | 说明 | 权限点 |

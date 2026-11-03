@@ -27,7 +27,7 @@ runtime:
   instances: 2
 micro:
   mode: service
-  modules: [user, role, dept, monitor]
+  modules: [user, role, dept, membership, monitor]
   registry:
     type: static
     endpoints:

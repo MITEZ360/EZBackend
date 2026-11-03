@@ -1,15 +1,48 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { CopyDocument, Download, Key } from '@element-plus/icons-vue'
 import OtpInput from '@/components/OtpInput.vue'
 import { authApi, totpApi } from '@/api/auth'
-import { fmtTime } from '@/utils/format'
+import { membershipApi } from '@/api/membership'
+import type { MembershipSnapshot } from '@/api/types'
+import { fmtDate, fmtTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+
+/* ------------------------------------------------------------ 会员 */
+const membership = ref<MembershipSnapshot | null>(null)
+const catalog = computed(() => membership.value?.levels ?? [])
+
+onMounted(async () => {
+  try {
+    membership.value = await membershipApi.me()
+  } catch {
+    // 会员模块可能未在当前服务进程启用，个人中心其余功能不受影响
+  }
+})
+
+/** 布尔型权益用符号展示，避免出现裸的 true/false */
+function benefitValue(v: string) {
+  const s = (v ?? '').trim().toLowerCase()
+  if (s === 'true') return '✓'
+  if (s === 'false' || s === '') return '—'
+  return v
+}
+
+function memberStatusText() {
+  const m = membership.value
+  if (!m) return '加载中'
+  if (m.state === 'expired') return m.expireAt ? `${fmtDate(m.expireAt)} 已过期` : '已过期'
+  if (m.state === 'disabled') return '等级已停用'
+  if (m.state === 'active') {
+    return m.daysLeft === -1 ? '长期有效' : `剩余 ${m.daysLeft} 天`
+  }
+  return '未开通'
+}
 
 const pwd = reactive({ oldPassword: '', newPassword: '', confirm: '' })
 
@@ -243,6 +276,68 @@ async function changePassword() {
       </section>
 
       <div class="side-col">
+        <section
+          class="card member-card"
+          :style="{ '--lv-color': membership?.level?.color || 'var(--brand-500)' }"
+        >
+          <div class="card-head">
+            <h3>会员权益</h3>
+            <span
+              v-if="membership"
+              class="member-state"
+              :class="{
+                'is-active': membership.state === 'active',
+                'is-expired': membership.state === 'expired' || membership.state === 'disabled',
+              }"
+            >
+              {{ memberStatusText() }}
+            </span>
+          </div>
+          <div class="card-body">
+            <div v-if="membership?.member && membership.level" class="member-hero">
+              <div class="member-mark">{{ membership.level.name.slice(0, 1) }}</div>
+              <div class="member-hero-lines">
+                <strong>{{ membership.level.name }}</strong>
+                <p>
+                  <template v-if="membership.daysLeft === -1">长期有效，无需续期</template>
+                  <template v-else>
+                    {{ membership.expireAt ? `${fmtDate(membership.expireAt)} 到期` : '' }}
+                  </template>
+                </p>
+              </div>
+            </div>
+
+            <div v-else class="member-hero is-empty">
+              <div class="member-mark">—</div>
+              <div class="member-hero-lines">
+                <strong>非会员</strong>
+                <p>联系管理员开通会员后即可享受对应权益</p>
+              </div>
+            </div>
+
+            <div v-if="membership?.member && membership.level?.benefits?.length" class="benefit-list">
+              <div v-for="b in membership.level.benefits" :key="b.key" class="benefit-item">
+                <span>{{ b.label }}</span>
+                <strong>{{ benefitValue(b.value) }}</strong>
+              </div>
+            </div>
+
+            <div v-if="membership && !membership.member && catalog.length" class="catalog">
+              <p class="catalog-title">可开通等级</p>
+              <div
+                v-for="lv in catalog"
+                :key="lv.id"
+                class="catalog-item"
+                :style="{ '--lv-color': lv.color || 'var(--brand-500)' }"
+              >
+                <span class="catalog-dot" />
+                <span class="catalog-name">{{ lv.name }}</span>
+                <span class="catalog-meta">{{ lv.benefits?.length ?? 0 }} 项权益</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="card totp-card">
           <div class="card-head">
             <h3>两步验证</h3>
@@ -612,6 +707,139 @@ async function changePassword() {
   display: flex;
   gap: 8px;
   margin-top: 12px;
+}
+
+/* -------------------------------------------------------------- 会员 */
+.member-card {
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: var(--lv-color);
+  }
+}
+
+.member-state {
+  font-size: 11.5px;
+  color: var(--ink-400);
+
+  &.is-active {
+    color: var(--ok-deep);
+  }
+
+  &.is-expired {
+    color: var(--warn-deep);
+  }
+}
+
+.member-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.member-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--lv-color);
+  background: color-mix(in srgb, var(--lv-color) 12%, white);
+  border: 1px solid color-mix(in srgb, var(--lv-color) 22%, white);
+}
+
+.member-hero.is-empty .member-mark {
+  color: var(--ink-400);
+  background: var(--ink-100);
+  border-color: var(--line);
+}
+
+.member-hero-lines {
+  min-width: 0;
+
+  strong {
+    font-size: 15px;
+    font-weight: 650;
+    color: var(--ink-900);
+  }
+
+  p {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--ink-400);
+  }
+}
+
+.benefit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.benefit-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+
+  span {
+    color: var(--ink-500);
+  }
+
+  strong {
+    font-weight: 600;
+    color: var(--ink-800);
+    text-align: right;
+  }
+}
+
+.catalog {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.catalog-title {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: var(--ink-400);
+}
+
+.catalog-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12.5px;
+}
+
+.catalog-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lv-color);
+}
+
+.catalog-name {
+  color: var(--ink-700);
+}
+
+.catalog-meta {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--ink-400);
 }
 
 @media (max-width: 980px) {

@@ -25,6 +25,7 @@ import (
 	"github.com/keel-framework/keel/internal/modules/dept"
 	"github.com/keel-framework/keel/internal/modules/file"
 	"github.com/keel-framework/keel/internal/modules/job"
+	"github.com/keel-framework/keel/internal/modules/membership"
 	"github.com/keel-framework/keel/internal/modules/menu"
 	"github.com/keel-framework/keel/internal/modules/message"
 	"github.com/keel-framework/keel/internal/modules/monitor"
@@ -150,7 +151,8 @@ func New(cfgPath string) (*App, error) {
 
 	menuSvc := menu.NewService(db)
 	authSvc := auth.NewService(db, ch, jwtMgr, captcha, cfg, lg, authzLoader, menuSvc)
-	userSvc := user.NewService(db, cfg, lg, authzLoader)
+	membershipSvc := membership.NewService(db, lg)
+	userSvc := user.NewService(db, cfg, lg, authzLoader, membershipSvc)
 	roleSvc := role.NewService(db, authzLoader)
 	deptSvc := dept.NewService(db)
 	dictSvc := system.NewDictService(db, ch)
@@ -181,22 +183,23 @@ func New(cfgPath string) (*App, error) {
 	engine = router.New(router.Deps{
 		Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
 		JWT: jwtMgr, Authz: authzLoader, AuditSvc: auditSvc,
-		Modules:   moduleSet(cfg.Micro),
-		Events:    bus,
-		Auth:      auth.NewHandler(authSvc, cfg.Security.CaptchaEnabled, cfg.Server.TrustProxy),
-		User:      user.NewHandler(userSvc),
-		Role:      role.NewHandler(roleSvc),
-		Menu:      menu.NewHandler(menuSvc),
-		Dept:      dept.NewHandler(deptSvc),
-		Dict:      system.NewDictHandler(dictSvc),
-		Config:    system.NewConfigHandler(configSvc),
-		Notice:    system.NewNoticeHandler(noticeSvc),
-		Message:   message.NewHandler(msgSvc),
-		Audit:     audit.NewHandler(auditSvc),
-		Job:       job.NewHandler(jobSvc),
-		File:      file.NewHandler(fileSvc),
-		Dashboard: dashboard.NewHandler(dashSvc),
-		Monitor:   monitor.NewHandler(monitorSvc),
+		Modules:    moduleSet(cfg.Micro),
+		Events:     bus,
+		Auth:       auth.NewHandler(authSvc, cfg.Security.CaptchaEnabled, cfg.Server.TrustProxy),
+		User:       user.NewHandler(userSvc),
+		Role:       role.NewHandler(roleSvc),
+		Menu:       menu.NewHandler(menuSvc),
+		Dept:       dept.NewHandler(deptSvc),
+		Dict:       system.NewDictHandler(dictSvc),
+		Config:     system.NewConfigHandler(configSvc),
+		Notice:     system.NewNoticeHandler(noticeSvc),
+		Message:    message.NewHandler(msgSvc),
+		Membership: membership.NewHandler(membershipSvc),
+		Audit:      audit.NewHandler(auditSvc),
+		Job:        job.NewHandler(jobSvc),
+		File:       file.NewHandler(fileSvc),
+		Dashboard:  dashboard.NewHandler(dashSvc),
+		Monitor:    monitor.NewHandler(monitorSvc),
 	})
 
 	app := &App{Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
@@ -229,6 +232,7 @@ func models() []any {
 		&model.Dept{}, &model.Session{}, &model.DictType{}, &model.DictItem{}, &model.SysConfig{},
 		&model.Notice{}, &model.LoginLog{}, &model.OperationLog{}, &model.Job{}, &model.JobLog{},
 		&model.File{}, &model.Message{}, &model.MessageRecipient{},
+		&model.MembershipLevel{},
 	}
 }
 

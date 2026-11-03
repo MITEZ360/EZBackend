@@ -25,6 +25,7 @@ import (
 	"github.com/keel-framework/keel/internal/modules/dept"
 	"github.com/keel-framework/keel/internal/modules/file"
 	"github.com/keel-framework/keel/internal/modules/job"
+	"github.com/keel-framework/keel/internal/modules/membership"
 	"github.com/keel-framework/keel/internal/modules/menu"
 	"github.com/keel-framework/keel/internal/modules/message"
 	"github.com/keel-framework/keel/internal/modules/monitor"
@@ -61,20 +62,21 @@ type Deps struct {
 	// Events 进程内事件总线，可为空；用于发布审计等业务事件。
 	Events *event.Bus
 
-	Auth      *auth.Handler
-	User      *user.Handler
-	Role      *role.Handler
-	Menu      *menu.Handler
-	Dept      *dept.Handler
-	Dict      *system.DictHandler
-	Config    *system.ConfigHandler
-	Notice    *system.NoticeHandler
-	Message   *message.Handler
-	Audit     *audit.Handler
-	Job       *job.Handler
-	File      *file.Handler
-	Dashboard *dashboard.Handler
-	Monitor   *monitor.Handler
+	Auth       *auth.Handler
+	User       *user.Handler
+	Role       *role.Handler
+	Menu       *menu.Handler
+	Dept       *dept.Handler
+	Dict       *system.DictHandler
+	Config     *system.ConfigHandler
+	Notice     *system.NoticeHandler
+	Message    *message.Handler
+	Membership *membership.Handler
+	Audit      *audit.Handler
+	Job        *job.Handler
+	File       *file.Handler
+	Dashboard  *dashboard.Handler
+	Monitor    *monitor.Handler
 }
 
 // New 创建 HTTP 引擎。
@@ -144,6 +146,9 @@ func New(d Deps) *gin.Engine {
 	}
 	if d.on("user") {
 		d.userRoutes(authed)
+	}
+	if d.on("membership") {
+		d.membershipRoutes(authed)
 	}
 	if d.on("role") {
 		d.roleRoutes(authed)

@@ -3,9 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { ArrowDown, Delete, Download, MoreFilled, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import { userApi, type CreateUserPayload, type ImportResult } from '@/api/user'
+import { membershipApi, type GrantMembershipPayload } from '@/api/membership'
 import { deptApi, roleApi } from '@/api/system'
-import type { DeptNode, RoleBrief, UserRow } from '@/api/types'
-import { fmtTime, fromNow, saveBlob } from '@/utils/format'
+import type { DeptNode, MembershipLevel, RoleBrief, UserRow } from '@/api/types'
+import { fmtDate, fmtTime, fromNow, saveBlob } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -24,6 +25,8 @@ const query = reactive({
   keyword: '',
   status: undefined as number | undefined,
   deptId: '',
+  membershipState: '' as '' | 'member' | 'expired' | 'none',
+  membershipLevelId: '',
 })
 
 const deptOptions = computed(() => toOptions(deptTree.value))
@@ -45,6 +48,8 @@ async function load() {
       keyword: query.keyword || undefined,
       status: query.status,
       deptId: query.deptId || undefined,
+      membershipState: query.membershipState || undefined,
+      membershipLevelId: query.membershipLevelId || undefined,
     })
     rows.value = res.list ?? []
     total.value = res.total ?? 0
@@ -62,6 +67,8 @@ function resetQuery() {
   query.keyword = ''
   query.status = undefined
   query.deptId = ''
+  query.membershipState = ''
+  query.membershipLevelId = ''
   reload()
 }
 
@@ -72,6 +79,8 @@ async function onExport() {
       keyword: query.keyword || undefined,
       status: query.status,
       deptId: query.deptId || undefined,
+      membershipState: query.membershipState || undefined,
+      membershipLevelId: query.membershipLevelId || undefined,
     })
     saveBlob(blob, `用户列表_${new Date().toISOString().slice(0, 10)}.xlsx`)
     ElMessage.success('已导出')
@@ -194,6 +203,98 @@ async function submitForm() {
   }
 }
 
+/* ---------------------------------------------------------- 会员设置 */
+const memberLevels = ref<MembershipLevel[]>([])
+const memberVisible = ref(false)
+const memberTarget = ref<UserRow | null>(null)
+const memberSaving = ref(false)
+const memberForm = reactive({
+  levelId: '',
+  mode: 'days' as 'days' | 'date' | 'forever',
+  days: 365,
+  expireAt: '',
+})
+
+const previewExpire = computed(() => {
+  if (memberForm.mode === 'forever') return '长期有效'
+  if (memberForm.mode === 'date') return memberForm.expireAt || '请选择日期'
+  const d = new Date()
+  d.setDate(d.getDate() + (memberForm.days || 0))
+  return fmtDate(d)
+})
+
+function onMemberLevelChange(id: string) {
+  const lv = memberLevels.value.find((l) => l.id === id)
+  if (!lv) return
+  if (lv.defaultDays > 0) {
+    memberForm.mode = 'days'
+    memberForm.days = lv.defaultDays
+  } else {
+    memberForm.mode = 'forever'
+  }
+}
+
+function openMember(row: UserRow) {
+  memberTarget.value = row
+  const usable = memberLevels.value.filter((l) => l.status === 1)
+  const preferred = memberLevels.value.find((l) => l.id === row.membershipLevelId) || usable[0]
+  memberForm.levelId = preferred?.id || ''
+  memberForm.mode = 'days'
+  memberForm.days = preferred?.defaultDays || 365
+  memberForm.expireAt = ''
+  if (memberForm.days <= 0) memberForm.mode = 'forever'
+  memberVisible.value = true
+}
+
+async function submitMember() {
+  const target = memberTarget.value
+  if (!target) return
+  if (!memberForm.levelId) {
+    ElMessage.warning('请选择会员等级')
+    return
+  }
+  const payload: GrantMembershipPayload = { levelId: memberForm.levelId }
+  if (memberForm.mode === 'days') {
+    payload.days = memberForm.days
+  } else if (memberForm.mode === 'date') {
+    if (!memberForm.expireAt) {
+      ElMessage.warning('请选择到期日期')
+      return
+    }
+    payload.expireAt = memberForm.expireAt
+  } else {
+    payload.permanent = true
+  }
+
+  memberSaving.value = true
+  try {
+    await membershipApi.grant(target.id, payload)
+    ElMessage.success('会员已更新')
+    memberVisible.value = false
+    await load()
+  } finally {
+    memberSaving.value = false
+  }
+}
+
+async function revokeMember() {
+  const target = memberTarget.value
+  if (!target) return
+  try {
+    await ElMessageBox.confirm(
+      `取消后「${target.nickname}」立即变为非会员，相关权益同时失效。确定继续吗？`,
+      '取消会员',
+      { confirmButtonText: '取消会员', cancelButtonText: '返回', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  await membershipApi.revoke(target.id)
+  ElMessage.success('已取消会员')
+  memberVisible.value = false
+  await load()
+}
+
 /* ---------------------------------------------------------- 行内操作 */
 async function toggleStatus(row: UserRow) {
   const next = row.status === 1 ? 0 : 1
@@ -251,6 +352,7 @@ async function removeUser(row: UserRow) {
 }
 
 function onCommand(cmd: string, row: UserRow) {
+  if (cmd === 'member') return openMember(row)
   if (cmd === 'reset') return resetPassword(row)
   if (cmd === 'totp') return resetTOTP(row)
   if (cmd === 'status') return toggleStatus(row)
@@ -360,6 +462,7 @@ onMounted(async () => {
     load(),
     deptApi.options().then((d) => (deptTree.value = d ?? [])).catch(() => undefined),
     roleApi.options().then((r) => (roles.value = r ?? [])).catch(() => undefined),
+    membershipApi.catalog().then((l) => (memberLevels.value = l ?? [])).catch(() => undefined),
   ])
 })
 </script>
@@ -430,6 +533,17 @@ onMounted(async () => {
             <el-option label="正常" :value="1" />
             <el-option label="停用" :value="0" />
           </el-select>
+          <el-select
+            v-model="query.membershipState"
+            placeholder="会员状态"
+            clearable
+            style="width: 128px"
+            @change="reload"
+          >
+            <el-option label="有效会员" value="member" />
+            <el-option label="已过期" value="expired" />
+            <el-option label="非会员" value="none" />
+          </el-select>
           <el-button @click="reload">查询</el-button>
           <el-button text @click="resetQuery">重置</el-button>
         </div>
@@ -488,6 +602,32 @@ onMounted(async () => {
           </template>
         </el-table-column>
 
+        <el-table-column label="会员" width="136">
+          <template #default="{ row }">
+            <div
+              v-if="row.membership"
+              class="member-cell"
+              :style="{ '--lv-color': row.membership.color || '#6366f1' }"
+            >
+              <span class="member-dot" />
+              <div class="member-lines">
+                <span class="member-name">{{ row.membership.name }}</span>
+                <span class="member-sub">
+                  <template v-if="row.membershipState === 'expired'">
+                    {{ row.membershipExpireAt ? `${fmtDate(row.membershipExpireAt)} 已过期` : '已过期' }}
+                  </template>
+                  <template v-else-if="row.membershipState === 'disabled'">等级已停用</template>
+                  <template v-else-if="row.membershipExpireAt">
+                    {{ fmtDate(row.membershipExpireAt) }} 到期
+                  </template>
+                  <template v-else>长期有效</template>
+                </span>
+              </div>
+            </div>
+            <span v-else class="dim">非会员</span>
+          </template>
+        </el-table-column>
+
         <el-table-column label="手机号" width="140">
           <template #default="{ row }">
             <span class="num muted">{{ row.phone || '-' }}</span>
@@ -528,7 +668,13 @@ onMounted(async () => {
               <el-button link type="primary" :icon="MoreFilled" />
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="reset" :disabled="!auth.can('system:user:reset')">
+                  <el-dropdown-item
+                    command="member"
+                    :disabled="!auth.can('system:user:grant-membership')"
+                  >
+                    设置会员
+                  </el-dropdown-item>
+                  <el-dropdown-item command="reset" divided :disabled="!auth.can('system:user:reset')">
                     重置密码
                   </el-dropdown-item>
                   <el-dropdown-item
@@ -692,6 +838,121 @@ onMounted(async () => {
         <el-button type="primary" @click="closeImport">知道了</el-button>
       </template>
     </el-dialog>
+
+    <!-- 设置会员 -->
+    <el-dialog
+      v-model="memberVisible"
+      title="设置会员"
+      width="540px"
+      append-to-body
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div v-if="memberTarget" class="member-dialog">
+        <div class="member-user">
+          <div class="avatar-dot">
+            {{ (memberTarget.nickname || memberTarget.username).slice(0, 1) }}
+          </div>
+          <div class="member-user-lines">
+            <strong>{{ memberTarget.nickname }}</strong>
+            <span class="dim">@{{ memberTarget.username }}</span>
+          </div>
+          <el-tag
+            v-if="memberTarget.membership && memberTarget.membershipState !== 'expired'"
+            size="small"
+            effect="plain"
+            :style="{ color: memberTarget.membership.color, borderColor: memberTarget.membership.color }"
+          >
+            当前 {{ memberTarget.membership.name }}
+          </el-tag>
+          <span v-else class="dim">当前非会员</span>
+        </div>
+
+        <el-form label-position="top">
+          <el-form-item label="会员等级">
+            <el-select
+              v-model="memberForm.levelId"
+              placeholder="选择会员等级"
+              style="width: 100%"
+              @change="onMemberLevelChange"
+            >
+              <el-option
+                v-for="lv in memberLevels"
+                :key="lv.id"
+                :label="lv.name"
+                :value="lv.id"
+                :disabled="lv.status === 0"
+              >
+                <div class="level-option">
+                  <span class="member-dot" :style="{ '--lv-color': lv.color || '#6366f1' }" />
+                  <span>{{ lv.name }}</span>
+                  <span class="dim">{{ lv.code }}</span>
+                  <span v-if="lv.status === 0" class="dim">已停用</span>
+                </div>
+              </el-option>
+            </el-select>
+            <p v-if="!memberLevels.length" class="member-tip">
+              还没有可用的会员等级，请先到「系统管理 → 会员等级」创建。
+            </p>
+          </el-form-item>
+
+          <el-form-item label="有效期">
+            <el-radio-group v-model="memberForm.mode">
+              <el-radio-button value="days">按天数</el-radio-button>
+              <el-radio-button value="date">指定日期</el-radio-button>
+              <el-radio-button value="forever">长期有效</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+
+          <el-form-item v-if="memberForm.mode === 'days'" label="有效天数">
+            <el-input-number
+              v-model="memberForm.days"
+              :min="1"
+              :max="36500"
+              controls-position="right"
+              style="width: 170px"
+            />
+            <span class="expire-hint">到期日 {{ previewExpire }}</span>
+          </el-form-item>
+
+          <el-form-item v-else-if="memberForm.mode === 'date'" label="到期日期">
+            <el-date-picker
+              v-model="memberForm.expireAt"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="选择到期日期"
+              :disabled-date="(d: Date) => d.getTime() < Date.now() - 86400000"
+            />
+          </el-form-item>
+
+          <p v-if="memberForm.mode === 'forever'" class="member-tip">
+            长期有效不会自动到期，需要手动取消会员。
+          </p>
+
+          <p class="member-tip">
+            同等级续费会在原到期日上顺延；切换等级则从今天重新计算。到期后自动按非会员处理，无需手动清理。
+          </p>
+        </el-form>
+      </div>
+
+      <template #footer>
+        <div class="member-footer">
+          <el-button
+            v-if="memberTarget?.membership"
+            type="danger"
+            plain
+            @click="revokeMember"
+          >
+            取消会员
+          </el-button>
+          <span v-else />
+          <div>
+            <el-button @click="memberVisible = false">返回</el-button>
+            <el-button type="primary" :loading="memberSaving" @click="submitMember">保存</el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -841,6 +1102,103 @@ onMounted(async () => {
   text-align: center;
   font-size: 13px;
   color: var(--ink-500);
+}
+
+/* -------------------------------------------------------------- 会员 */
+.member-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.member-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--lv-color, var(--brand-500));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lv-color, var(--brand-500)) 16%, transparent);
+}
+
+.member-lines {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.member-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-sub {
+  font-size: 11px;
+  color: var(--ink-400);
+  white-space: nowrap;
+}
+
+.member-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+}
+
+.member-user-lines {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+  margin-right: auto;
+
+  strong {
+    font-size: 13px;
+    color: var(--ink-900);
+  }
+
+  span {
+    font-size: 11.5px;
+  }
+}
+
+.level-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .dim {
+    margin-left: auto;
+    font-size: 11px;
+  }
+}
+
+.expire-hint {
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--ink-400);
+}
+
+.member-tip {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-400);
+}
+
+.member-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 :deep(.el-table .cell) {

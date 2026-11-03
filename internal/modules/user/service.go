@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/keel-framework/keel/internal/model"
+	"github.com/keel-framework/keel/internal/modules/membership"
 	"github.com/keel-framework/keel/internal/platform/authn"
 	"github.com/keel-framework/keel/internal/platform/authz"
 	"github.com/keel-framework/keel/internal/platform/config"
@@ -26,14 +27,15 @@ type Service struct {
 	cfg   *config.Config
 	log   *zap.Logger
 	authz *authz.Loader
+	mem   *membership.Service
 }
 
-// NewService 创建用户服务。
-func NewService(db *gorm.DB, cfg *config.Config, log *zap.Logger, al *authz.Loader) *Service {
+// NewService 创建用户服务。mem 可为空：关闭会员模块时不展示等级信息。
+func NewService(db *gorm.DB, cfg *config.Config, log *zap.Logger, al *authz.Loader, mem *membership.Service) *Service {
 	if log == nil {
 		log = zap.NewNop()
 	}
-	return &Service{db: db, cfg: cfg, log: log, authz: al}
+	return &Service{db: db, cfg: cfg, log: log, authz: al, mem: mem}
 }
 
 // Scope 数据权限范围。
@@ -109,7 +111,8 @@ func (s *Service) List(ctx context.Context, p *query.Params, sc Scope, deptFilte
 	allowed := map[string]string{
 		"username": "username", "nickname": "nickname", "phone": "phone",
 		"email": "email", "status": "status", "dept_id": "dept_id",
-		"created_at": "created_at",
+		"membership_level_id": "membership_level_id",
+		"created_at":          "created_at",
 	}
 	base := s.db.WithContext(ctx).Model(&model.User{})
 	if len(deptFilter) > 0 {
@@ -126,6 +129,7 @@ func (s *Service) List(ctx context.Context, p *query.Params, sc Scope, deptFilte
 		}
 	}
 	db := p.Filter(base, allowed)
+	db = applyMembershipFilter(db, p.Filters["membershipState"])
 	db = query.Search(db, p.Keyword, "username", "nickname", "phone", "email")
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
@@ -152,6 +156,33 @@ func maskPhone(p string) string {
 		return p
 	}
 	return p[:3] + "****" + p[len(p)-4:]
+}
+
+// applyMembershipFilter 按会员状态筛选。
+// member=有效会员；none=当前非会员（从未开通、已过期或等级停用）；
+// expired 与 disabled 用于更细的运营筛选。
+func applyMembershipFilter(db *gorm.DB, state string) *gorm.DB {
+	if state == "" || state == "all" {
+		return db
+	}
+	now := time.Now()
+	enabledLevels := func() *gorm.DB {
+		return db.Session(&gorm.Session{NewDB: true}).Model(&model.MembershipLevel{}).
+			Select("id").Where("status = ? AND deleted_at IS NULL", model.StatusEnabled)
+	}
+	activeCond := "membership_level_id <> '' AND (membership_expire_at IS NULL OR membership_expire_at > ?) AND membership_level_id IN (?)"
+	switch state {
+	case "member":
+		return db.Where(activeCond, now, enabledLevels())
+	case "none":
+		// 与 member 互补，保证两个筛选的并集等于全量用户。
+		return db.Where("NOT ("+activeCond+")", now, enabledLevels())
+	case "expired":
+		return db.Where("membership_level_id <> '' AND membership_expire_at IS NOT NULL AND membership_expire_at <= ?", now)
+	case "disabled":
+		return db.Where("membership_level_id <> '' AND membership_level_id NOT IN (?)", enabledLevels())
+	}
+	return db
 }
 
 // attachRelations 批量填充角色与部门，避免 N+1 查询。
@@ -205,6 +236,9 @@ func (s *Service) attachRelations(ctx context.Context, users []*model.User) erro
 		if d, ok := depts[u.DeptID]; ok {
 			u.Dept = d
 		}
+	}
+	if s.mem != nil {
+		return s.mem.Fill(ctx, users)
 	}
 	return nil
 }
@@ -520,7 +554,7 @@ func (s *Service) Export(ctx context.Context, p *query.Params, sc Scope, deptFil
 	index, _ := f.NewSheet(sheet)
 	f.SetActiveSheet(index)
 	f.DeleteSheet("Sheet1")
-	headers := []string{"ID", "用户名", "昵称", "姓名", "手机号", "邮箱", "部门", "角色", "状态", "最后登录", "创建时间"}
+	headers := []string{"ID", "用户名", "昵称", "姓名", "手机号", "邮箱", "部门", "角色", "会员等级", "会员到期", "状态", "最后登录", "创建时间"}
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f.SetCellValue(sheet, cell, h)
@@ -545,12 +579,22 @@ func (s *Service) Export(ctx context.Context, p *query.Params, sc Scope, deptFil
 		if u.Status == 0 {
 			status = "禁用"
 		}
+		level, expire := "非会员", ""
+		if u.Membership != nil {
+			level = u.Membership.Name
+			if u.MembershipState == model.MembershipExpired {
+				level += "（已过期）"
+			}
+			if u.MembershipExpireAt != nil {
+				expire = u.MembershipExpireAt.Format("2006-01-02")
+			}
+		}
 		last := ""
 		if u.LastLoginAt != nil {
 			last = u.LastLoginAt.Format("2006-01-02 15:04:05")
 		}
 		values := []any{u.ID, u.Username, u.Nickname, u.RealName, u.Phone, u.Email, dept,
-			strings.Join(roleNames, "/"), status, last, u.CreatedAt.Format("2006-01-02 15:04:05")}
+			strings.Join(roleNames, "/"), level, expire, status, last, u.CreatedAt.Format("2006-01-02 15:04:05")}
 		for j, v := range values {
 			cell, _ := excelize.CoordinatesToCellName(j+1, row)
 			f.SetCellValue(sheet, cell, v)
@@ -559,6 +603,7 @@ func (s *Service) Export(ctx context.Context, p *query.Params, sc Scope, deptFil
 	f.SetColWidth(sheet, "A", "A", 22)
 	f.SetColWidth(sheet, "B", "D", 16)
 	f.SetColWidth(sheet, "G", "H", 18)
+	f.SetColWidth(sheet, "I", "J", 14)
 	return f, nil
 }
 
