@@ -533,34 +533,63 @@ make test
 
 ### 10.1 分支约定
 
-`main` 是唯一长期分支，存放**基础框架与核心功能**，任何提交都必须处于可编译、
-可启动、冒烟测试通过的状态。业务开发不在 `main` 上直接进行，而是从 `main`
-切出短生命周期的功能分支，完成后再合回。
+`main` 是唯一长期分支，也是**默认的提交目标**。基础框架与核心通用能力直接
+提交到 `main`，不为它们单独开分支——这些能力属于框架本身，每一次演进都应
+立即成为后续业务分支的起点，额外的分支与合并只会让基线出现分叉。
+
+直接进 `main` 的范围（框架自身）：
+
+| 类别 | 示例 |
+| --- | --- |
+| 认证与安全 | 登录、JWT、验证码、两步验证、密码策略 |
+| 权限模型 | RBAC、数据权限、菜单与权限点 |
+| 组织与基础数据 | 用户、部门、角色、字典、参数配置 |
+| 平台能力 | 审计日志、任务调度、文件存储、站内消息、监控指标 |
+| 前端基座 | 布局、设计系统、路由守卫、通用组件 |
+| 工程与构建 | 依赖升级、Makefile、Dockerfile、文档 |
+
+需要开分支的是**面向具体业务的衍生功能**：它们不属于框架基线，是否合入、
+何时合入取决于项目排期。
 
 | 分支 | 用途 | 命名示例 |
 | --- | --- | --- |
-| `main` | 基础与核心功能基线，可随时发布 | `main` |
-| `feature/*` | 新模块、新页面、新能力 | `feature/customer-module` |
+| `feature/*` | 具体业务模块、行业特性、定制页面 | `feature/customer-module` |
 | `fix/*` | 非紧急缺陷修复 | `fix/user-export-filter` |
 | `hotfix/*` | 生产问题紧急修复，从 `main` 切出 | `hotfix/login-lockout` |
-| `chore/*` | 依赖升级、构建脚本、文档调整 | `chore/upgrade-gorm` |
+| `chore/*` | 影响面大、需要评审的依赖或构建调整 | `chore/upgrade-gorm` |
 
-命名统一小写中划线，`feature` 后跟模块名，必要时再加简述：
-`feature/message-batch-delete`。
+判断标准一句话：**改完之后所有下游项目都会受益，就进 `main`；只有当前项目
+需要，才开分支。**
 
 ### 10.2 日常工作流
 
+核心通用能力直接提交：
+
 ```bash
 git switch main
-git pull --ff-only                 # 有远端时；本地仓库可跳过
-git switch -c feature/customer-module
 
 # ... 开发、自测 ...
 make test && make build
-git add -A
-git commit -m "feat(customer): 新增客户档案模块"
+./scripts/smoke.sh
 
-# 合回 main，保留分支拓扑便于回溯
+git add -A
+git commit -m "feat(auth): 两步验证支持扫码绑定与恢复码"
+git push origin main
+```
+
+提交前必须满足：可编译、可启动、`make test` 与 `scripts/smoke.sh` 全部通过、
+工作区没有残留调试文件。`main` 在任何提交点都应该能直接发版。
+
+衍生业务功能走分支：
+
+```bash
+git switch main
+git pull --ff-only
+
+git switch -c feature/customer-module
+# ... 开发、自测 ...
+make test && make build
+
 git switch main
 git merge --no-ff feature/customer-module
 git branch -d feature/customer-module
@@ -572,6 +601,15 @@ git branch -d feature/customer-module
 git switch feature/customer-module
 git rebase main                    # 或 git merge main
 ```
+
+如果核心能力误开了分支并已合并，在**尚未推送远端**时可以压平成一次直接提交：
+
+```bash
+git reset --soft <合并前的提交>
+git commit -C <分支上的提交>
+```
+
+一旦推送，就不要再改写公共历史，改用新的正向提交修正。
 
 ### 10.3 提交信息
 
@@ -604,6 +642,10 @@ git push origin main --tags
 
 ### 10.5 保护建议
 
-推送到远端后，对 `main` 开启分支保护：禁止直接推送、要求线性历史与
-必要的检查（`make test`、`make build`）通过后再合并。本地仓库可跳过本节。
+推送到远端后对 `main` 开启分支保护，重点是**检查通过**而不是禁止直推：
+
+- 要求 `make test`、`make build` 通过，且不允许强制推送
+- 核心能力的提交允许维护者直接推送；若团队统一要求走 PR，也应由框架维护者
+  当天合并，避免基线长期滞后、下游业务分支越拉越远
+- 本地仓库不需要这些限制，但每次提交后应跑一遍 `scripts/smoke.sh`
 
