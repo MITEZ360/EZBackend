@@ -37,10 +37,22 @@ var jobSeeds = []struct {
 		Remark: "每小时回收已过期的登录会话"},
 	{Name: "清理历史消息", Cron: "0 4 * * *", Handler: "message.cleanup", Params: `{"days":180}`,
 		Remark: "每天 04:00 清理 180 天前已读的收件记录"},
+	{Name: "清理过期资讯", Cron: "15 * * * *", Handler: "news.cleanup", Params: `{}`,
+		Remark: "每小时清理超过 news.retention_days 的资讯；任务参数可单独覆盖天数"},
 }
 
 var menuSeeds = []menuSeed{
 	{ID: "m_dashboard", Name: "仪表盘", Type: model.MenuPage, Path: "/dashboard", Icon: "dashboard", Perm: "dashboard:view", Sort: 1},
+	{ID: "m_content", Name: "资讯中心", Type: model.MenuDir, Path: "/content", Icon: "news", Sort: 5, Children: []menuSeed{
+		{ID: "m_news", Name: "资讯列表", Type: model.MenuPage, Path: "/content/news", Icon: "file-text", Perm: "content:news:list", Sort: 1, Children: []menuSeed{
+			{ID: "m_news_view", Name: "查看资讯", Type: model.MenuButton, Perm: "content:news:view"},
+			{ID: "m_news_del", Name: "删除资讯", Type: model.MenuButton, Perm: "content:news:delete"},
+			{ID: "m_news_cleanup", Name: "手动清理", Type: model.MenuButton, Perm: "content:news:cleanup"},
+		}},
+		{ID: "m_news_source", Name: "数据源", Type: model.MenuPage, Path: "/content/source", Icon: "server", Perm: "content:news:list", Sort: 2, Children: []menuSeed{
+			{ID: "m_news_source_edit", Name: "维护数据源", Type: model.MenuButton, Perm: "content:news:source"},
+		}},
+	}},
 	{ID: "m_system", Name: "系统管理", Type: model.MenuDir, Path: "/system", Icon: "settings", Sort: 10, Children: []menuSeed{
 		{ID: "m_user", Name: "用户管理", Type: model.MenuPage, Path: "/system/user", Icon: "users", Perm: "system:user:list", Sort: 1, Children: []menuSeed{
 			{ID: "m_user_add", Name: "新增用户", Type: model.MenuButton, Perm: "system:user:create"},
@@ -237,6 +249,31 @@ func syncBuiltinMenus(db *gorm.DB, log *zap.Logger) error {
 	return nil
 }
 
+// syncBuiltinJobs 幂等补齐内置定时任务。按 handler 判重，
+// 管理员改过 cron 或停用后不会被重置回默认值。
+func syncBuiltinJobs(db *gorm.DB, log *zap.Logger) error {
+	created := 0
+	for _, j := range jobSeeds {
+		var exists int64
+		if err := db.Unscoped().Model(&model.Job{}).Where("handler = ?", j.Handler).Count(&exists).Error; err != nil {
+			return err
+		}
+		if exists > 0 {
+			continue
+		}
+		job := model.Job{Name: j.Name, Cron: j.Cron, Handler: j.Handler,
+			Params: j.Params, Remark: j.Remark, Status: model.StatusEnabled}
+		if err := db.Create(&job).Error; err != nil {
+			return fmt.Errorf("补齐内置任务失败: %w", err)
+		}
+		created++
+	}
+	if created > 0 {
+		log.Info("已补齐内置定时任务", zap.Int("count", created))
+	}
+	return nil
+}
+
 // syncBuiltinLevels 幂等补齐内置会员等级。已删除的等级不会重建，
 // 避免管理员清理示例数据后每次启动又冒出来。
 func syncBuiltinLevels(db *gorm.DB, log *zap.Logger) error {
@@ -277,6 +314,9 @@ func seed(db *gorm.DB, log *zap.Logger) error {
 		// 已初始化的库也要能拿到后续版本新增的内置菜单，否则升级后功能
 		// 有接口却没有入口。
 		if err := syncBuiltinMenus(db, log); err != nil {
+			return err
+		}
+		if err := syncBuiltinJobs(db, log); err != nil {
 			return err
 		}
 		return syncBuiltinLevels(db, log)

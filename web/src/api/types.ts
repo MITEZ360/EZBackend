@@ -403,3 +403,53 @@ export interface APIKeyRow {
   creatorName?: string
   todayUsage: number
 }
+
+/** 资讯条目。列表接口不返回 content，详情接口才带正文 */
+export interface NewsArticle {
+  id: string
+  sourceId: string
+  sourceCode: string
+  sourceName: string
+  externalId: string
+  title: string
+  summary?: string
+  content?: string
+  url?: string
+  author?: string
+  category: string
+  tags: string[]
+  coverUrl?: string
+  wordCount: number
+  viewCount: number
+  publishedAt: string
+  ingestedAt: string
+  status: number
+}
+
+export interface NewsSource {
+  id: string
+  createdAt: string
+  updatedAt: string
+  code: string
+  name: string
+  kind: 'crawler' | 'api' | 'rss'
+  homepage?: string
+  status: number
+  lastIngestAt?: string
+  totalIngested: number
+  remark?: string
+}
+
+export interface NewsCount {
+  name: string
+  count: number
+}
+
+export interface NewsStats {
+  total: number
+  today: number
+  last24h: number
+  categories: NewsCount[]
+  sources: NewsCount[]
+  retentionDays: number
+}

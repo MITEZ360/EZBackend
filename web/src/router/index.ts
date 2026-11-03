@@ -66,6 +66,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'API 密钥' },
       },
       {
+        path: 'content/news',
+        name: 'content-news',
+        component: () => import('@/pages/content/news/index.vue'),
+        meta: { title: '资讯列表' },
+      },
+      {
+        path: 'content/source',
+        name: 'content-source',
+        component: () => import('@/pages/content/source/index.vue'),
+        meta: { title: '数据源' },
+      },
+      {
         path: 'system/dept',
         name: 'system-dept',
         component: () => import('@/pages/system/dept/index.vue'),

@@ -477,6 +477,86 @@ X-API-Key: ak_s_8fQ2mN...
 
 请求头二选一：`X-API-Key: <plain>` 或 `Authorization: ApiKey <plain>`。
 
+### 4.19 资讯中心（后台管理）
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| GET | `/news` | 分页；`keyword`、`category`、`sourceId`、`from`、`to`、`status` | `content:news:list` |
+| GET | `/news/stats` | 总量、今日、近 24 小时、分类与来源分布 | `content:news:list` |
+| GET | `/news/:id` | 详情（含正文） | `content:news:view` |
+| DELETE | `/news/:id` | 删除单条 | `content:news:delete` |
+| POST | `/news/cleanup` | 立即清理过期数据，返回 `{deleted}` | `content:news:cleanup` |
+| GET | `/news-sources` | 数据源分页 | `content:news:list` |
+| POST | `/news-sources` | 新增数据源 | `content:news:source` |
+| PUT | `/news-sources/:id` | 编辑；编码不可改 | `content:news:source` |
+| DELETE | `/news-sources/:id` | 删除；仍有资讯引用时返回 `409` | `content:news:delete` |
+
+列表接口不返回 `content`，正文只在详情里给，避免单页响应过大。
+
+### 4.20 资讯开放接口（`/api/open/v1`，API 密钥）
+
+| 方法 | 路径 | scope | 说明 |
+| --- | --- | --- | --- |
+| POST | `/news/batch` | `news:ingest` | 批量推送，单次最多 200 条 |
+| GET | `/news` | `news:read` | 游标分页，`limit` 最大 100 |
+| GET | `/news/:id` | `news:read` | 详情，异步累加阅读量 |
+| GET | `/news/meta` | `news:read` | 分类、来源、保留天数 |
+
+推送：
+
+```http
+POST /api/open/v1/news/batch
+X-API-Key: ak_s_...
+Content-Type: application/json
+
+{
+  "source": "tech-daily",
+  "items": [
+    {
+      "externalId": "a1b2c3",
+      "title": "标题",
+      "summary": "摘要，可省略，缺省时截取正文前 120 字",
+      "content": "正文",
+      "url": "https://example.com/a1b2c3",
+      "author": "作者",
+      "category": "tech",
+      "tags": ["AI", "芯片"],
+      "coverUrl": "https://example.com/cover.jpg",
+      "publishedAt": "2026-11-03T10:00:00+08:00"
+    }
+  ]
+}
+```
+
+```json
+{
+  "code": 0,
+  "data": {
+    "source": "tech-daily",
+    "sourceCreated": false,
+    "received": 200,
+    "accepted": 197,
+    "duplicate": 2,
+    "invalid": 1,
+    "expired": 0,
+    "errors": [{ "index": 12, "reason": "标题不能为空" }]
+  }
+}
+```
+
+- **幂等**：唯一键是 `(source, externalId)`；未传 `externalId` 时用「标题+正文」的内容指纹兜底。
+  重复推送不会报错，直接计入 `duplicate`，因此爬虫可以放心重试整批。
+- **过期丢弃**：`publishedAt` 早于保留窗口的条目计入 `expired` 且不入库，
+  避免刚写入就被清理、同时让爬虫知道这批数据没有存档价值。
+- **自动注册数据源**：`source` 首次出现时自动建源，之后可在后台改名或停用。
+- **校验**：单条正文上限 200KB；标题为空、正文超限计入 `invalid`，`errors` 最多返回 20 条明细。
+- **游标分页**：`GET /news?limit=20&cursor=...`，按 `published_at DESC, id DESC` 排序，
+  深翻页不会变慢；`hasMore=false` 时结束。响应中的列表不含正文。
+
+```json
+{ "code": 0, "data": { "list": [], "nextCursor": "MTc5...", "hasMore": true } }
+```
+
 ---
 
 ## 5. 调用示例

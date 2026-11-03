@@ -30,6 +30,7 @@ import (
 	"github.com/keel-framework/keel/internal/modules/menu"
 	"github.com/keel-framework/keel/internal/modules/message"
 	"github.com/keel-framework/keel/internal/modules/monitor"
+	"github.com/keel-framework/keel/internal/modules/news"
 	"github.com/keel-framework/keel/internal/modules/role"
 	"github.com/keel-framework/keel/internal/modules/system"
 	"github.com/keel-framework/keel/internal/modules/user"
@@ -163,9 +164,22 @@ func New(cfgPath string) (*App, error) {
 	noticeSvc := system.NewNoticeService(db, msgSvc, lg)
 	auditSvc := audit.NewService(db, ch, lg)
 	apiKeySvc := apikey.NewService(db, ch, lg)
+	newsSvc := news.NewService(db, ch, lg, cfg.News.RetentionDays)
 	jobSvc := job.NewService(db, ch, lg)
 	jobSvc.SetCleaner(auditSvc)
 	jobSvc.SetMessageCleaner(msgSvc)
+	// 资讯是滚动窗口数据，清理任务与业务同生命周期，不依赖外部调度。
+	jobSvc.Register("news.cleanup", func(ctx context.Context, p map[string]any) (string, error) {
+		days := 0
+		if v, ok := p["days"].(float64); ok {
+			days = int(v)
+		}
+		n, err := newsSvc.Cleanup(ctx, days)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("已清理 %d 条过期资讯", n), nil
+	})
 	fileSvc := file.NewService(db, cfg, store, lg)
 	dashSvc := dashboard.NewService(db, ch)
 
@@ -199,6 +213,8 @@ func New(cfgPath string) (*App, error) {
 		Membership: membership.NewHandler(membershipSvc),
 		APIKey:     apikey.NewHandler(apiKeySvc),
 		APIKeySvc:  apiKeySvc,
+		News:       news.NewHandler(newsSvc),
+		NewsOpen:   news.NewOpenHandler(newsSvc),
 		Audit:      audit.NewHandler(auditSvc),
 		Job:        job.NewHandler(jobSvc),
 		File:       file.NewHandler(fileSvc),
@@ -237,6 +253,7 @@ func models() []any {
 		&model.Notice{}, &model.LoginLog{}, &model.OperationLog{}, &model.Job{}, &model.JobLog{},
 		&model.File{}, &model.Message{}, &model.MessageRecipient{},
 		&model.MembershipLevel{}, &model.APIKey{},
+		&model.NewsSource{}, &model.NewsArticle{},
 	}
 }
 

@@ -30,6 +30,7 @@ import (
 	"github.com/keel-framework/keel/internal/modules/menu"
 	"github.com/keel-framework/keel/internal/modules/message"
 	"github.com/keel-framework/keel/internal/modules/monitor"
+	"github.com/keel-framework/keel/internal/modules/news"
 	"github.com/keel-framework/keel/internal/modules/role"
 	"github.com/keel-framework/keel/internal/modules/system"
 	"github.com/keel-framework/keel/internal/modules/user"
@@ -75,6 +76,8 @@ type Deps struct {
 	Membership *membership.Handler
 	APIKey     *apikey.Handler
 	APIKeySvc  *apikey.Service
+	News       *news.Handler
+	NewsOpen   *news.OpenHandler
 	Audit      *audit.Handler
 	Job        *job.Handler
 	File       *file.Handler
@@ -156,6 +159,9 @@ func New(d Deps) *gin.Engine {
 	if d.on("apikey") {
 		d.apiKeyRoutes(authed)
 	}
+	if d.on("news") {
+		d.newsRoutes(authed)
+	}
 	if d.on("role") {
 		d.roleRoutes(authed)
 	}
@@ -195,6 +201,12 @@ func New(d Deps) *gin.Engine {
 		open := e.Group("/api/open/v1",
 			middleware.APIKeyAuth(d.APIKeySvc, d.Cfg.Server.TrustProxy))
 		open.GET("/whoami", d.APIKey.Whoami)
+		if d.NewsOpen != nil {
+			open.POST("/news/batch", middleware.RequirePerm("news:ingest"), d.NewsOpen.Ingest)
+			open.GET("/news/meta", middleware.RequirePerm("news:read"), d.NewsOpen.Meta)
+			open.GET("/news", middleware.RequirePerm("news:read"), d.NewsOpen.List)
+			open.GET("/news/:id", middleware.RequirePerm("news:read"), d.NewsOpen.Detail)
+		}
 	}
 
 	e.NoRoute(d.notFound)

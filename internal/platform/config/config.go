@@ -30,6 +30,13 @@ type Config struct {
 	Metrics   Metrics   `mapstructure:"metrics"`
 	Micro     Micro     `mapstructure:"micro"`
 	Runtime   Runtime   `mapstructure:"runtime"`
+	News      News      `mapstructure:"news"`
+}
+
+// News 资讯聚合参数。
+type News struct {
+	// RetentionDays 资讯保留天数，超期由定时任务物理删除。
+	RetentionDays int `mapstructure:"retention_days"`
 }
 
 // App 应用基础信息。
@@ -607,4 +614,6 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("runtime.stateless", "auto")
 	v.SetDefault("runtime.instances", 1)
+
+	v.SetDefault("news.retention_days", 7)
 }

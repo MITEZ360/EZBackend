@@ -31,7 +31,7 @@ micro:
   mode: mono
 ```
 
-- 15 个模块全部挂载，116 条路由。
+- 15 个模块全部挂载，129 条路由（含 4 条开放接口）。
 - 数据库、缓存、定时任务都在本进程。
 - 只有 1 个进程时，默认的 SQLite + 进程内缓存即可，无需外部依赖。
 
@@ -96,7 +96,7 @@ micro:
 可用的模块名：
 
 ```
-auth  user  role  menu  dept  dict  config  notice  audit  job  file  dashboard  monitor
+auth  user  role  menu  dept  dict  config  notice  audit  job  file  dashboard  monitor  apikey  news
 ```
 
 拆分示例：
@@ -105,6 +105,7 @@ auth  user  role  menu  dept  dict  config  notice  audit  job  file  dashboard 
 | --- | --- | --- |
 | keel-auth | `[auth, menu]` | 登录、令牌、导航树 |
 | keel-user | `[user, role, dept, membership]` | 组织、账号与会员等级 |
+| keel-content | `[news]` | 资讯聚合，写入量大，建议独立部署并单独限流 |
 | keel-ops | `[audit, job, file, monitor]` | 运维能力，可单独限流 |
 | keel-core | 全部 | 兜底，未拆分部分 |
 
