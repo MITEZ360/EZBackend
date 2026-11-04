@@ -20,4 +20,9 @@ func (d Deps) newsRoutes(g *gin.RouterGroup) {
 	g.POST("/news-sources", middleware.RequirePerm("content:news:source"), d.News.CreateSource)
 	g.PUT("/news-sources/:id", middleware.RequirePerm("content:news:source"), d.News.UpdateSource)
 	g.DELETE("/news-sources/:id", middleware.RequirePerm("content:news:delete"), d.News.DeleteSource)
+
+	g.GET("/news-categories", middleware.RequirePerm("content:news:list"), d.News.Categories)
+	g.POST("/news-categories", middleware.RequirePerm("content:news:category"), d.News.CreateCategory)
+	g.PUT("/news-categories/:id", middleware.RequirePerm("content:news:category"), d.News.UpdateCategory)
+	g.DELETE("/news-categories/:id", middleware.RequirePerm("content:news:delete"), d.News.DeleteCategory)
 }

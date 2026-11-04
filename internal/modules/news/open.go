@@ -66,17 +66,15 @@ func (h *OpenHandler) Detail(c *gin.Context) {
 	response.OK(c, a)
 }
 
-// Meta 筛选元数据：分类、来源与保留窗口，客户端启动时拉一次即可。
+// Meta 筛选元数据：来源、分类与保留窗口。
+//
+// 来源与分类都是后台配置好的白名单，这里全量下发（含图标与颜色），
+// 客户端启动时拉一次并缓存，即可渲染筛选面板与来源标识。
 func (h *OpenHandler) Meta(c *gin.Context) {
-	stats, err := h.svc.Stats(c.Request.Context())
+	meta, err := h.svc.BuildMeta(c.Request.Context())
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{
-		"categories":    stats.Categories,
-		"sources":       stats.Sources,
-		"retentionDays": int(h.svc.Retention().Hours() / 24),
-		"total":         stats.Total,
-	})
+	response.OK(c, meta)
 }

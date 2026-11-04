@@ -487,11 +487,19 @@ X-API-Key: ak_s_8fQ2mN...
 | DELETE | `/news/:id` | 删除单条 | `content:news:delete` |
 | POST | `/news/cleanup` | 立即清理过期数据，返回 `{deleted}` | `content:news:cleanup` |
 | GET | `/news-sources` | 数据源分页 | `content:news:list` |
-| POST | `/news-sources` | 新增数据源 | `content:news:source` |
+| POST | `/news-sources` | 新增数据源；`icon`、`color`、`sort` 用于客户端展示 | `content:news:source` |
 | PUT | `/news-sources/:id` | 编辑；编码不可改 | `content:news:source` |
 | DELETE | `/news-sources/:id` | 删除；仍有资讯引用时返回 `409` | `content:news:delete` |
+| GET | `/news-categories` | 分类全量列表（含 `articleCount`） | `content:news:list` |
+| POST | `/news-categories` | 新增分类 | `content:news:category` |
+| PUT | `/news-categories/:id` | 编辑；编码不可改 | `content:news:category` |
+| DELETE | `/news-categories/:id` | 删除；仍有资讯引用时返回 `409` | `content:news:delete` |
 
 列表接口不返回 `content`，正文只在详情里给，避免单页响应过大。
+
+来源与分类都是**运营预置的白名单**，不是爬虫自由填写的字段：未配置或已停用的编码会在推送时被拒。
+两者的 `icon` 存可公开访问的图片 URL（本地上传为 `/uploads/...`，对象存储为外链），
+`color` 作为图标缺失时的兜底主色，客户端不需要各自维护图标映射表。
 
 ### 4.20 资讯开放接口（`/api/open/v1`，API 密钥）
 
@@ -500,7 +508,7 @@ X-API-Key: ak_s_8fQ2mN...
 | POST | `/news/batch` | `news:ingest` | 批量推送，单次最多 200 条 |
 | GET | `/news` | `news:read` | 游标分页，`limit` 最大 100 |
 | GET | `/news/:id` | `news:read` | 详情，异步累加阅读量 |
-| GET | `/news/meta` | `news:read` | 分类、来源、保留天数 |
+| GET | `/news/meta` | `news:read` | 全量下发来源与分类（含图标、颜色、排序）、保留天数 |
 
 推送：
 
@@ -533,23 +541,54 @@ Content-Type: application/json
   "code": 0,
   "data": {
     "source": "tech-daily",
-    "sourceCreated": false,
     "received": 200,
     "accepted": 197,
     "duplicate": 2,
     "invalid": 1,
     "expired": 0,
-    "errors": [{ "index": 12, "reason": "标题不能为空" }]
+    "errors": [{ "index": 12, "reason": "分类未配置或已停用：gossip" }]
   }
 }
 ```
+
+元数据：
+
+```http
+GET /api/open/v1/news/meta
+X-API-Key: ak_c_...
+```
+
+```json
+{
+  "code": 0,
+  "data": {
+    "sources": [
+      { "code": "tech-daily", "name": "科技日报", "kind": "crawler",
+        "icon": "https://cdn.example.com/icons/tech.png", "color": "#1E6FFF", "sort": 10 }
+    ],
+    "categories": [
+      { "code": "tech", "name": "科技", "icon": "/uploads/2026/11/04/tech.png",
+        "color": "#1E6FFF", "sort": 10 }
+    ],
+    "retentionDays": 7,
+    "total": 1280
+  }
+}
+```
+
+`meta` 只返回启用项，按 `sort` 升序。来源和分类数量是运营配置级别（几十条），
+一次全量下发 + 客户端缓存即可，不再返回「按名称分组的 Top 12 计数」——
+那种结构既不能直接用于筛选，还会因截断漏项。
 
 - **幂等**：唯一键是 `(source, externalId)`；未传 `externalId` 时用「标题+正文」的内容指纹兜底。
   重复推送不会报错，直接计入 `duplicate`，因此爬虫可以放心重试整批。
 - **过期丢弃**：`publishedAt` 早于保留窗口的条目计入 `expired` 且不入库，
   避免刚写入就被清理、同时让爬虫知道这批数据没有存档价值。
-- **自动注册数据源**：`source` 首次出现时自动建源，之后可在后台改名或停用。
-- **校验**：单条正文上限 200KB；标题为空、正文超限计入 `invalid`，`errors` 最多返回 20 条明细。
+- **来源白名单**：`source` 必须是后台已创建且启用的数据源，否则整批 `403`、不写入任何一条。
+  来源是请求级属性，配置错了应该让爬虫立刻感知，而不是写一半。
+- **分类白名单**：`category` 必填且必须命中已启用分类，否则该条计入 `invalid`，其余正常入库。
+  分类是条目级属性，一条脏数据不该拖垮整批。缺失分类不再兜底到 `general`。
+- **校验**：单条正文上限 200KB；标题为空、正文超限、分类非法均计入 `invalid`，`errors` 最多返回 20 条明细。
 - **游标分页**：`GET /news?limit=20&cursor=...`，按 `published_at DESC, id DESC` 排序，
   深翻页不会变慢；`hasMore=false` 时结束。响应中的列表不含正文。
 

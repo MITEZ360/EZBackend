@@ -572,8 +572,8 @@ curl -H "X-API-Key: $KEEL_API_KEY" \
 .scope-chip {
   padding: 1px 6px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--brand) 8%, transparent);
-  color: var(--brand-700, var(--brand));
+  background: color-mix(in srgb, var(--brand-500) 8%, transparent);
+  color: var(--brand-700, var(--brand-600));
   font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 1.6;

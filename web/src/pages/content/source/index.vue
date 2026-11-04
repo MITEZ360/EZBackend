@@ -5,6 +5,7 @@ import { Plus, Refresh } from '@element-plus/icons-vue'
 import { newsSourceApi } from '@/api/news'
 import type { NewsSource } from '@/api/types'
 import { fmtTime } from '@/utils/format'
+import IconField from '@/components/IconField.vue'
 
 /** 列表里用紧凑时间，完整时间放在 tooltip 中 */
 function fmtShort(v?: string) {
@@ -52,6 +53,9 @@ const form = ref({
   code: '',
   name: '',
   kind: 'crawler' as 'crawler' | 'api' | 'rss',
+  icon: '',
+  color: '',
+  sort: 0,
   homepage: '',
   status: 1,
   remark: '',
@@ -72,7 +76,10 @@ const rules: FormRules = {
 function openCreate() {
   editingId.value = ''
   isEdit.value = false
-  Object.assign(form.value, { code: '', name: '', kind: 'crawler', homepage: '', status: 1, remark: '' })
+  Object.assign(form.value, {
+    code: '', name: '', kind: 'crawler', icon: '', color: '', sort: 0,
+    homepage: '', status: 1, remark: '',
+  })
   formRef.value?.clearValidate()
   drawer.value = true
 }
@@ -84,6 +91,9 @@ function openEdit(row: NewsSource) {
     code: row.code,
     name: row.name,
     kind: row.kind,
+    icon: row.icon ?? '',
+    color: row.color ?? '',
+    sort: row.sort ?? 0,
     homepage: row.homepage ?? '',
     status: row.status,
     remark: row.remark ?? '',
@@ -128,6 +138,9 @@ async function toggle(row: NewsSource) {
     code: row.code,
     name: row.name,
     kind: row.kind,
+    icon: row.icon,
+    color: row.color,
+    sort: row.sort,
     homepage: row.homepage,
     remark: row.remark,
     status: next,
@@ -149,7 +162,7 @@ const KIND_LABEL: Record<string, string> = {
       <div>
         <h1 class="page-title">数据源</h1>
         <p class="page-desc">
-          按来源归集资讯，用于统计产量与定位异常。爬虫首次推送未知编码时会自动注册，之后可在此改名或停用。
+          来源是爬虫推送的白名单：未配置或已停用的来源会被整批拒收。名称、图标与颜色随元数据接口下发，客户端直接用于展示与筛选。
         </p>
       </div>
       <div class="page-actions">
@@ -174,10 +187,18 @@ const KIND_LABEL: Record<string, string> = {
       </div>
 
       <el-table :data="rows" v-loading="loading" row-key="id">
-        <el-table-column label="名称" width="220">
+        <el-table-column label="名称" width="240">
           <template #default="{ row }">
-            <div class="src-name">{{ row.name }}</div>
-            <div v-if="row.remark" class="dim src-remark">{{ row.remark }}</div>
+            <div class="src-cell">
+              <div class="src-icon" :style="{ background: row.color || 'var(--bg-subtle)' }">
+                <img v-if="row.icon" :src="row.icon" alt="" />
+                <span v-else>{{ row.name.slice(0, 1) }}</span>
+              </div>
+              <div class="src-meta">
+                <div class="src-name">{{ row.name }}</div>
+                <div v-if="row.remark" class="dim src-remark">{{ row.remark }}</div>
+              </div>
+            </div>
           </template>
         </el-table-column>
 
@@ -233,7 +254,7 @@ const KIND_LABEL: Record<string, string> = {
         <template #empty>
           <div class="empty">
             <p>还没有数据源</p>
-            <p class="dim">爬虫首次推送时会按传入的 source 编码自动注册</p>
+            <p class="dim">请先创建来源，爬虫推送未配置的编码会被拒绝</p>
           </div>
         </template>
       </el-table>
@@ -260,12 +281,20 @@ const KIND_LABEL: Record<string, string> = {
         <el-form-item label="名称" prop="name">
           <el-input v-model="form.name" placeholder="如：科技日报" maxlength="64" />
         </el-form-item>
+        <el-form-item label="图标">
+          <IconField v-model:icon="form.icon" v-model:color="form.color" :fallback="form.name" />
+          <p class="field-tip">建议方形 PNG / SVG，透明底，≤ 512KB</p>
+        </el-form-item>
         <el-form-item label="类型">
           <el-radio-group v-model="form.kind">
             <el-radio-button value="crawler">爬虫</el-radio-button>
             <el-radio-button value="api">接口</el-radio-button>
             <el-radio-button value="rss">RSS</el-radio-button>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="form.sort" :min="0" :max="9999" controls-position="right" />
+          <span class="dim switch-tip">数字越小越靠前，客户端按此顺序展示</span>
         </el-form-item>
         <el-form-item label="主页">
           <el-input v-model="form.homepage" placeholder="https://" maxlength="255" />
@@ -297,9 +326,46 @@ const KIND_LABEL: Record<string, string> = {
   border-bottom: 1px solid var(--line-soft);
 }
 
+.src-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.src-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.src-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.src-meta {
+  min-width: 0;
+}
+
 .src-name {
   font-weight: 500;
   color: var(--ink-800);
+}
+
+.field-tip {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-400);
+  line-height: 1.4;
 }
 
 .src-remark {

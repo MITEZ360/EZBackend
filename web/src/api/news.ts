@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { NewsArticle, NewsSource, NewsStats, PageResult } from './types'
+import type { NewsArticle, NewsCategory, NewsSource, NewsStats, PageResult } from './types'
 
 export interface NewsQuery {
   page?: number
@@ -16,7 +16,20 @@ export interface SourcePayload {
   code: string
   name: string
   kind: 'crawler' | 'api' | 'rss'
+  icon?: string
+  color?: string
+  sort?: number
   homepage?: string
+  status?: number
+  remark?: string
+}
+
+export interface CategoryPayload {
+  code: string
+  name: string
+  icon?: string
+  color?: string
+  sort?: number
   status?: number
   remark?: string
 }
@@ -32,10 +45,19 @@ export const newsApi = {
 }
 
 export const newsSourceApi = {
-  list: (query: { page?: number; page_size?: number; keyword?: string }) =>
+  list: (query: { page?: number; page_size?: number; keyword?: string; status?: number }) =>
     api.get<PageResult<NewsSource>>('/news-sources', query),
   create: (payload: SourcePayload) => api.post<NewsSource>('/news-sources', payload),
   update: (id: string, payload: SourcePayload) =>
     api.put<NewsSource>(`/news-sources/${id}`, payload),
   remove: (id: string) => api.del<void>(`/news-sources/${id}`),
+}
+
+export const newsCategoryApi = {
+  /** 分类数量有限，接口一次返回全量，不分页 */
+  list: () => api.get<NewsCategory[]>('/news-categories'),
+  create: (payload: CategoryPayload) => api.post<NewsCategory>('/news-categories', payload),
+  update: (id: string, payload: CategoryPayload) =>
+    api.put<NewsCategory>(`/news-categories/${id}`, payload),
+  remove: (id: string) => api.del<void>(`/news-categories/${id}`),
 }

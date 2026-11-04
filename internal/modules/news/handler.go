@@ -75,6 +75,56 @@ func (h *Handler) Stats(c *gin.Context) {
 	})
 }
 
+// Categories 分类全量列表（含资讯条数）。
+func (h *Handler) Categories(c *gin.Context) {
+	list, err := h.svc.ListCategories(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, list)
+}
+
+// CreateCategory 新增分类。
+func (h *Handler) CreateCategory(c *gin.Context) {
+	var in CategoryInput
+	if !httpx.BindJSON(c, &in) {
+		return
+	}
+	cat, err := h.svc.CreateCategory(c.Request.Context(), &in)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	middleware.AuditInfo(c, "资讯中心", "新增分类 "+cat.Code)
+	response.OK(c, cat)
+}
+
+// UpdateCategory 编辑分类。
+func (h *Handler) UpdateCategory(c *gin.Context) {
+	var in CategoryInput
+	if !httpx.BindJSON(c, &in) {
+		return
+	}
+	cat, err := h.svc.UpdateCategory(c.Request.Context(), c.Param("id"), &in)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	middleware.AuditInfo(c, "资讯中心", "编辑分类 "+cat.Code)
+	response.OK(c, cat)
+}
+
+// DeleteCategory 删除分类。
+func (h *Handler) DeleteCategory(c *gin.Context) {
+	if err := h.svc.DeleteCategory(c.Request.Context(), c.Param("id")); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	middleware.AuditInfo(c, "资讯中心", "删除分类")
+	response.OK(c, gin.H{"message": "已删除"})
+}
+
 // Cleanup 手动触发过期清理。
 func (h *Handler) Cleanup(c *gin.Context) {
 	n, err := h.svc.Cleanup(c.Request.Context(), 0)

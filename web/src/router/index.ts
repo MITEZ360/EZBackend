@@ -78,6 +78,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '数据源' },
       },
       {
+        path: 'content/category',
+        name: 'content-category',
+        component: () => import('@/pages/content/category/index.vue'),
+        meta: { title: '资讯分类' },
+      },
+      {
         path: 'system/dept',
         name: 'system-dept',
         component: () => import('@/pages/system/dept/index.vue'),

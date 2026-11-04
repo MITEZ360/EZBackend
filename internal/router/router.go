@@ -93,6 +93,21 @@ func New(d Deps) *gin.Engine {
 	e := gin.New()
 	e.RedirectTrailingSlash = true
 	e.RemoveExtraSlash = true
+
+	// 本地上传目录公开只读：资讯图标、封面这类资源要能被客户端直接渲染，
+	// 不能再经过登录态。目录仅存放上传产物，不做目录列表。
+	// 对象存储模式下返回的是外链，无需挂载。
+	if d.Storage != nil && d.Storage.Kind() == "local" {
+		base := strings.TrimSuffix(d.Cfg.Storage.BaseURL, "/")
+		if base == "" {
+			base = "/uploads"
+		}
+		dir := d.Cfg.Storage.LocalDir
+		if dir == "" {
+			dir = "data/uploads"
+		}
+		e.Static(base, dir)
+	}
 	e.ContextWithFallback = true
 	_ = e.SetTrustedProxies(nil)
 	if d.Cfg.Server.TrustProxy {

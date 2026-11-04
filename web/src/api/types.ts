@@ -433,11 +433,28 @@ export interface NewsSource {
   code: string
   name: string
   kind: 'crawler' | 'api' | 'rss'
+  icon?: string
+  color?: string
+  sort: number
   homepage?: string
   status: number
   lastIngestAt?: string
   totalIngested: number
   remark?: string
+}
+
+export interface NewsCategory {
+  id: string
+  createdAt: string
+  updatedAt: string
+  code: string
+  name: string
+  icon?: string
+  color?: string
+  sort: number
+  status: number
+  remark?: string
+  articleCount: number
 }
 
 export interface NewsCount {

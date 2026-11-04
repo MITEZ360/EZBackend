@@ -93,24 +93,30 @@ type IngestError struct {
 
 // IngestResult 导入结果。爬虫按 accepted/duplicate/invalid 对账。
 type IngestResult struct {
-	Source        string        `json:"source"`
-	SourceCreated bool          `json:"sourceCreated"`
-	Received      int           `json:"received"`
-	Accepted      int           `json:"accepted"`
-	Duplicate     int           `json:"duplicate"`
-	Invalid       int           `json:"invalid"`
-	Expired       int           `json:"expired"`
-	Errors        []IngestError `json:"errors,omitempty"`
+	Source    string        `json:"source"`
+	Received  int           `json:"received"`
+	Accepted  int           `json:"accepted"`
+	Duplicate int           `json:"duplicate"`
+	Invalid   int           `json:"invalid"`
+	Expired   int           `json:"expired"`
+	Errors    []IngestError `json:"errors,omitempty"`
 }
 
 // Ingest 批量导入。整批在一个事务里写，冲突静默跳过，
 // 因此爬虫可以安全重试同一批数据而不会产生重复。
+//
+// 来源与分类都是白名单：来源不合法整批拒绝（请求级属性，写一半没有意义），
+// 分类不合法只把该条计入 invalid（条目级属性，不该拖垮其余数据）。
 func (s *Service) Ingest(ctx context.Context, req *IngestRequest) (*IngestResult, error) {
-	src, created, err := s.ensureSource(ctx, req.Source)
+	src, err := s.requireSource(ctx, req.Source)
 	if err != nil {
 		return nil, err
 	}
-	res := &IngestResult{Source: src.Code, SourceCreated: created, Received: len(req.Items)}
+	cats, err := s.enabledCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res := &IngestResult{Source: src.Code, Received: len(req.Items)}
 	cutoff := time.Now().UTC().Add(-s.retention)
 
 	now := time.Now().UTC()
@@ -119,6 +125,11 @@ func (s *Service) Ingest(ctx context.Context, req *IngestRequest) (*IngestResult
 
 	for i, it := range req.Items {
 		rec, reason := normalizeItem(src, it, now)
+		if reason == "" {
+			if _, ok := cats[rec.Category]; !ok {
+				reason = "分类未配置或已停用：" + rec.Category
+			}
+		}
 		if reason != "" {
 			res.Invalid++
 			if len(res.Errors) < 20 {
@@ -167,35 +178,41 @@ func (s *Service) Ingest(ctx context.Context, req *IngestRequest) (*IngestResult
 	return res, nil
 }
 
-// ensureSource 按编码取数据源；不存在则自动注册，让爬虫接入无需先人工建源。
-func (s *Service) ensureSource(ctx context.Context, code string) (*model.NewsSource, bool, error) {
+// requireSource 按编码取已启用的数据源。
+//
+// 这里刻意不做自动注册：来源是运营方预先配置的白名单，
+// 若允许爬虫自行造源，后台的图标、名称与统计口径都会被逐步污染。
+func (s *Service) requireSource(ctx context.Context, code string) (*model.NewsSource, error) {
 	code = strings.ToLower(strings.TrimSpace(code))
 	if code == "" {
-		return nil, false, errs.BadRequest("数据源编码不能为空")
+		return nil, errs.BadRequest("数据源编码不能为空")
 	}
 	var src model.NewsSource
 	err := s.db.WithContext(ctx).Where("code = ?", code).First(&src).Error
-	if err == nil {
-		if src.Status != model.StatusEnabled {
-			return nil, false, errs.Forbidden("数据源已停用：" + src.Code)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errs.Forbidden("数据源未配置：" + code + "，请先在后台「数据源」中创建")
 		}
-		return &src, false, nil
+		return nil, err
 	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, false, err
+	if src.Status != model.StatusEnabled {
+		return nil, errs.Forbidden("数据源已停用：" + src.Code)
 	}
-	src = model.NewsSource{
-		Code: code, Name: code, Kind: model.NewsSourceCrawler, Status: model.StatusEnabled,
+	return &src, nil
+}
+
+// enabledCategories 返回启用中的分类编码集合，用于逐条校验。
+func (s *Service) enabledCategories(ctx context.Context) (map[string]struct{}, error) {
+	var codes []string
+	if err := s.db.WithContext(ctx).Model(&model.NewsCategory{}).
+		Where("status = ?", model.StatusEnabled).Pluck("code", &codes).Error; err != nil {
+		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Create(&src).Error; err != nil {
-		// 并发首次推送可能同时创建，回查一次即可
-		if e := s.db.WithContext(ctx).Where("code = ?", code).First(&src).Error; e == nil {
-			return &src, false, nil
-		}
-		return nil, false, err
+	set := make(map[string]struct{}, len(codes))
+	for _, c := range codes {
+		set[c] = struct{}{}
 	}
-	s.log.Info("自动注册资讯数据源", zap.String("code", code))
-	return &src, true, nil
+	return set, nil
 }
 
 func normalizeItem(src *model.NewsSource, it IngestItem, now time.Time) (*model.NewsArticle, string) {
@@ -224,7 +241,9 @@ func normalizeItem(src *model.NewsSource, it IngestItem, now time.Time) (*model.
 
 	category := strings.ToLower(strings.TrimSpace(it.Category))
 	if category == "" {
-		category = "general"
+		// 分类是白名单配置的一部分，不做默认兜底：宁可拒收，
+		// 也不要让「没传分类」悄悄堆成一个巨大的 general 桶。
+		return nil, "分类不能为空"
 	}
 
 	published := now
@@ -430,7 +449,8 @@ func (s *Service) Stats(ctx context.Context) (*Stats, error) {
 	s.db.WithContext(ctx).Model(&model.NewsArticle{}).Where("published_at >= ?", now.UTC().Add(-24*time.Hour)).Count(&out.Last24h)
 
 	s.groupCount(ctx, "category", &out.Categories)
-	s.groupCount(ctx, "source_name", &out.Sources)
+	// 按来源编码而不是名称分组：两个来源重名时会并成一条，统计就对不上。
+	s.groupCount(ctx, "source_code", &out.Sources)
 
 	var oldest model.NewsArticle
 	if err := s.db.WithContext(ctx).Order("published_at ASC").Limit(1).Find(&oldest).Error; err == nil && oldest.ID != "" {
@@ -445,6 +465,66 @@ func (s *Service) groupCount(ctx context.Context, col string, out *[]CountItem) 
 		Select(col + " AS name, COUNT(*) AS count").
 		Group(col).Order("count DESC").Limit(12).Scan(&rows)
 	*out = rows
+}
+
+// Meta 开放端元数据：客户端一次拉全，用于渲染筛选面板与来源标识。
+type Meta struct {
+	Sources       []MetaSource   `json:"sources"`
+	Categories    []MetaCategory `json:"categories"`
+	RetentionDays int            `json:"retentionDays"`
+	Total         int64          `json:"total"`
+}
+
+// MetaSource 来源的对外视图。
+type MetaSource struct {
+	Code  string `json:"code"`
+	Name  string `json:"name"`
+	Kind  string `json:"kind"`
+	Icon  string `json:"icon,omitempty"`
+	Color string `json:"color,omitempty"`
+	Sort  int    `json:"sort"`
+}
+
+// MetaCategory 分类的对外视图。
+type MetaCategory struct {
+	Code  string `json:"code"`
+	Name  string `json:"name"`
+	Icon  string `json:"icon,omitempty"`
+	Color string `json:"color,omitempty"`
+	Sort  int    `json:"sort"`
+}
+
+// BuildMeta 组装开放端元数据。只下发启用项，顺序由后台排序字段决定。
+func (s *Service) BuildMeta(ctx context.Context) (*Meta, error) {
+	out := &Meta{
+		Sources:       []MetaSource{},
+		Categories:    []MetaCategory{},
+		RetentionDays: int(s.retention.Hours() / 24),
+	}
+	var srcs []*model.NewsSource
+	if err := s.db.WithContext(ctx).Where("status = ?", model.StatusEnabled).
+		Order("sort ASC, created_at ASC").Find(&srcs).Error; err != nil {
+		return nil, err
+	}
+	for _, v := range srcs {
+		out.Sources = append(out.Sources, MetaSource{
+			Code: v.Code, Name: v.Name, Kind: v.Kind,
+			Icon: v.Icon, Color: v.Color, Sort: v.Sort,
+		})
+	}
+	var cats []*model.NewsCategory
+	if err := s.db.WithContext(ctx).Where("status = ?", model.StatusEnabled).
+		Order("sort ASC, created_at ASC").Find(&cats).Error; err != nil {
+		return nil, err
+	}
+	for _, v := range cats {
+		out.Categories = append(out.Categories, MetaCategory{
+			Code: v.Code, Name: v.Name, Icon: v.Icon, Color: v.Color, Sort: v.Sort,
+		})
+	}
+	s.db.WithContext(ctx).Model(&model.NewsArticle{}).
+		Where("published_at >= ?", time.Now().UTC().Add(-s.retention)).Count(&out.Total)
+	return out, nil
 }
 
 // Cleanup 删除超过保留窗口的资讯，返回删除条数。
@@ -489,6 +569,9 @@ type SourceInput struct {
 	Code     string `json:"code" binding:"required,max=32" label:"编码"`
 	Name     string `json:"name" binding:"required,max=64" label:"名称"`
 	Kind     string `json:"kind" binding:"omitempty,oneof=crawler api rss" label:"类型"`
+	Icon     string `json:"icon" binding:"max=512" label:"图标"`
+	Color    string `json:"color" binding:"max=16" label:"颜色"`
+	Sort     int    `json:"sort" label:"排序"`
 	Homepage string `json:"homepage" binding:"max=255" label:"主页"`
 	Status   *int8  `json:"status" binding:"omitempty,oneof=0 1" label:"状态"`
 	Remark   string `json:"remark" binding:"max=255" label:"备注"`
@@ -521,6 +604,7 @@ func (s *Service) CreateSource(ctx context.Context, in *SourceInput) (*model.New
 	}
 	src := &model.NewsSource{
 		Code: code, Name: strings.TrimSpace(in.Name), Kind: in.Kind,
+		Icon: strings.TrimSpace(in.Icon), Color: strings.TrimSpace(in.Color), Sort: in.Sort,
 		Homepage: in.Homepage, Remark: in.Remark, Status: statusOr(in.Status, model.StatusEnabled),
 	}
 	if src.Kind == "" {
@@ -540,6 +624,7 @@ func (s *Service) UpdateSource(ctx context.Context, id string, in *SourceInput) 
 	}
 	updates := map[string]any{
 		"name": strings.TrimSpace(in.Name), "homepage": in.Homepage, "remark": in.Remark,
+		"icon": strings.TrimSpace(in.Icon), "color": strings.TrimSpace(in.Color), "sort": in.Sort,
 	}
 	if in.Kind != "" {
 		updates["kind"] = in.Kind
@@ -579,6 +664,116 @@ func (s *Service) sourceByID(ctx context.Context, id string) (*model.NewsSource,
 		return nil, errs.NotFound("数据源不存在")
 	}
 	return &src, nil
+}
+
+// ---- 分类 ----
+
+// CategoryInput 分类入参。编码创建后不可修改：
+// 资讯表里存的是编码字符串，改了会让历史数据失去归属。
+type CategoryInput struct {
+	Code   string `json:"code" binding:"required,max=32" label:"编码"`
+	Name   string `json:"name" binding:"required,max=64" label:"名称"`
+	Icon   string `json:"icon" binding:"max=512" label:"图标"`
+	Color  string `json:"color" binding:"max=16" label:"颜色"`
+	Sort   int    `json:"sort" label:"排序"`
+	Status *int8  `json:"status" binding:"omitempty,oneof=0 1" label:"状态"`
+	Remark string `json:"remark" binding:"max=255" label:"备注"`
+}
+
+// ListCategories 分类全量列表，附带资讯条数。
+// 分类属于低频配置，数量一般在几十条内，分页反而增加前端拼装成本。
+func (s *Service) ListCategories(ctx context.Context) ([]*model.NewsCategory, error) {
+	var list []*model.NewsCategory
+	if err := s.db.WithContext(ctx).Order("sort ASC, created_at ASC").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		Category string
+		Count    int64
+	}
+	if err := s.db.WithContext(ctx).Model(&model.NewsArticle{}).
+		Select("category, COUNT(*) AS count").Group("category").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		counts[r.Category] = r.Count
+	}
+	for _, c := range list {
+		c.ArticleCount = counts[c.Code]
+	}
+	return list, nil
+}
+
+// CreateCategory 新增分类。
+func (s *Service) CreateCategory(ctx context.Context, in *CategoryInput) (*model.NewsCategory, error) {
+	code := strings.ToLower(strings.TrimSpace(in.Code))
+	var n int64
+	if err := s.db.WithContext(ctx).Model(&model.NewsCategory{}).
+		Where("code = ?", code).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	if n > 0 {
+		return nil, errs.Conflict("分类编码已存在")
+	}
+	cat := &model.NewsCategory{
+		Code: code, Name: strings.TrimSpace(in.Name), Icon: strings.TrimSpace(in.Icon),
+		Color: strings.TrimSpace(in.Color), Sort: in.Sort, Remark: in.Remark,
+		Status: statusOr(in.Status, model.StatusEnabled),
+	}
+	if err := s.db.WithContext(ctx).Create(cat).Error; err != nil {
+		return nil, err
+	}
+	return cat, nil
+}
+
+// UpdateCategory 编辑分类。编码不可改，只更新展示与状态。
+func (s *Service) UpdateCategory(ctx context.Context, id string, in *CategoryInput) (*model.NewsCategory, error) {
+	var cat model.NewsCategory
+	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&cat).Error; err != nil {
+		return nil, errs.NotFound("分类不存在")
+	}
+	updates := map[string]any{
+		"name": strings.TrimSpace(in.Name), "icon": strings.TrimSpace(in.Icon),
+		"color": strings.TrimSpace(in.Color), "sort": in.Sort, "remark": in.Remark,
+	}
+	if in.Status != nil {
+		updates["status"] = *in.Status
+	}
+	if err := s.db.WithContext(ctx).Model(&model.NewsCategory{}).Where("id = ?", id).
+		Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	var out model.NewsCategory
+	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&out).Error; err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteCategory 删除分类。仍有资讯引用时禁止，
+// 否则这些资讯会变成筛选项里的孤儿。
+func (s *Service) DeleteCategory(ctx context.Context, id string) error {
+	var cat model.NewsCategory
+	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&cat).Error; err != nil {
+		return errs.NotFound("分类不存在")
+	}
+	var n int64
+	if err := s.db.WithContext(ctx).Model(&model.NewsArticle{}).
+		Where("category = ?", cat.Code).Count(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return errs.Conflict("该分类下仍有 " + strconv.FormatInt(n, 10) + " 条资讯，请先停用或等待过期")
+	}
+	res := s.db.WithContext(ctx).Where("id = ?", id).Delete(&model.NewsCategory{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return errs.NotFound("分类不存在")
+	}
+	return nil
 }
 
 // ---- 内部 ----

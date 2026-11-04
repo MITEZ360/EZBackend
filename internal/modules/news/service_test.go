@@ -27,7 +27,7 @@ func newTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err != nil {
 		t.Fatalf("打开测试库失败: %v", err)
 	}
-	if err := db.AutoMigrate(&model.NewsSource{}, &model.NewsArticle{}); err != nil {
+	if err := db.AutoMigrate(&model.NewsSource{}, &model.NewsCategory{}, &model.NewsArticle{}); err != nil {
 		t.Fatalf("建表失败: %v", err)
 	}
 	c, err := cache.New(config.Redis{}, zap.NewNop())
@@ -35,7 +35,24 @@ func newTestService(t *testing.T) (*Service, *gorm.DB) {
 		t.Fatalf("创建缓存失败: %v", err)
 	}
 	t.Cleanup(func() { _ = c.Close() })
-	return NewService(db, c, zap.NewNop(), 7), db
+	svc := NewService(db, c, zap.NewNop(), 7)
+	// 来源与分类都是白名单，测试基座先备好常用项。
+	for _, code := range []string{"tech", "science", "sports"} {
+		if _, err := svc.CreateCategory(context.Background(), &CategoryInput{Code: code, Name: code}); err != nil {
+			t.Fatalf("初始化分类失败: %v", err)
+		}
+	}
+	return svc, db
+}
+
+// seedSource 预置一个启用中的数据源，供导入测试使用。
+func seedSource(t *testing.T, svc *Service, code string) *model.NewsSource {
+	t.Helper()
+	src, err := svc.CreateSource(context.Background(), &SourceInput{Code: code, Name: code})
+	if err != nil {
+		t.Fatalf("创建数据源失败: %v", err)
+	}
+	return src
 }
 
 func item(title string, published time.Time) IngestItem {
@@ -51,6 +68,7 @@ func item(title string, published time.Time) IngestItem {
 
 func TestIngestDedup(t *testing.T) {
 	svc, db := newTestService(t)
+	seedSource(t, svc, "tech-daily")
 	ctx := context.Background()
 	now := time.Now()
 
@@ -64,15 +82,12 @@ func TestIngestDedup(t *testing.T) {
 	if res.Accepted != 1 || res.Duplicate != 2 {
 		t.Fatalf("同批去重不正确: accepted=%d duplicate=%d", res.Accepted, res.Duplicate)
 	}
-	if !res.SourceCreated {
-		t.Fatal("首次推送应自动注册数据源")
-	}
 
 	res, err = svc.Ingest(ctx, &IngestRequest{Source: "tech-daily", Items: []IngestItem{it}})
 	if err != nil {
 		t.Fatalf("重复导入失败: %v", err)
 	}
-	if res.Accepted != 0 || res.Duplicate != 1 || res.SourceCreated {
+	if res.Accepted != 0 || res.Duplicate != 1 {
 		t.Fatalf("重复推送应全部跳过: %+v", res)
 	}
 
@@ -91,15 +106,16 @@ func TestIngestDedup(t *testing.T) {
 
 func TestIngestValidation(t *testing.T) {
 	svc, db := newTestService(t)
+	seedSource(t, svc, "src")
 	ctx := context.Background()
 	now := time.Now()
 	old := now.AddDate(0, 0, -10)
 
 	res, err := svc.Ingest(ctx, &IngestRequest{Source: "src", Items: []IngestItem{
-		{Title: "  ", PublishedAt: &now}, // 空标题
-		item("过期新闻", old),                // 早于保留窗口
-		item("正常新闻", now),                // 正常
-		{Title: "无时间", Content: "内容"},    // 时间缺失按当前时间
+		{Title: "  ", PublishedAt: &now},                // 空标题
+		item("过期新闻", old),                               // 早于保留窗口
+		item("正常新闻", now),                               // 正常
+		{Title: "无时间", Content: "内容", Category: "tech"}, // 时间缺失按当前时间
 	}})
 	if err != nil {
 		t.Fatalf("导入失败: %v", err)
@@ -120,6 +136,8 @@ func TestIngestValidation(t *testing.T) {
 
 func TestContentHashDedup(t *testing.T) {
 	svc, _ := newTestService(t)
+	seedSource(t, svc, "s1")
+	seedSource(t, svc, "s2")
 	ctx := context.Background()
 	now := time.Now()
 
@@ -141,6 +159,7 @@ func TestContentHashDedup(t *testing.T) {
 
 func TestCursorPagination(t *testing.T) {
 	svc, _ := newTestService(t)
+	seedSource(t, svc, "s")
 	ctx := context.Background()
 	base := time.Now().Add(-time.Hour).Truncate(time.Second)
 
@@ -194,6 +213,8 @@ func TestCursorPagination(t *testing.T) {
 
 func TestSearchAndFilter(t *testing.T) {
 	svc, _ := newTestService(t)
+	seedSource(t, svc, "s")
+	seedSource(t, svc, "s2")
 	ctx := context.Background()
 	now := time.Now()
 
@@ -232,6 +253,7 @@ func TestSearchAndFilter(t *testing.T) {
 
 func TestCleanup(t *testing.T) {
 	svc, db := newTestService(t)
+	seedSource(t, svc, "s")
 	ctx := context.Background()
 	now := time.Now()
 
@@ -298,6 +320,7 @@ func TestSourceLifecycle(t *testing.T) {
 
 func TestListPaging(t *testing.T) {
 	svc, _ := newTestService(t)
+	seedSource(t, svc, "s")
 	ctx := context.Background()
 	now := time.Now()
 	items := make([]IngestItem, 0, 15)
@@ -328,5 +351,120 @@ func TestListPaging(t *testing.T) {
 	}
 	if len(stats.Categories) == 0 || stats.Categories[0].Name != "tech" {
 		t.Fatalf("分类分布不正确: %+v", stats.Categories)
+	}
+}
+
+func TestWhitelist(t *testing.T) {
+	svc, db := newTestService(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	// 来源未配置：整批拒绝，且不产生任何写入
+	if _, err := svc.Ingest(ctx, &IngestRequest{Source: "ghost", Items: []IngestItem{item("甲", now)}}); err == nil {
+		t.Fatal("未配置的来源应被拒绝")
+	}
+	var n int64
+	db.Model(&model.NewsArticle{}).Count(&n)
+	if n != 0 {
+		t.Fatalf("拒绝的来源不应写入数据，实际 %d 条", n)
+	}
+	var srcCount int64
+	db.Model(&model.NewsSource{}).Count(&srcCount)
+	if srcCount != 0 {
+		t.Fatalf("不应再自动注册来源，实际 %d 条", srcCount)
+	}
+
+	seedSource(t, svc, "ok")
+
+	// 分类未配置：单条 invalid，其余正常入库
+	bad := item("坏分类", now)
+	bad.Category = "unknown"
+	good := item("好分类", now)
+	res, err := svc.Ingest(ctx, &IngestRequest{Source: "ok", Items: []IngestItem{bad, good}})
+	if err != nil {
+		t.Fatalf("导入失败: %v", err)
+	}
+	if res.Accepted != 1 || res.Invalid != 1 {
+		t.Fatalf("未配置分类应只拒该条: %+v", res)
+	}
+	if len(res.Errors) != 1 || res.Errors[0].Index != 0 {
+		t.Fatalf("错误明细不正确: %+v", res.Errors)
+	}
+
+	// 分类缺失：不再兜底 general
+	noCat := item("无分类", now)
+	noCat.Category = ""
+	res, _ = svc.Ingest(ctx, &IngestRequest{Source: "ok", Items: []IngestItem{noCat}})
+	if res.Invalid != 1 || res.Accepted != 0 {
+		t.Fatalf("缺失分类应被拒收: %+v", res)
+	}
+
+	// 停用分类：同样拒收
+	cats, err := svc.ListCategories(ctx)
+	if err != nil {
+		t.Fatalf("查询分类失败: %v", err)
+	}
+	off := model.StatusDisabled
+	for _, c := range cats {
+		if c.Code == "tech" {
+			if _, err := svc.UpdateCategory(ctx, c.ID, &CategoryInput{Name: c.Name, Status: &off}); err != nil {
+				t.Fatalf("停用分类失败: %v", err)
+			}
+		}
+	}
+	res, _ = svc.Ingest(ctx, &IngestRequest{Source: "ok", Items: []IngestItem{item("停用分类", now)}})
+	if res.Invalid != 1 || res.Accepted != 0 {
+		t.Fatalf("停用分类应被拒收: %+v", res)
+	}
+}
+
+func TestCategoryLifecycle(t *testing.T) {
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	cat, err := svc.CreateCategory(ctx, &CategoryInput{
+		Code: "Tech-News", Name: "科技", Icon: "/uploads/tech.png", Color: "#409EFF", Sort: 5,
+	})
+	if err != nil {
+		t.Fatalf("新建分类失败: %v", err)
+	}
+	if cat.Code != "tech-news" {
+		t.Fatalf("编码应统一小写: %s", cat.Code)
+	}
+	if _, err := svc.CreateCategory(ctx, &CategoryInput{Code: "tech-news", Name: "重复"}); err == nil {
+		t.Fatal("重复编码应报错")
+	}
+
+	seedSource(t, svc, "s")
+	used := item("一条", time.Now())
+	used.Category = "tech-news"
+	if _, err := svc.Ingest(ctx, &IngestRequest{Source: "s", Items: []IngestItem{used}}); err != nil {
+		t.Fatalf("导入失败: %v", err)
+	}
+	if err := svc.DeleteCategory(ctx, cat.ID); err == nil {
+		t.Fatal("仍有资讯的分类不应被删除")
+	}
+
+	meta, err := svc.BuildMeta(ctx)
+	if err != nil {
+		t.Fatalf("组装元数据失败: %v", err)
+	}
+	found := false
+	for _, c := range meta.Categories {
+		if c.Code == "tech-news" {
+			found = true
+			if c.Icon != "/uploads/tech.png" || c.Color != "#409EFF" {
+				t.Fatalf("元数据应携带图标与颜色: %+v", c)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("元数据缺少新分类: %+v", meta.Categories)
+	}
+	if len(meta.Sources) != 1 || meta.Sources[0].Code != "s" {
+		t.Fatalf("元数据来源不正确: %+v", meta.Sources)
+	}
+	if meta.RetentionDays != 7 {
+		t.Fatalf("保留天数不正确: %d", meta.RetentionDays)
 	}
 }

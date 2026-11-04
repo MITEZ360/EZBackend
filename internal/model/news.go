@@ -16,11 +16,17 @@ const (
 )
 
 // NewsSource 采集来源。爬虫按 Code 归属，便于统计产量与定位异常源。
+//
+// 来源是「白名单」而非自由字符串：推送时必须命中已启用的来源，
+// 否则整批拒绝，避免脏编码把统计和客户端筛选项撕成碎片。
 type NewsSource struct {
 	Base
 	Code          string     `gorm:"size:32;uniqueIndex;not null" json:"code"`
 	Name          string     `gorm:"size:64;not null" json:"name"`
 	Kind          string     `gorm:"size:16;not null;default:crawler" json:"kind"`
+	Icon          string     `gorm:"size:512" json:"icon,omitempty"`
+	Color         string     `gorm:"size:16" json:"color,omitempty"`
+	Sort          int        `gorm:"default:0" json:"sort"`
 	Homepage      string     `gorm:"size:255" json:"homepage,omitempty"`
 	Status        int8       `gorm:"index;default:1" json:"status"`
 	LastIngestAt  *time.Time `json:"lastIngestAt"`
@@ -30,6 +36,24 @@ type NewsSource struct {
 
 // TableName 指定表名。
 func (NewsSource) TableName() string { return "news_source" }
+
+// NewsCategory 资讯分类。与来源同为白名单配置，
+// 由后台维护名称、图标与颜色，开放端原样下发给客户端。
+type NewsCategory struct {
+	Base
+	Code   string `gorm:"size:32;uniqueIndex;not null" json:"code"`
+	Name   string `gorm:"size:64;not null" json:"name"`
+	Icon   string `gorm:"size:512" json:"icon,omitempty"`
+	Color  string `gorm:"size:16" json:"color,omitempty"`
+	Sort   int    `gorm:"default:0" json:"sort"`
+	Status int8   `gorm:"index;default:1" json:"status"`
+	Remark string `gorm:"size:255" json:"remark,omitempty"`
+	// ArticleCount 仅用于列表展示，不落库。
+	ArticleCount int64 `gorm:"-" json:"articleCount"`
+}
+
+// TableName 指定表名。
+func (NewsCategory) TableName() string { return "news_category" }
 
 // NewsArticle 一条资讯。
 //

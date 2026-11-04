@@ -253,7 +253,7 @@ func models() []any {
 		&model.Notice{}, &model.LoginLog{}, &model.OperationLog{}, &model.Job{}, &model.JobLog{},
 		&model.File{}, &model.Message{}, &model.MessageRecipient{},
 		&model.MembershipLevel{}, &model.APIKey{},
-		&model.NewsSource{}, &model.NewsArticle{},
+		&model.NewsSource{}, &model.NewsCategory{}, &model.NewsArticle{},
 	}
 }
 
