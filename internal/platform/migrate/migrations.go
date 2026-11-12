@@ -71,5 +71,57 @@ func (r *Runner) definitions() []definition {
 			// 回填不可逆（无法区分哪些昵称是回填产生的），回滚只撤销版本记录。
 			Down: func(context.Context, *gorm.DB) error { return nil },
 		},
+		{
+			Version: 4,
+			Name:    "fix_oauth_binding_unique_indexes",
+			// v2 建表时把 user_id 也放进了 uk_oauth_subject，导致同一个
+			// (provider, subject) 可以绑定到多个本地用户，与 resolveUser 按该组合
+			// 查绑定的逻辑不一致。这里清理历史脏数据并重建为两个唯一约束。
+			Up: func(ctx context.Context, db *gorm.DB) error {
+				tx := db.WithContext(ctx)
+				m := tx.Migrator()
+				if !m.HasTable(&model.UserOAuthBinding{}) {
+					return nil
+				}
+				// 物理清理解绑残留的软删除行，它们仍会占用唯一键
+				if err := tx.Unscoped().Where("deleted_at IS NOT NULL").
+					Delete(&model.UserOAuthBinding{}).Error; err != nil {
+					return err
+				}
+				// 同一外部账号只保留最早一条绑定；派生表写法兼容 MySQL 的
+				// "can't specify target table for update in FROM clause" 限制
+				if err := tx.Exec(`DELETE FROM sys_user_oauth_binding WHERE id NOT IN (
+					SELECT keep_id FROM (
+						SELECT MIN(id) AS keep_id FROM sys_user_oauth_binding
+						GROUP BY provider, subject
+					) t
+				)`).Error; err != nil {
+					return err
+				}
+				// 删掉三列旧索引，AutoMigrate 才不会按同名跳过重建
+				if m.HasIndex(&model.UserOAuthBinding{}, "uk_oauth_subject") {
+					if err := m.DropIndex(&model.UserOAuthBinding{}, "uk_oauth_subject"); err != nil {
+						return err
+					}
+				}
+				return tx.AutoMigrate(&model.UserOAuthBinding{})
+			},
+			Down: func(ctx context.Context, db *gorm.DB) error {
+				tx := db.WithContext(ctx)
+				m := tx.Migrator()
+				if !m.HasTable(&model.UserOAuthBinding{}) {
+					return nil
+				}
+				for _, name := range []string{"uk_oauth_subject", "uk_oauth_user_provider"} {
+					if m.HasIndex(&model.UserOAuthBinding{}, name) {
+						if err := m.DropIndex(&model.UserOAuthBinding{}, name); err != nil {
+							return err
+						}
+					}
+				}
+				return tx.Exec("CREATE UNIQUE INDEX uk_oauth_subject ON " +
+					"sys_user_oauth_binding (user_id, provider, subject)").Error
+			},
+		},
 	}
 }

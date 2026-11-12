@@ -252,6 +252,11 @@ func (f *oauthFlow) resolveUser(ctx context.Context, p *oauthProvider, st oauthS
 	err := f.svc.db.WithContext(ctx).
 		Where("provider = ? AND subject = ?", provider, prof.Subject).First(&binding).Error
 	if err == nil {
+		// 绑定流程不允许把已被其它本地账号占用的外部账号静默「绑定成功」：
+		// 否则这里会直接返回该绑定所属的用户，前端提示成功而关系并未建立。
+		if st.Mode == "bind" && binding.UserID != st.UserID {
+			return nil, errs.Conflict("该第三方账号已绑定其它本地账号，请先解绑")
+		}
 		var user model.User
 		if e := f.svc.db.WithContext(ctx).First(&user, "id = ?", binding.UserID).Error; e == nil {
 			return &user, nil
@@ -327,7 +332,15 @@ func (f *oauthFlow) createBinding(ctx context.Context, userID, provider string, 
 	}
 	now := time.Now()
 	b.LastLoginAt = &now
-	return f.svc.db.WithContext(ctx).Create(b).Error
+	if err := f.svc.db.WithContext(ctx).Create(b).Error; err != nil {
+		// 并发下由唯一索引兜底，把各驱动差异化的约束错误转成可读提示
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate") {
+			return errs.Conflict("该第三方账号已被绑定，请刷新后重试")
+		}
+		return err
+	}
+	return nil
 }
 
 func (f *oauthFlow) touchBinding(ctx context.Context, provider, subject string) error {
