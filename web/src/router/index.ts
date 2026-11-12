@@ -19,6 +19,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '登录', public: true, hidden: true },
   },
   {
+    path: '/oauth/callback',
+    name: 'oauth-callback',
+    component: () => import('@/pages/oauth/callback.vue'),
+    meta: { title: '第三方登录', public: true, hidden: true },
+  },
+  {
     path: '/',
     component: () => import('@/layouts/BasicLayout.vue'),
     redirect: '/dashboard',
@@ -142,6 +148,12 @@ const routes: RouteRecordRaw[] = [
         name: 'ops-monitor',
         component: () => import('@/pages/ops/monitor/index.vue'),
         meta: { title: '服务监控' },
+      },
+      {
+        path: 'ops/maintenance',
+        name: 'ops-maintenance',
+        component: () => import('@/pages/ops/maintenance/index.vue'),
+        meta: { title: '备份与迁移' },
       },
       {
         path: 'profile',

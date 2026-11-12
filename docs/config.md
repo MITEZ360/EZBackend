@@ -314,3 +314,82 @@ KEEL_MICRO_REGISTRY_DNS_SUFFIX=keel.svc.cluster.local:9000
 
 > 切片类型（`micro.modules`、`micro.registry.endpoints`、`cors.allow_origins`、`storage.allow_ext`）
 > 已显式绑定环境变量，用英文逗号分隔即可。
+
+补充：
+
+```bash
+# 迁移与备份
+KEEL_MIGRATION_MODE=versioned
+KEEL_MIGRATION_TABLE_NAME=keel_schema_migrations
+KEEL_BACKUP_ENABLED=true
+KEEL_BACKUP_DIR=/var/backups/keel
+KEEL_BACKUP_RETAIN=14
+KEEL_BACKUP_ALLOW_RESTORE=false
+# 接口文档（不配置时 dev 开 / prod 关）
+KEEL_DOCS_ENABLED=true
+KEEL_DOCS_PATH=/docs
+# OAuth 凭据（名称转大写、非字母数字转下划线）
+KEEL_OAUTH_GITHUB_CLIENT_ID=...
+KEEL_OAUTH_GITHUB_CLIENT_SECRET=...
+KEEL_OAUTH_ENABLED=true
+```
+
+---
+
+## 15. 数据库迁移、备份、第三方登录与接口文档
+
+### 15.1 migration
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `migration.mode` | `versioned` | `versioned` 按版本执行 / `auto` 沿用 AutoMigrate / `off` 不迁移 |
+| `migration.table_name` | `keel_schema_migrations` | 版本记录表 |
+
+`db.auto_migrate`、`db.seed` 仅影响 `auto` 模式与种子数据。版本清单、回滚与 CLI
+用法见 `docs/deploy.md` 7.1。
+
+### 15.2 backup
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `backup.enabled` | `true` | `db.backup` 定时任务是否真正执行 |
+| `backup.dir` | `data/backups` | 产物目录 |
+| `backup.retain` | `7` | 保留最近 N 份 |
+| `backup.compress` | `true` | gzip 压缩 |
+| `backup.allow_restore` | `false` | 是否允许在线恢复（高危） |
+| `backup.mysql_dump` / `mysql_restore` | `mysqldump` / `mysql` | 外部工具路径 |
+| `backup.pg_dump` / `pg_restore` | `pg_dump` / `psql` | 外部工具路径 |
+
+### 15.3 oauth
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `oauth.enabled` | `false` | 总开关 |
+| `oauth.callback_base` | 空 | 回调基址，网关后必填；留空按请求 Host 推断 |
+| `oauth.frontend_path` | `/oauth/callback` | 回调成功后前端接收页 |
+| `oauth.state_ttl` | `10m` | state 有效期 |
+| `oauth.providers` | `[]` | 渠道列表，见下表 |
+
+单个 provider 的关键字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `name` / `label` / `icon` / `enabled` | 唯一标识、按钮文案、图标 URL、开关 |
+| `client_id` / `client_secret` | 凭据，可用 `KEEL_OAUTH_<NAME>_CLIENT_*` 覆盖 |
+| `auth_url` / `token_url` / `user_info_url` / `email_url` | 端点 |
+| `scopes` | 授权范围 |
+| `field_map` | 用户信息字段映射，支持点路径、数组下标、逗号分隔多候选 |
+| `link_existing` / `match_by` | 是否按已验证邮箱或用户名关联已有账号 |
+| `auto_register` / `default_roles` | 是否自动建号及其默认角色编码 |
+| `auth_style` | `auto` / `in_header` / `in_params` |
+| `extra_auth` | 附加到授权 URL 的自定义参数 |
+| `user_info_raw` | `true` 时用 POST 请求用户信息接口 |
+
+完整可复制示例：`configs/config.oauth.example.yaml`。
+
+### 15.4 docs
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `docs.enabled` | 未配置 | 三态：未配置时 dev 开 / prod 关；显式 `true`/`false` 覆盖 |
+| `docs.path` | `/docs` | Swagger UI 与 `doc.json` 挂载前缀 |

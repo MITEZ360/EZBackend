@@ -26,9 +26,22 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 help: ## 显示帮助
 	@awk 'BEGIN{FS=":.*##"; printf "\n用法: make <目标>\n\n"} /^[a-zA-Z_-]+:.*?##/ {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
+SWAG      := $(shell go env GOPATH)/bin/swag
+SWAG_VER  := v1.16.4
+
 .PHONY: tidy
 tidy: ## 整理依赖
-	go mod tidy
+	GOTOOLCHAIN=local go mod tidy
+
+.PHONY: swag-install
+swag-install: ## 安装 swag 接口文档生成工具
+	GOTOOLCHAIN=local go install github.com/swaggo/swag/cmd/swag@$(SWAG_VER)
+
+.PHONY: docs
+docs: ## 从代码注解重新生成 OpenAPI 文档
+	python3 scripts/gen_swagger_annotations.py
+	$(SWAG) init -g internal/apidocs/general.go -d . -o internal/apidocs --parseInternal --outputTypes go,json,yaml
+	@echo "已生成 internal/apidocs/{docs.go,swagger.json,swagger.yaml}"
 
 .PHONY: fmt
 fmt: ## 格式化代码

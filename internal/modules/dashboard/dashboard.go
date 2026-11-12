@@ -126,6 +126,22 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Overview 返回首页数据。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Overview
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/dashboard/overview [get]
+// KE:SWAGGER-END
 func (h *Handler) Overview(c *gin.Context) {
 	o, err := h.svc.Overview(c.Request.Context())
 	if err != nil {

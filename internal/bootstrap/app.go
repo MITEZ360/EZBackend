@@ -26,6 +26,7 @@ import (
 	"github.com/keel-framework/keel/internal/modules/dept"
 	"github.com/keel-framework/keel/internal/modules/file"
 	"github.com/keel-framework/keel/internal/modules/job"
+	"github.com/keel-framework/keel/internal/modules/maintenance"
 	"github.com/keel-framework/keel/internal/modules/membership"
 	"github.com/keel-framework/keel/internal/modules/menu"
 	"github.com/keel-framework/keel/internal/modules/message"
@@ -42,6 +43,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/idgen"
 	"github.com/keel-framework/keel/internal/platform/logger"
 	"github.com/keel-framework/keel/internal/platform/mailer"
+	"github.com/keel-framework/keel/internal/platform/migrate"
 	"github.com/keel-framework/keel/internal/platform/storage"
 	"github.com/keel-framework/keel/internal/router"
 	"github.com/keel-framework/keel/pkg/discovery"
@@ -98,11 +100,34 @@ func New(cfgPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	if cfg.DB.AutoMigrate {
-		if err := database.Migrate(db, models()...); err != nil {
+	// ---- 数据库结构变更 ----
+	// versioned（默认）：按版本号执行，支持回滚与数据回填；
+	// auto：沿用 AutoMigrate，只增不减，适合本地快速迭代；off：交给 CLI/CI 执行。
+	migrationMode := cfg.Migration.ResolveMode()
+	var migrationRunner *migrate.Runner
+	allModels := append(append([]any{}, models()...), &model.UserOAuthBinding{})
+	switch migrationMode {
+	case "auto":
+		if err := database.Migrate(db, allModels...); err != nil {
 			return nil, err
 		}
-		lg.Info("数据库表结构已同步")
+		lg.Info("数据库表结构已同步（AutoMigrate）")
+	case "versioned":
+		var err error
+		migrationRunner, err = migrate.New(db, cfg.Migration, cfg.DB.ResolveDriver(), lg, models())
+		if err != nil {
+			return nil, err
+		}
+		applied, err := migrationRunner.Up(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("数据库版本迁移失败: %w", err)
+		}
+		lg.Info("数据库版本迁移完成", zap.Int("applied", len(applied)))
+		if st, e := migrationRunner.Status(context.Background()); e == nil {
+			lg.Info("当前数据库版本", zap.Int64("current", st.Current), zap.Int64("latest", st.Latest))
+		}
+	default:
+		lg.Info("已跳过数据库迁移（migration.mode=off）")
 	}
 	if cfg.DB.Seed {
 		if err := seed(db, lg); err != nil {
@@ -180,6 +205,20 @@ func New(cfgPath string) (*App, error) {
 		}
 		return fmt.Sprintf("已清理 %d 条过期资讯", n), nil
 	})
+	// 备份与版本迁移：同一份服务供 HTTP 管理接口、定时任务与 CLI 复用
+	backupSvc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, lg)
+	maintenanceHandler := maintenance.NewHandler(backupSvc, migrationRunner, migrationMode)
+	jobSvc.Register("db.backup", func(ctx context.Context, _ map[string]any) (string, error) {
+		if !cfg.Backup.Enabled {
+			return "备份已在配置中关闭（backup.enabled=false），跳过", nil
+		}
+		meta, err := backupSvc.Backup(ctx)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("已生成备份 %s（%d 字节）", meta.Name, meta.Size), nil
+	})
+
 	fileSvc := file.NewService(db, cfg, store, lg)
 	dashSvc := dashboard.NewService(db, ch)
 
@@ -199,27 +238,28 @@ func New(cfgPath string) (*App, error) {
 	engine = router.New(router.Deps{
 		Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
 		JWT: jwtMgr, Authz: authzLoader, AuditSvc: auditSvc,
-		Modules:    moduleSet(cfg.Micro),
-		Events:     bus,
-		Auth:       auth.NewHandler(authSvc, cfg.Security.CaptchaEnabled, cfg.Server.TrustProxy),
-		User:       user.NewHandler(userSvc),
-		Role:       role.NewHandler(roleSvc),
-		Menu:       menu.NewHandler(menuSvc),
-		Dept:       dept.NewHandler(deptSvc),
-		Dict:       system.NewDictHandler(dictSvc),
-		Config:     system.NewConfigHandler(configSvc),
-		Notice:     system.NewNoticeHandler(noticeSvc),
-		Message:    message.NewHandler(msgSvc),
-		Membership: membership.NewHandler(membershipSvc),
-		APIKey:     apikey.NewHandler(apiKeySvc),
-		APIKeySvc:  apiKeySvc,
-		News:       news.NewHandler(newsSvc),
-		NewsOpen:   news.NewOpenHandler(newsSvc),
-		Audit:      audit.NewHandler(auditSvc),
-		Job:        job.NewHandler(jobSvc),
-		File:       file.NewHandler(fileSvc),
-		Dashboard:  dashboard.NewHandler(dashSvc),
-		Monitor:    monitor.NewHandler(monitorSvc),
+		Modules:     moduleSet(cfg.Micro),
+		Events:      bus,
+		Auth:        auth.NewHandler(authSvc, cfg.Security.CaptchaEnabled, cfg.Server.TrustProxy),
+		User:        user.NewHandler(userSvc),
+		Role:        role.NewHandler(roleSvc),
+		Menu:        menu.NewHandler(menuSvc),
+		Dept:        dept.NewHandler(deptSvc),
+		Dict:        system.NewDictHandler(dictSvc),
+		Config:      system.NewConfigHandler(configSvc),
+		Notice:      system.NewNoticeHandler(noticeSvc),
+		Message:     message.NewHandler(msgSvc),
+		Membership:  membership.NewHandler(membershipSvc),
+		APIKey:      apikey.NewHandler(apiKeySvc),
+		APIKeySvc:   apiKeySvc,
+		News:        news.NewHandler(newsSvc),
+		NewsOpen:    news.NewOpenHandler(newsSvc),
+		Audit:       audit.NewHandler(auditSvc),
+		Job:         job.NewHandler(jobSvc),
+		File:        file.NewHandler(fileSvc),
+		Dashboard:   dashboard.NewHandler(dashSvc),
+		Monitor:     monitor.NewHandler(monitorSvc),
+		Maintenance: maintenanceHandler,
 	})
 
 	app := &App{Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,

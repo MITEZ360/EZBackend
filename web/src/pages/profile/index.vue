@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { CopyDocument, Download, Key } from '@element-plus/icons-vue'
 import OtpInput from '@/components/OtpInput.vue'
-import { authApi, totpApi } from '@/api/auth'
+import { authApi, oauthApi, totpApi, type OAuthBinding, type OAuthProvider } from '@/api/auth'
 import { membershipApi } from '@/api/membership'
 import type { MembershipSnapshot } from '@/api/types'
 import { fmtDate, fmtTime } from '@/utils/format'
@@ -17,11 +17,50 @@ const submitting = ref(false)
 const membership = ref<MembershipSnapshot | null>(null)
 const catalog = computed(() => membership.value?.levels ?? [])
 
+/* ------------------------------------------------------------ 第三方账号 */
+const oauthProviders = ref<OAuthProvider[]>([])
+const bindings = ref<OAuthBinding[]>([])
+
+function boundOf(name: string) {
+  return bindings.value.find((b) => b.provider === name)
+}
+
+async function startBind(p: OAuthProvider) {
+  try {
+    const res = await oauthApi.bind(p.name)
+    window.location.href = res.url
+  } catch {
+    ElMessage.error('发起绑定失败，请稍后重试')
+  }
+}
+
+async function unbind(provider: string, who: string) {
+  try {
+    await ElMessageBox.confirm(`解绑后不能再使用 ${who} 登录，确认解绑？`, '解绑第三方账号', {
+      type: 'warning',
+      confirmButtonText: '解绑',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  await oauthApi.unbind(provider)
+  bindings.value = bindings.value.filter((x) => x.provider !== provider)
+  ElMessage.success('已解绑')
+}
+
 onMounted(async () => {
   try {
     membership.value = await membershipApi.me()
   } catch {
     // 会员模块可能未在当前服务进程启用，个人中心其余功能不受影响
+  }
+  try {
+    const [pv, bd] = await Promise.all([oauthApi.providers(), oauthApi.bindings()])
+    oauthProviders.value = pv.providers ?? []
+    bindings.value = bd ?? []
+  } catch {
+    // OAuth 未启用时接口仍返回空列表，异常不影响个人中心
   }
 })
 
@@ -367,6 +406,37 @@ async function changePassword() {
               <el-button v-else type="primary" :icon="Key" @click="openSetup">
                 开启两步验证
               </el-button>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="oauthProviders.length" class="card oauth-card">
+          <div class="card-head">
+            <h3>第三方账号</h3>
+            <span class="dim">绑定后可直接使用该渠道登录</span>
+          </div>
+          <div class="card-body">
+            <div v-for="p in oauthProviders" :key="p.name" class="oauth-row">
+              <div class="oauth-left">
+                <img v-if="p.icon" :src="p.icon" alt="" class="oauth-icon" />
+                <span v-else class="oauth-fallback">{{ (p.label || p.name).slice(0, 1).toUpperCase() }}</span>
+                <div>
+                  <div class="oauth-label">{{ p.label }}</div>
+                  <div class="dim">
+                    {{ boundOf(p.name) ? (boundOf(p.name)?.username || boundOf(p.name)?.email || '已绑定') : '未绑定' }}
+                  </div>
+                </div>
+              </div>
+              <el-button
+                v-if="boundOf(p.name)"
+                size="small"
+                plain
+                type="danger"
+                @click="unbind(p.name, boundOf(p.name)?.username || p.label)"
+              >
+                解绑
+              </el-button>
+              <el-button v-else size="small" type="primary" plain @click="startBind(p)">绑定</el-button>
             </div>
           </div>
         </section>
@@ -840,6 +910,52 @@ async function changePassword() {
   margin-left: auto;
   font-size: 11.5px;
   color: var(--ink-400);
+}
+
+/* ------------------------------------------------------------ 第三方账号 */
+.oauth-card {
+  .oauth-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--ink-100);
+
+    &:first-child { padding-top: 0; }
+    &:last-child { padding-bottom: 0; border-bottom: none; }
+  }
+
+  .oauth-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .oauth-label {
+    font-size: 13.5px;
+    font-weight: 550;
+    color: var(--ink-800);
+  }
+
+  .oauth-icon,
+  .oauth-fallback {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    object-fit: contain;
+  }
+
+  .oauth-fallback {
+    display: grid;
+    place-items: center;
+    background: var(--brand-600);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+  }
 }
 
 @media (max-width: 980px) {

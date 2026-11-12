@@ -21,6 +21,22 @@ type Handler struct {
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // List 用户列表。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary List
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users [get]
+// KE:SWAGGER-END
 func (h *Handler) List(c *gin.Context) {
 	p := query.Parse(c)
 	sc := h.svc.ResolveScope(c.Request.Context(), middleware.Identity(c))
@@ -45,6 +61,23 @@ func (h *Handler) deptFilter(c *gin.Context) []string {
 }
 
 // Get 用户详情。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Get
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users/{id} [get]
+// KE:SWAGGER-END
 func (h *Handler) Get(c *gin.Context) {
 	u, err := h.svc.Get(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -55,6 +88,23 @@ func (h *Handler) Get(c *gin.Context) {
 }
 
 // Create 创建用户。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Create
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users [post]
+// KE:SWAGGER-END
 func (h *Handler) Create(c *gin.Context) {
 	var in CreateInput
 	if !httpx.BindJSON(c, &in) {
@@ -70,6 +120,24 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 // Update 更新用户。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Update
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users/{id} [put]
+// KE:SWAGGER-END
 func (h *Handler) Update(c *gin.Context) {
 	var in UpdateInput
 	if !httpx.BindJSON(c, &in) {
@@ -84,6 +152,23 @@ func (h *Handler) Update(c *gin.Context) {
 }
 
 // Delete 删除用户。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Delete
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users/{id} [delete]
+// KE:SWAGGER-END
 func (h *Handler) Delete(c *gin.Context) {
 	if err := h.svc.Delete(c.Request.Context(), c.Param("id"), middleware.UserID(c)); err != nil {
 		response.Fail(c, err)
@@ -99,6 +184,24 @@ type StatusInput struct {
 }
 
 // SetStatus 启用/禁用。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary SetStatus
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users/{id}/status [put]
+// KE:SWAGGER-END
 func (h *Handler) SetStatus(c *gin.Context) {
 	var in StatusInput
 	if !httpx.BindJSON(c, &in) {
@@ -118,6 +221,24 @@ type ResetPasswordInput struct {
 }
 
 // ResetPassword 重置密码。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary ResetPassword
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users/{id}/password [put]
+// KE:SWAGGER-END
 func (h *Handler) ResetPassword(c *gin.Context) {
 	var in ResetPasswordInput
 	if !httpx.BindJSON(c, &in) {
@@ -132,6 +253,23 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 }
 
 // ResetTOTP 重置指定用户的两步验证。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary ResetTOTP
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users/{id}/totp [delete]
+// KE:SWAGGER-END
 func (h *Handler) ResetTOTP(c *gin.Context) {
 	if err := h.svc.ResetTOTP(c.Request.Context(), c.Param("id"), middleware.UserID(c)); err != nil {
 		response.Fail(c, err)
@@ -147,6 +285,24 @@ type RolesInput struct {
 }
 
 // SetRoles 分配角色。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary SetRoles
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users/{id}/roles [put]
+// KE:SWAGGER-END
 func (h *Handler) SetRoles(c *gin.Context) {
 	var in RolesInput
 	if !httpx.BindJSON(c, &in) {
@@ -161,6 +317,22 @@ func (h *Handler) SetRoles(c *gin.Context) {
 }
 
 // Options 用户下拉选项。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Options
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/options/users [get]
+// KE:SWAGGER-END
 func (h *Handler) Options(c *gin.Context) {
 	list, err := h.svc.Options(c.Request.Context(), c.Query("keyword"), httpx.QueryInt(c, "limit", 50))
 	if err != nil {
@@ -171,6 +343,22 @@ func (h *Handler) Options(c *gin.Context) {
 }
 
 // Export 导出 Excel。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Export
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/exports/users [get]
+// KE:SWAGGER-END
 func (h *Handler) Export(c *gin.Context) {
 	sc := h.svc.ResolveScope(c.Request.Context(), middleware.Identity(c))
 	f, err := h.svc.Export(c.Request.Context(), query.Parse(c), sc, h.deptFilter(c))
@@ -189,6 +377,22 @@ func (h *Handler) Export(c *gin.Context) {
 }
 
 // ImportTemplate 下载导入模板。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary ImportTemplate
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/imports/users/template [get]
+// KE:SWAGGER-END
 func (h *Handler) ImportTemplate(c *gin.Context) {
 	f, err := h.svc.ImportTemplate()
 	if err != nil {
@@ -205,6 +409,23 @@ func (h *Handler) ImportTemplate(c *gin.Context) {
 }
 
 // Import 从 Excel 批量导入用户。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Import
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/imports/users [post]
+// KE:SWAGGER-END
 func (h *Handler) Import(c *gin.Context) {
 	fh, err := c.FormFile("file")
 	if err != nil {
@@ -228,6 +449,23 @@ func (h *Handler) Import(c *gin.Context) {
 }
 
 // BatchDelete 批量删除用户。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary BatchDelete
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/users/batch-delete [post]
+// KE:SWAGGER-END
 func (h *Handler) BatchDelete(c *gin.Context) {
 	var in struct {
 		IDs []string `json:"ids" binding:"required,min=1,max=200"`

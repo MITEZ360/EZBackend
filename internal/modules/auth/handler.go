@@ -34,6 +34,21 @@ func metaFrom(c *gin.Context, trustProxy bool) ClientMeta {
 }
 
 // Captcha 获取图形验证码。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Captcha
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/auth/captcha [get]
+// KE:SWAGGER-END
 func (h *Handler) Captcha(c *gin.Context) {
 	id, img, err := h.svc.captcha.Generate()
 	if err != nil {
@@ -44,6 +59,22 @@ func (h *Handler) Captcha(c *gin.Context) {
 }
 
 // Login 账号密码登录。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Login
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/auth/login [post]
+// KE:SWAGGER-END
 func (h *Handler) Login(c *gin.Context) {
 	var in LoginInput
 	if !httpx.BindJSON(c, &in) {
@@ -66,6 +97,22 @@ type RefreshInput struct {
 }
 
 // Refresh 刷新访问令牌。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Refresh
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/auth/refresh [post]
+// KE:SWAGGER-END
 func (h *Handler) Refresh(c *gin.Context) {
 	var in RefreshInput
 	_ = c.ShouldBindJSON(&in)
@@ -89,6 +136,23 @@ func (h *Handler) Refresh(c *gin.Context) {
 }
 
 // Logout 登出。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Logout
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/logout [post]
+// KE:SWAGGER-END
 func (h *Handler) Logout(c *gin.Context) {
 	id := middleware.Identity(c)
 	if id != nil {
@@ -99,6 +163,22 @@ func (h *Handler) Logout(c *gin.Context) {
 }
 
 // Profile 获取当前用户资料、菜单与权限。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Profile
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/profile [get]
+// KE:SWAGGER-END
 func (h *Handler) Profile(c *gin.Context) {
 	id := middleware.Identity(c)
 	if id == nil {
@@ -114,6 +194,23 @@ func (h *Handler) Profile(c *gin.Context) {
 }
 
 // UpdateProfile 更新个人资料。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary UpdateProfile
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/profile [put]
+// KE:SWAGGER-END
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	var in UpdateProfileInput
 	if !httpx.BindJSON(c, &in) {
@@ -127,6 +224,23 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 }
 
 // ChangePassword 修改密码。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary ChangePassword
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/password [put]
+// KE:SWAGGER-END
 func (h *Handler) ChangePassword(c *gin.Context) {
 	var in ChangePasswordInput
 	if !httpx.BindJSON(c, &in) {
@@ -145,6 +259,23 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 }
 
 // SetupTOTP 生成动态口令密钥与二维码（尚未启用）。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary SetupTOTP
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/totp/setup [post]
+// KE:SWAGGER-END
 func (h *Handler) SetupTOTP(c *gin.Context) {
 	out, err := h.svc.SetupTOTP(c.Request.Context(), middleware.UserID(c))
 	if err != nil {
@@ -162,6 +293,23 @@ type TOTPCodeInput struct {
 }
 
 // EnableTOTP 启用动态口令，返回一次性恢复码。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary EnableTOTP
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/totp/enable [post]
+// KE:SWAGGER-END
 func (h *Handler) EnableTOTP(c *gin.Context) {
 	var in TOTPCodeInput
 	if !httpx.BindJSON(c, &in) {
@@ -177,6 +325,23 @@ func (h *Handler) EnableTOTP(c *gin.Context) {
 }
 
 // DisableTOTP 关闭动态口令。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary DisableTOTP
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/totp/disable [post]
+// KE:SWAGGER-END
 func (h *Handler) DisableTOTP(c *gin.Context) {
 	var in TOTPCodeInput
 	if !httpx.BindJSON(c, &in) {
@@ -191,6 +356,23 @@ func (h *Handler) DisableTOTP(c *gin.Context) {
 }
 
 // RegenerateRecoveryCodes 重新生成恢复码。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary RegenerateRecoveryCodes
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/totp/recovery [post]
+// KE:SWAGGER-END
 func (h *Handler) RegenerateRecoveryCodes(c *gin.Context) {
 	var in TOTPCodeInput
 	if !httpx.BindJSON(c, &in) {
@@ -206,6 +388,22 @@ func (h *Handler) RegenerateRecoveryCodes(c *gin.Context) {
 }
 
 // Sessions 查看我的登录设备。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Sessions
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/sessions [get]
+// KE:SWAGGER-END
 func (h *Handler) Sessions(c *gin.Context) {
 	id := middleware.Identity(c)
 	list, err := h.svc.Sessions(c.Request.Context(), id.UserID, id.SessionID)
@@ -217,6 +415,23 @@ func (h *Handler) Sessions(c *gin.Context) {
 }
 
 // RevokeSession 注销指定设备。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary RevokeSession
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/sessions/{id} [delete]
+// KE:SWAGGER-END
 func (h *Handler) RevokeSession(c *gin.Context) {
 	if err := h.svc.RevokeSession(c.Request.Context(), middleware.UserID(c), c.Param("id")); err != nil {
 		response.Fail(c, err)
@@ -226,6 +441,21 @@ func (h *Handler) RevokeSession(c *gin.Context) {
 }
 
 // PublicConfig 返回前端可公开使用的配置（站点名、验证码开关等）。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary PublicConfig
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/public/config [get]
+// KE:SWAGGER-END
 func (h *Handler) PublicConfig(c *gin.Context) {
 	response.OK(c, gin.H{
 		"siteName":        h.svc.cfg.App.Name,

@@ -86,3 +86,43 @@ export const totpApi = {
   regenerate: (code: string) =>
     api.post<{ recoveryCodes: string[] }>('/auth/totp/recovery', { code }),
 }
+
+/* ---------------------------------------------------------------- 第三方登录 */
+
+/** 后端按配置下发的可用渠道，不含任何凭据 */
+export interface OAuthProvider {
+  name: string
+  label: string
+  icon?: string
+}
+
+/** 我的第三方账号绑定 */
+export interface OAuthBinding {
+  id: string
+  provider: string
+  label: string
+  username: string
+  email: string
+  avatar: string
+  createdAt: string
+  lastLoginAt?: string
+}
+
+export const oauthApi = {
+  /** 登录页拉取可用渠道 */
+  providers: () =>
+    api.get<{ enabled: boolean; providers: OAuthProvider[] }>('/oauth/providers'),
+
+  /** 发起登录跳转，返回第三方授权地址 */
+  authorize: (name: string) =>
+    api.get<{ url: string; state: string }>(`/oauth/authorize/${encodeURIComponent(name)}`),
+
+  /** 已登录用户发起账号绑定 */
+  bind: (name: string) =>
+    api.post<{ url: string; state: string }>(`/oauth/bind/${encodeURIComponent(name)}`),
+
+  bindings: () => api.get<OAuthBinding[]>('/oauth/bindings'),
+
+  unbind: (name: string) =>
+    api.del<void>(`/oauth/bindings/${encodeURIComponent(name)}`),
+}

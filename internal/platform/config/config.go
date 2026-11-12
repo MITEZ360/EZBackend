@@ -31,12 +31,144 @@ type Config struct {
 	Micro     Micro     `mapstructure:"micro"`
 	Runtime   Runtime   `mapstructure:"runtime"`
 	News      News      `mapstructure:"news"`
+	Migration Migration `mapstructure:"migration"`
+	Backup    Backup    `mapstructure:"backup"`
+	OAuth     OAuth     `mapstructure:"oauth"`
+	Docs      Docs      `mapstructure:"docs"`
 }
 
 // News 资讯聚合参数。
 type News struct {
 	// RetentionDays 资讯保留天数，超期由定时任务物理删除。
 	RetentionDays int `mapstructure:"retention_days"`
+}
+
+// Migration 数据库结构变更策略。
+//
+// versioned：按版本号执行迁移函数（支持回滚与数据回填），生产推荐；
+// auto：沿用 GORM AutoMigrate，只增不减，适合本地快速迭代；
+// off：完全不迁移，由外部 DBA 或 CI 执行 migrate 子命令。
+type Migration struct {
+	Mode      string `mapstructure:"mode"`
+	TableName string `mapstructure:"table_name"`
+}
+
+// Mode 归一化迁移模式。
+func (m Migration) ResolveMode() string {
+	switch strings.ToLower(strings.TrimSpace(m.Mode)) {
+	case "auto":
+		return "auto"
+	case "off", "none", "disabled":
+		return "off"
+	default:
+		return "versioned"
+	}
+}
+
+// VersionTable 返回版本记录表名，留空时使用 goose 默认值。
+func (m Migration) VersionTable() string {
+	if v := strings.TrimSpace(m.TableName); v != "" {
+		return v
+	}
+	return "keel_schema_migrations"
+}
+
+// Backup 数据库备份参数。
+//
+// 备份产物落在 Dir，文件名形如 keel-sqlite-20261112-152524.db.gz；
+// Retain 只保留最近 N 份，Compress 用 gzip 压缩。MySQL / PostgreSQL
+// 通过外部 dump 工具导出，路径可配置，未安装时备份任务会明确报错。
+type Backup struct {
+	Enabled      bool   `mapstructure:"enabled"`
+	Dir          string `mapstructure:"dir"`
+	Retain       int    `mapstructure:"retain"`
+	Compress     bool   `mapstructure:"compress"`
+	MySQLDump    string `mapstructure:"mysql_dump"`
+	MySQLRestore string `mapstructure:"mysql_restore"`
+	PGDump       string `mapstructure:"pg_dump"`
+	PGRestore    string `mapstructure:"pg_restore"`
+	// AllowRestore 打开后才允许通过管理接口触发恢复；恢复会替换当前库，
+	// 需要重启进程，默认关闭以免误操作。
+	AllowRestore bool `mapstructure:"allow_restore"`
+}
+
+// EffectiveDir 返回实际备份目录。
+func (b Backup) EffectiveDir() string {
+	if strings.TrimSpace(b.Dir) != "" {
+		return b.Dir
+	}
+	return "data/backups"
+}
+
+// OAuth 第三方登录参数。
+//
+// 新增渠道只需在 providers 里加一段配置，代码不需要改动：
+// 每个 provider 自行声明端点、scope 以及用户信息字段到本系统字段的映射。
+// 敏感凭据建议用环境变量 KEEL_OAUTH_<NAME>_CLIENT_ID / _CLIENT_SECRET 覆盖，
+// 避免明文写进配置文件。
+type OAuth struct {
+	Enabled      bool            `mapstructure:"enabled"`
+	CallbackBase string          `mapstructure:"callback_base"`
+	FrontendPath string          `mapstructure:"frontend_path"`
+	StateTTL     time.Duration   `mapstructure:"state_ttl"`
+	Providers    []OAuthProvider `mapstructure:"providers"`
+}
+
+// OAuthProvider 单个第三方身份提供商（通用 OAuth2 / OIDC）。
+type OAuthProvider struct {
+	Name         string            `mapstructure:"name"`
+	Label        string            `mapstructure:"label"`
+	Icon         string            `mapstructure:"icon"`
+	Enabled      bool              `mapstructure:"enabled"`
+	ClientID     string            `mapstructure:"client_id"`
+	ClientSecret string            `mapstructure:"client_secret"`
+	AuthURL      string            `mapstructure:"auth_url"`
+	TokenURL     string            `mapstructure:"token_url"`
+	UserInfoURL  string            `mapstructure:"user_info_url"`
+	EmailURL     string            `mapstructure:"email_url"`
+	Scopes       []string          `mapstructure:"scopes"`
+	FieldMap     map[string]string `mapstructure:"field_map"`
+	// AutoRegister 未绑定且匹配不到本地账号时自动创建用户。
+	AutoRegister bool `mapstructure:"auto_register"`
+	// LinkExisting 允许按 MatchBy 把外部身份关联到已有本地账号。
+	LinkExisting bool     `mapstructure:"link_existing"`
+	MatchBy      string   `mapstructure:"match_by"`
+	DefaultRoles []string `mapstructure:"default_roles"`
+	// AuthStyle 对应 oauth2.AuthStyle：in_header / in_params / auto。
+	AuthStyle   string            `mapstructure:"auth_style"`
+	ExtraAuth   map[string]string `mapstructure:"extra_auth"`
+	UserInfoRaw bool              `mapstructure:"user_info_raw"` // true 时用 POST 提交 token
+}
+
+// Active 判断 provider 是否可以对外提供。
+func (p OAuthProvider) Active() bool {
+	return p.Enabled && p.ClientID != "" && p.ClientSecret != "" &&
+		p.AuthURL != "" && p.TokenURL != "" && p.UserInfoURL != ""
+}
+
+// Docs 自动接口文档参数。
+//
+// Enabled 为三态：nil 时开发环境自动开启、生产环境自动关闭。
+type Docs struct {
+	Enabled *bool  `mapstructure:"enabled"`
+	Path    string `mapstructure:"path"`
+}
+
+// UseDocs 判断是否挂载 Swagger UI。
+func (d Docs) UseDocs(isProd bool) bool {
+	if d.Enabled != nil {
+		return *d.Enabled
+	}
+	return !isProd
+}
+
+// EffectivePath 返回文档挂载前缀。
+func (d Docs) EffectivePath() string {
+	p := strings.TrimSpace(d.Path)
+	if p == "" {
+		return "/docs"
+	}
+	return "/" + strings.Trim(p, "/")
 }
 
 // App 应用基础信息。
@@ -369,6 +501,10 @@ func Load(path string) (*Config, error) {
 		"mail.host", "mail.username", "mail.password", "mail.from",
 		"runtime.stateless", "runtime.instance_id", "runtime.instances",
 		"db.auto_migrate", "db.seed", "security.captcha_enabled", "rate_limit.enabled",
+		"migration.mode", "migration.table_name",
+		"backup.enabled", "backup.dir", "backup.retain", "backup.compress", "backup.allow_restore",
+		"oauth.enabled", "oauth.callback_base", "oauth.frontend_path", "oauth.state_ttl",
+		"docs.enabled", "docs.path",
 	} {
 		_ = v.BindEnv(key)
 	}
@@ -379,6 +515,7 @@ func Load(path string) (*Config, error) {
 	}
 	applyEnvFallbacks(cfg)
 	applyMicroRoutesEnv(cfg)
+	applyOAuthEnvOverrides(cfg)
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -471,6 +608,68 @@ func applyEnvFallbacks(c *Config) {
 	if c.Security.InternalToken == "" {
 		c.Security.InternalToken = "keel-internal-token"
 	}
+	if c.Backup.Retain <= 0 {
+		c.Backup.Retain = 7
+	}
+	if c.Backup.MySQLDump == "" {
+		c.Backup.MySQLDump = "mysqldump"
+	}
+	if c.Backup.MySQLRestore == "" {
+		c.Backup.MySQLRestore = "mysql"
+	}
+	if c.Backup.PGDump == "" {
+		c.Backup.PGDump = "pg_dump"
+	}
+	if c.Backup.PGRestore == "" {
+		c.Backup.PGRestore = "psql"
+	}
+	if c.OAuth.StateTTL <= 0 {
+		c.OAuth.StateTTL = 10 * time.Minute
+	}
+	if c.OAuth.FrontendPath == "" {
+		c.OAuth.FrontendPath = "/oauth/callback"
+	}
+}
+
+// applyOAuthEnvOverrides 允许用环境变量注入各 provider 的凭据，避免密钥落盘。
+// 约定：KEEL_OAUTH_GITHUB_CLIENT_ID / KEEL_OAUTH_GITHUB_CLIENT_SECRET，
+// 名称中的非字母数字统一转为下划线。仅配置了一个 provider 时也可用
+// KEEL_OAUTH_CLIENT_ID / KEEL_OAUTH_CLIENT_SECRET 简写。
+func applyOAuthEnvOverrides(c *Config) {
+	if len(c.OAuth.Providers) == 0 {
+		return
+	}
+	envKey := func(s string) string {
+		var b strings.Builder
+		upper := strings.ToUpper(s)
+		for _, r := range upper {
+			if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+				b.WriteRune(r)
+			} else {
+				b.WriteRune('_')
+			}
+		}
+		return b.String()
+	}
+	for i := range c.OAuth.Providers {
+		p := &c.OAuth.Providers[i]
+		prefix := "KEEL_OAUTH_" + envKey(p.Name) + "_"
+		id, secret := os.Getenv(prefix+"CLIENT_ID"), os.Getenv(prefix+"CLIENT_SECRET")
+		if len(c.OAuth.Providers) == 1 {
+			if v := os.Getenv("KEEL_OAUTH_CLIENT_ID"); v != "" {
+				id = v
+			}
+			if v := os.Getenv("KEEL_OAUTH_CLIENT_SECRET"); v != "" {
+				secret = v
+			}
+		}
+		if id != "" {
+			p.ClientID = id
+		}
+		if secret != "" {
+			p.ClientSecret = secret
+		}
+	}
 }
 
 // Validate 做启动期关键校验，避免带病运行。
@@ -491,6 +690,32 @@ func (c *Config) Validate() error {
 	if mode := strings.ToLower(strings.TrimSpace(c.Runtime.Stateless)); mode != "" &&
 		mode != "auto" && mode != "strict" && mode != "off" {
 		return fmt.Errorf("runtime.stateless 非法: %s（可选 auto / strict / off）", c.Runtime.Stateless)
+	}
+	switch mode := strings.ToLower(strings.TrimSpace(c.Migration.Mode)); mode {
+	case "", "versioned", "auto", "off", "none", "disabled":
+	default:
+		return fmt.Errorf("migration.mode 非法: %s（可选 versioned / auto / off）", c.Migration.Mode)
+	}
+	if c.Backup.Retain <= 0 {
+		// 未配置时补默认值，兼容直接构造 Config 的调用方（如单测）
+		c.Backup.Retain = 7
+	}
+	if seen := map[string]bool{}; len(c.OAuth.Providers) > 0 {
+		for _, p := range c.OAuth.Providers {
+			name := strings.ToLower(strings.TrimSpace(p.Name))
+			if name == "" {
+				return fmt.Errorf("oauth.providers 存在未命名的配置项")
+			}
+			if seen[name] {
+				return fmt.Errorf("oauth.providers 名称重复: %s", name)
+			}
+			seen[name] = true
+			for label, u := range map[string]string{"auth_url": p.AuthURL, "token_url": p.TokenURL, "user_info_url": p.UserInfoURL} {
+				if u != "" && !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+					return fmt.Errorf("oauth.providers.%s.%s 必须是 http(s) URL", name, label)
+				}
+			}
+		}
 	}
 	if c.Mail.Enabled != nil && *c.Mail.Enabled && strings.TrimSpace(c.Mail.Host) == "" {
 		return fmt.Errorf("mail.enabled 为 true 但 mail.host 为空")
@@ -616,4 +841,24 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("runtime.instances", 1)
 
 	v.SetDefault("news.retention_days", 7)
+
+	v.SetDefault("migration.mode", "versioned")
+	v.SetDefault("migration.table_name", "keel_schema_migrations")
+
+	v.SetDefault("backup.enabled", true)
+	v.SetDefault("backup.dir", "data/backups")
+	v.SetDefault("backup.retain", 7)
+	v.SetDefault("backup.compress", true)
+	v.SetDefault("backup.mysql_dump", "mysqldump")
+	v.SetDefault("backup.mysql_restore", "mysql")
+	v.SetDefault("backup.pg_dump", "pg_dump")
+	v.SetDefault("backup.pg_restore", "psql")
+	v.SetDefault("backup.allow_restore", false)
+
+	v.SetDefault("oauth.enabled", false)
+	v.SetDefault("oauth.frontend_path", "/oauth/callback")
+	v.SetDefault("oauth.state_ttl", "10m")
+
+	// docs.enabled 不设默认值：保持 nil 三态，由环境（dev/prod）自动判断
+	v.SetDefault("docs.path", "/docs")
 }

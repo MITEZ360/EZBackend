@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { ArrowLeft, Key, Lock, Refresh, User } from '@element-plus/icons-vue'
 import OtpInput from '@/components/OtpInput.vue'
-import { authApi } from '@/api/auth'
+import { authApi, oauthApi, type OAuthProvider } from '@/api/auth'
 import { ApiError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
@@ -18,6 +18,10 @@ const loading = ref(false)
 const errorMsg = ref('')
 
 const captcha = reactive({ enabled: false, id: '', image: '' })
+
+/** 由后端配置下发的第三方登录渠道；未配置时整块不显示 */
+const providers = ref<OAuthProvider[]>([])
+const oauthLoading = ref('')
 
 /** credential：账号密码；totp：第二步动态码 */
 const step = ref<'credential' | 'totp'>('credential')
@@ -153,7 +157,33 @@ function toggleRecovery() {
   recoveryCode.value = ''
 }
 
-onMounted(loadCaptcha)
+async function loadProviders() {
+  try {
+    const res = await oauthApi.providers()
+    providers.value = res.providers ?? []
+  } catch {
+    providers.value = []
+  }
+}
+
+/** 跳转到第三方授权页；回调会把令牌交回 /oauth/callback */
+async function goOAuth(p: OAuthProvider) {
+  oauthLoading.value = p.name
+  try {
+    const res = await oauthApi.authorize(p.name)
+    window.location.href = res.url
+  } catch {
+    errorMsg.value = `${p.label} 暂时不可用，请稍后重试`
+    oauthLoading.value = ''
+  }
+}
+
+onMounted(() => {
+  loadCaptcha()
+  loadProviders()
+  const err = route.query.oauth_error
+  if (typeof err === 'string' && err) errorMsg.value = err
+})
 </script>
 
 <template>
@@ -317,6 +347,24 @@ onMounted(loadCaptcha)
           <button type="button" class="switch-mode" @click="toggleRecovery">
             {{ recoveryMode ? '使用动态验证码' : '无法使用认证器？改用恢复码' }}
           </button>
+        </div>
+
+        <div v-if="step === 'credential' && providers.length" class="oauth">
+          <div class="oauth-divider"><span>或使用第三方账号</span></div>
+          <div class="oauth-list">
+            <button
+              v-for="p in providers"
+              :key="p.name"
+              type="button"
+              class="oauth-btn"
+              :disabled="oauthLoading !== ''"
+              @click="goOAuth(p)"
+            >
+              <img v-if="p.icon" :src="p.icon" alt="" class="oauth-icon" />
+              <span v-else class="oauth-fallback">{{ (p.label || p.name).slice(0, 1).toUpperCase() }}</span>
+              <span>{{ oauthLoading === p.name ? '跳转中…' : p.label }}</span>
+            </button>
+          </div>
         </div>
 
         <div v-if="step === 'credential'" class="hint">
@@ -675,8 +723,82 @@ onMounted(loadCaptcha)
   }
 }
 
+/* ---------------------------------------------------------- 第三方登录 */
+.oauth {
+  margin-top: 26px;
+}
+
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--ink-400);
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--ink-100);
+  }
+}
+
+.oauth-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.oauth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 132px;
+  padding: 9px 14px;
+  border: 1px solid var(--ink-100);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--ink-700);
+  cursor: pointer;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+
+  &:hover:not(:disabled) {
+    border-color: var(--brand-600);
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.oauth-icon,
+.oauth-fallback {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  object-fit: contain;
+}
+
+.oauth-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand-600);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .hint {
-  margin-top: 22px;
+  margin-top: 16px;
   font-size: 12px;
   line-height: 1.7;
   color: var(--ink-400);

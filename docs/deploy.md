@@ -258,34 +258,58 @@ jq -c 'select(.trace_id=="0f3a1c9e-...")' logs/keel.log
 
 ## 7. 数据库运维
 
-### 7.1 迁移
+### 7.1 版本化迁移
 
-默认 `db.auto_migrate: true`，启动时自动建表与加列（只增不减，安全）。
-生产建议：
+默认 `migration.mode: versioned`：启动时按版本号执行迁移，版本表 `keel_schema_migrations`
+记录已应用版本。迁移体用 GORM 编写，同一份代码覆盖 SQLite / MySQL / PostgreSQL；
+改列、删列、数据回填、回滚都由版本表达，不只是「加列」。
 
 ```yaml
-db:
-  auto_migrate: false   # 用发布流程控制
-  seed: false           # 种子数据只在初始化时写一次
+migration:
+  mode: versioned                # versioned / auto / off
+  table_name: keel_schema_migrations
 ```
 
-首次初始化可以临时打开，或手动执行一次 `keel -config ... ` 后关闭。
-
-### 7.2 备份
-
-SQLite：
+CLI 子命令与服务端共用同一份配置，适合放进发布流水线：
 
 ```bash
-sqlite3 data/keel.db ".backup '/backup/keel-$(date +%F).db'"
+keel -config configs/config.yaml migrate status     # 当前版本 / 待应用版本
+keel -config configs/config.yaml migrate up         # 升级到最新
+keel -config configs/config.yaml migrate up-to 2    # 升级到指定版本
+keel -config configs/config.yaml migrate down       # 回滚最近一个版本
+keel -config configs/config.yaml migrate down-to 1  # 回滚到指定版本
 ```
 
-MySQL：
+`mode: auto` 退回 GORM AutoMigrate（只增不减，适合本地快速迭代）；`mode: off`
+完全不迁移，交给 CI / DBA 显式执行。`db.auto_migrate`、`db.seed` 仅控制 auto 模式与种子数据。
+
+> 回滚 baseline（v1）会删除全部业务表，仅用于新建环境的回退演练，生产不要执行。
+
+### 7.2 备份与恢复
+
+内置 `db.backup` 定时任务（默认每天 02:00）与「运维中心 → 备份与迁移」页面，无需手写脚本：
+
+- 产物：`data/backups/keel-<driver>-<时间戳>.db.gz`（SQLite）或 `.sql.gz`（MySQL / PostgreSQL）
+- 每份附带 `.meta.json`：时间、大小、SHA-256、表清单、用户数；按 `backup.retain` 保留最近 N 份
+- SQLite 用 `VACUUM INTO` 生成在线一致性快照（含 WAL 已提交数据），**不需要停服**
+- 页面支持立即备份、校验（gzip + SHA-256 + `PRAGMA integrity_check`）、下载、删除
 
 ```bash
-mysqldump --single-transaction --quick keel | gzip > /backup/keel-$(date +%F).sql.gz
+# 手动备份（与页面等价）
+keel -config configs/config.yaml backup
 ```
 
-建议每天全备 + binlog 增量，保留 7~30 天。
+SQLite 恢复必须停机后替换数据文件；恢复前会自动把当前库另存为 `pre-restore-*.db`：
+
+```bash
+systemctl stop keel
+keel -config configs/config.yaml restore keel-sqlite-20261112-020000.db.gz
+systemctl start keel
+```
+
+MySQL / PostgreSQL 在设置 `backup.allow_restore: true` 后可通过页面「恢复」在线导入
+（会覆盖当前数据，建议低峰期执行并另留一份备份）。外部工具路径由
+`backup.mysql_dump` / `backup.pg_dump` 等配置指定。
 
 ### 7.3 容量参考
 
@@ -321,11 +345,14 @@ env:
 ## 9. 升级流程
 
 ```bash
-# 1. 备份数据库与 data 目录
-# 2. 拉取新二进制，滚动替换（K8s 直接改镜像 tag）
-# 3. 观察 /healthz、错误率、P99
-# 4. 回滚：换回旧二进制即可（表结构只增不减，向后兼容）
+# 1. 备份：页面点「立即备份」，或 CLI 执行 keel -config ... backup
+# 2. 检查待应用版本：keel -config ... migrate status
+# 3. 停服 → 替换二进制 → keel -config ... migrate up → 启动
+# 4. 观察 /healthz、错误率、P99
+# 5. 回滚：停服 → keel restore <升级前的备份> → 换回旧二进制 → 启动
 ```
+
+多实例部署时，迁移与备份由 `SET NX` 任务锁保证只在一个实例执行。
 
 优雅停机保证在途请求处理完成：
 

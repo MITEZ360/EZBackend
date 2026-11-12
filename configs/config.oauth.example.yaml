@@ -1,0 +1,73 @@
+# ============================================================================
+# 第三方登录配置示例（片段文件，不会自动加载）
+#
+# 用法：把下面 oauth 段复制到 configs/config.yaml，填好凭据后重启服务。
+# 新增渠道只需增加一个 providers 项，代码无需改动；启用/停用改 enabled 即可。
+#
+# 凭据强烈建议用环境变量注入，避免明文落盘：
+#   KEEL_OAUTH_GITHUB_CLIENT_ID / KEEL_OAUTH_GITHUB_CLIENT_SECRET
+#   规则：名称转大写、非字母数字转下划线；只有一个渠道时也可用
+#         KEEL_OAUTH_CLIENT_ID / KEEL_OAUTH_CLIENT_SECRET
+#
+# 回调地址固定为：{oauth.callback_base 或请求 Host}/api/v1/oauth/callback/{name}
+# 在 GitHub / 身份提供商后台登记的 Authorization callback URL 必须与此一致。
+# ============================================================================
+
+oauth:
+  enabled: true
+  # 部署在网关或域名后必填；留空按请求 Host 推断（仅适合本地开发）
+  callback_base: "https://console.example.com"
+  frontend_path: /oauth/callback
+  state_ttl: 10m
+
+  providers:
+    # -------------------------------------------------------------- GitHub
+    - name: github
+      label: GitHub 登录
+      icon: ""                       # 可选：按钮图标 URL，建议 20~32px 方形 PNG
+      enabled: true
+      client_id: ""                  # 用 KEEL_OAUTH_GITHUB_CLIENT_ID 注入
+      client_secret: ""              # 用 KEEL_OAUTH_GITHUB_CLIENT_SECRET 注入
+      auth_url: https://github.com/login/oauth/authorize
+      token_url: https://github.com/login/oauth/access_token
+      user_info_url: https://api.github.com/user
+      email_url: https://api.github.com/user/emails   # GitHub 的邮箱在独立接口
+      scopes: [read:user, user:email]
+      field_map:                     # 外部字段路径 -> 系统字段
+        id: id
+        username: login
+        nickname: name
+        avatar: avatar_url
+      link_existing: true            # 邮箱已验证时允许关联已有本地账号
+      match_by: email                # email / username
+      auto_register: false           # 匹配不到时是否自动注册（见下方说明）
+      default_roles: []              # 自动注册时分配的角色编码，如 [staff]
+      auth_style: auto               # auto / in_header / in_params
+
+    # ------------------------------------------- 通用 OIDC（Keycloak / 自建）
+    - name: corp-sso
+      label: 企业账号登录
+      enabled: false
+      client_id: ""
+      client_secret: ""
+      auth_url: https://sso.example.com/realms/corp/protocol/openid-connect/auth
+      token_url: https://sso.example.com/realms/corp/protocol/openid-connect/token
+      user_info_url: https://sso.example.com/realms/corp/protocol/openid-connect/userinfo
+      scopes: [openid, profile, email]
+      # 不写 field_map 时使用内置多候选映射，已覆盖 sub / preferred_username /
+      # name / email / picture / email_verified 等常见字段
+      link_existing: true
+      match_by: email
+      auto_register: true
+      default_roles: [staff]
+      auth_style: in_header
+
+# ---------------------------------------------------------------- 策略说明
+# 账号落库顺序：已绑定关系 -> 按已验证邮箱/用户名关联已有账号 -> 自动注册 -> 拒绝。
+#
+# link_existing  仅当身份提供方返回 email_verified=true（或未提供该字段）时才允许
+#                按邮箱关联，避免攻击者用任意邮箱抢占本地账号。
+# auto_register  自动注册的用户密码为随机串，无法用密码登录；需要时由管理员重置。
+#                若不开启，未绑定的外部账号会被拒绝并提示联系管理员。
+# 解绑          用户可在个人中心解绑；解绑后再次登录，若开启 auto_register 会新建账号。
+# state          一次性、10 分钟有效，存于缓存；换条件或超时会要求重新发起登录。

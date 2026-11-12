@@ -39,6 +39,8 @@ var jobSeeds = []struct {
 		Remark: "每天 04:00 清理 180 天前已读的收件记录"},
 	{Name: "清理过期资讯", Cron: "15 * * * *", Handler: "news.cleanup", Params: `{}`,
 		Remark: "每小时清理超过 news.retention_days 的资讯；任务参数可单独覆盖天数"},
+	{Name: "数据库备份", Cron: "0 2 * * *", Handler: "db.backup", Params: `{}`,
+		Remark: "每天 02:00 生成数据库快照，按 backup.retain 保留最近 N 份；backup.enabled=false 时跳过"},
 }
 
 var menuSeeds = []menuSeed{
@@ -127,6 +129,11 @@ var menuSeeds = []menuSeed{
 		{ID: "m_oplog", Name: "操作日志", Type: model.MenuPage, Path: "/ops/operation-log", Icon: "file-text", Perm: "ops:oplog:list", Sort: 4},
 		{ID: "m_online", Name: "在线用户", Type: model.MenuPage, Path: "/ops/online", Icon: "wifi", Perm: "ops:online:list", Sort: 5},
 		{ID: "m_monitor", Name: "服务监控", Type: model.MenuPage, Path: "/ops/monitor", Icon: "activity", Perm: "ops:monitor:view", Sort: 6},
+		{ID: "m_maintenance", Name: "备份与迁移", Type: model.MenuPage, Path: "/ops/maintenance", Icon: "server", Perm: "ops:backup:list", Sort: 7, Children: []menuSeed{
+			{ID: "m_maintenance_backup", Name: "立即备份", Type: model.MenuButton, Perm: "ops:backup:create"},
+			{ID: "m_maintenance_restore", Name: "恢复与回滚", Type: model.MenuButton, Perm: "ops:backup:restore"},
+			{ID: "m_maintenance_del", Name: "删除备份", Type: model.MenuButton, Perm: "ops:backup:delete"},
+		}},
 	}},
 }
 

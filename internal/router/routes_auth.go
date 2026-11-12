@@ -16,4 +16,9 @@ func (d Deps) authRoutes(g *gin.RouterGroup) {
 	g.POST("/auth/totp/recovery", d.Auth.RegenerateRecoveryCodes)
 	g.GET("/auth/sessions", d.Auth.Sessions)
 	g.DELETE("/auth/sessions/:id", d.Auth.RevokeSession)
+
+	// 第三方账号绑定（需登录）。静态段与 :name 分在不同层级，避免 Gin 通配冲突
+	g.GET("/oauth/bindings", d.Auth.OAuthBindings)
+	g.POST("/oauth/bind/:name", d.Auth.OAuthBind)
+	g.DELETE("/oauth/bindings/:name", d.Auth.OAuthUnbind)
 }

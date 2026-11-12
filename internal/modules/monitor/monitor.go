@@ -78,11 +78,43 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // System 系统信息。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary System
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/monitor/system [get]
+// KE:SWAGGER-END
 func (h *Handler) System(c *gin.Context) {
 	response.OK(c, h.svc.System(c.Request.Context()))
 }
 
 // Routes 路由清单。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Routes
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/monitor/routes [get]
+// KE:SWAGGER-END
 func (h *Handler) Routes(c *gin.Context) {
 	response.OK(c, h.svc.routes())
 }

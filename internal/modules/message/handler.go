@@ -16,6 +16,22 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Inbox 我的消息。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Inbox
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages [get]
+// KE:SWAGGER-END
 func (h *Handler) Inbox(c *gin.Context) {
 	q := &InboxQuery{
 		Page:     httpx.QueryInt(c, "page", 1),
@@ -33,6 +49,22 @@ func (h *Handler) Inbox(c *gin.Context) {
 }
 
 // UnreadCount 未读数。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary UnreadCount
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/unread-count [get]
+// KE:SWAGGER-END
 func (h *Handler) UnreadCount(c *gin.Context) {
 	n, err := h.svc.UnreadCount(c.Request.Context(), middleware.UserID(c))
 	if err != nil {
@@ -43,6 +75,22 @@ func (h *Handler) UnreadCount(c *gin.Context) {
 }
 
 // Recent 最近消息（铃铛预览）。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Recent
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/recent [get]
+// KE:SWAGGER-END
 func (h *Handler) Recent(c *gin.Context) {
 	list, err := h.svc.Recent(c.Request.Context(), middleware.UserID(c), httpx.QueryInt(c, "limit", 5))
 	if err != nil {
@@ -53,6 +101,23 @@ func (h *Handler) Recent(c *gin.Context) {
 }
 
 // Detail 消息详情。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Detail
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/{id} [get]
+// KE:SWAGGER-END
 func (h *Handler) Detail(c *gin.Context) {
 	d, err := h.svc.Get(c.Request.Context(), middleware.UserID(c), c.Param("id"))
 	if err != nil {
@@ -63,6 +128,24 @@ func (h *Handler) Detail(c *gin.Context) {
 }
 
 // MarkRead 标记单条已读。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary MarkRead
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/{id}/read [put]
+// KE:SWAGGER-END
 func (h *Handler) MarkRead(c *gin.Context) {
 	if err := h.svc.MarkRead(c.Request.Context(), middleware.UserID(c), c.Param("id")); err != nil {
 		response.Fail(c, err)
@@ -72,6 +155,23 @@ func (h *Handler) MarkRead(c *gin.Context) {
 }
 
 // MarkAllRead 全部已读，可按类型过滤。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary MarkAllRead
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/read-all [put]
+// KE:SWAGGER-END
 func (h *Handler) MarkAllRead(c *gin.Context) {
 	n, err := h.svc.MarkAllRead(c.Request.Context(), middleware.UserID(c), c.Query("type"))
 	if err != nil {
@@ -82,6 +182,23 @@ func (h *Handler) MarkAllRead(c *gin.Context) {
 }
 
 // Delete 删除单条消息。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Delete
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/{id} [delete]
+// KE:SWAGGER-END
 func (h *Handler) Delete(c *gin.Context) {
 	if err := h.svc.Delete(c.Request.Context(), middleware.UserID(c), c.Param("id")); err != nil {
 		response.Fail(c, err)
@@ -91,6 +208,23 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 // BatchDelete 批量删除消息。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary BatchDelete
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/batch-delete [post]
+// KE:SWAGGER-END
 func (h *Handler) BatchDelete(c *gin.Context) {
 	var in struct {
 		IDs []string `json:"ids" binding:"required,min=1,max=200" label:"消息"`
@@ -107,6 +241,22 @@ func (h *Handler) BatchDelete(c *gin.Context) {
 }
 
 // DeleteRead 清空已读消息。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary DeleteRead
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/read [delete]
+// KE:SWAGGER-END
 func (h *Handler) DeleteRead(c *gin.Context) {
 	n, err := h.svc.DeleteRead(c.Request.Context(), middleware.UserID(c))
 	if err != nil {
@@ -117,6 +267,22 @@ func (h *Handler) DeleteRead(c *gin.Context) {
 }
 
 // Sent 发送记录。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Sent
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/sent [get]
+// KE:SWAGGER-END
 func (h *Handler) Sent(c *gin.Context) {
 	q := &SentQuery{
 		Page:     httpx.QueryInt(c, "page", 1),
@@ -134,6 +300,23 @@ func (h *Handler) Sent(c *gin.Context) {
 }
 
 // Send 发送消息。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Send
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/send [post]
+// KE:SWAGGER-END
 func (h *Handler) Send(c *gin.Context) {
 	var in SendInput
 	if !httpx.BindJSON(c, &in) {
@@ -158,6 +341,23 @@ func (h *Handler) Send(c *gin.Context) {
 }
 
 // Revoke 撤回消息。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Revoke
+// @Tags 配置
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/messages/sent/{id} [delete]
+// KE:SWAGGER-END
 func (h *Handler) Revoke(c *gin.Context) {
 	if err := h.svc.Revoke(c.Request.Context(), c.Param("id")); err != nil {
 		response.Fail(c, err)

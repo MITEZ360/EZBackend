@@ -16,6 +16,22 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // List 角色列表。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary List
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/roles [get]
+// KE:SWAGGER-END
 func (h *Handler) List(c *gin.Context) {
 	p := query.Parse(c)
 	list, total, err := h.svc.List(c.Request.Context(), p)
@@ -27,6 +43,22 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 // All 全量启用角色（下拉用）。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary All
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/options/roles [get]
+// KE:SWAGGER-END
 func (h *Handler) All(c *gin.Context) {
 	list, err := h.svc.All(c.Request.Context())
 	if err != nil {
@@ -37,6 +69,23 @@ func (h *Handler) All(c *gin.Context) {
 }
 
 // Get 角色详情。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Get
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/roles/{id} [get]
+// KE:SWAGGER-END
 func (h *Handler) Get(c *gin.Context) {
 	r, err := h.svc.Get(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -47,6 +96,23 @@ func (h *Handler) Get(c *gin.Context) {
 }
 
 // Create 创建角色。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Create
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/roles [post]
+// KE:SWAGGER-END
 func (h *Handler) Create(c *gin.Context) {
 	var in Input
 	if !httpx.BindJSON(c, &in) {
@@ -62,6 +128,24 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 // Update 更新角色。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Update
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/roles/{id} [put]
+// KE:SWAGGER-END
 func (h *Handler) Update(c *gin.Context) {
 	var in Input
 	if !httpx.BindJSON(c, &in) {
@@ -76,6 +160,23 @@ func (h *Handler) Update(c *gin.Context) {
 }
 
 // Delete 删除角色。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Delete
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/roles/{id} [delete]
+// KE:SWAGGER-END
 func (h *Handler) Delete(c *gin.Context) {
 	if err := h.svc.Delete(c.Request.Context(), c.Param("id")); err != nil {
 		response.Fail(c, err)
@@ -86,6 +187,23 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 // Menus 查询角色菜单。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Menus
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/roles/{id}/menus [get]
+// KE:SWAGGER-END
 func (h *Handler) Menus(c *gin.Context) {
 	ids, err := h.svc.Menus(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -101,6 +219,24 @@ type MenuInput struct {
 }
 
 // SetMenus 分配菜单权限。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary SetMenus
+// @Tags 用户与权限
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/roles/{id}/menus [put]
+// KE:SWAGGER-END
 func (h *Handler) SetMenus(c *gin.Context) {
 	var in MenuInput
 	if !httpx.BindJSON(c, &in) {

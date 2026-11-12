@@ -598,6 +598,71 @@ X-API-Key: ak_c_...
 
 ---
 
+### 4.21 第三方登录（配置化 OAuth2 / OIDC）
+
+新增渠道只需在 `oauth.providers` 里加一段配置，代码无需改动；完整示例见
+`configs/config.oauth.example.yaml`。凭据建议用环境变量
+`KEEL_OAUTH_<NAME>_CLIENT_ID` / `_CLIENT_SECRET` 注入。
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/oauth/providers` | 公开 | 返回启用渠道 `[{name,label,icon}]`，不含凭据 |
+| GET | `/oauth/authorize/:name` | 公开 | 返回 `{url, state}`；`?redirect=1` 直接 302 |
+| GET | `/oauth/callback/:name` | 公开 | 回调，成功后 302 到 `oauth.frontend_path#access_token=...` |
+| POST | `/oauth/bind/:name` | Bearer | 已登录用户发起绑定，返回 `{url, state}` |
+| GET | `/oauth/bindings` | Bearer | 我的绑定列表 |
+| DELETE | `/oauth/bindings/:name` | Bearer | 解绑 |
+
+回调地址固定为 `{callback_base 或请求 Host}/api/v1/oauth/callback/{name}`，
+需在身份提供商后台登记一致。令牌放在 URL **fragment**，不会进入服务端日志与 Referer。
+
+账号落库顺序：已绑定关系 → 按已验证邮箱/用户名关联已有账号（`link_existing`）
+→ 自动注册（`auto_register`）→ 拒绝。自动注册的账号密码为随机串，需管理员重置。
+`state` 一次性、默认 10 分钟有效，重放会被拒绝并跳回登录页。
+
+- `field_map`：外部用户信息字段 → 系统字段，支持点路径、数组下标和逗号分隔的多候选路径。
+  不配置时使用内置候选表，已覆盖 `sub/id`、`preferred_username/login`、`name`、
+  `email`、`picture/avatar_url`、`email_verified`。
+- `email_url`：GitHub 一类把邮箱放在独立接口时使用，支持数组（优先 primary + verified）与对象。
+- `auto_register` + `default_roles`：控制是否自动建号及分配的角色编码。
+- `auth_style`：`auto` / `in_header` / `in_params`，对应 `oauth2.AuthStyle`。
+
+### 4.22 备份与迁移（运维中心）
+
+| 方法 | 路径 | 权限点 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/maintenance/backups` | `ops:backup:list` | 备份文件列表 |
+| POST | `/maintenance/backups` | `ops:backup:create` | 立即备份，返回元信息 |
+| GET | `/maintenance/backups/:name/meta` | `ops:backup:list` | 备份元信息 |
+| GET | `/maintenance/backups/:name/download` | `ops:backup:list` | 下载备份文件 |
+| POST | `/maintenance/backups/:name/verify` | `ops:backup:list` | 校验和 + 完整性 + 表清单 |
+| POST | `/maintenance/backups/:name/restore` | `ops:backup:restore` | 在线恢复（需 `backup.allow_restore`） |
+| DELETE | `/maintenance/backups/:name` | `ops:backup:delete` | 删除备份及元信息 |
+| GET | `/maintenance/migrations` | `ops:backup:list` | 版本状态（驱动、当前/最新版本、清单） |
+| POST | `/maintenance/migrations/up` | `ops:backup:restore` | 升级到最新 |
+| POST | `/maintenance/migrations/down` | `ops:backup:restore` | 回滚最近一个版本 |
+
+备份定时执行器 `db.backup` 默认每天 02:00 运行，按 `backup.retain` 保留最近 N 份。
+SQLite 恢复需停机执行 `keel -config ... restore <文件>`；MySQL / PostgreSQL 可在开启
+`backup.allow_restore` 后在线导入。等价的 CLI 子命令见 `docs/deploy.md` 7.1 / 7.2。
+
+### 4.23 自动接口文档
+
+`docs.enabled` 未配置时，开发环境自动开启、生产环境自动关闭，路径由 `docs.path`
+指定（默认 `/docs`）。
+
+| 路径 | 说明 |
+| --- | --- |
+| `GET /docs/` | 跳转 Swagger UI |
+| `GET /docs/index.html` | Swagger UI |
+| `GET /docs/doc.json` | OpenAPI 2.0 描述（随二进制嵌入） |
+
+文档由 `swaggo/swag` 从代码注解生成，注解由 `scripts/gen_swagger_annotations.py`
+按路由表自动生成，保证与真实路由一致。重新生成：`make docs`（需先 `make swag-install`）。
+两种鉴权在文档里分别定义为 `BearerAuth` 与 `ApiKeyAuth`。
+
+---
+
 ## 5. 调用示例
 
 ```bash

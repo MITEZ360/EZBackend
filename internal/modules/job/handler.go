@@ -16,6 +16,22 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // List 任务列表。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary List
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/jobs [get]
+// KE:SWAGGER-END
 func (h *Handler) List(c *gin.Context) {
 	p := query.Parse(c)
 	list, total, err := h.svc.List(c.Request.Context(), p)
@@ -27,11 +43,44 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 // Handlers 可用执行器。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Handlers
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/jobs/handlers [get]
+// KE:SWAGGER-END
 func (h *Handler) Handlers(c *gin.Context) {
 	response.OK(c, h.svc.Handlers())
 }
 
 // Create 新增任务。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Create
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/jobs [post]
+// KE:SWAGGER-END
 func (h *Handler) Create(c *gin.Context) {
 	var in Input
 	if !httpx.BindJSON(c, &in) {
@@ -47,6 +96,24 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 // Update 更新任务。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Update
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/jobs/{id} [put]
+// KE:SWAGGER-END
 func (h *Handler) Update(c *gin.Context) {
 	var in Input
 	if !httpx.BindJSON(c, &in) {
@@ -61,6 +128,23 @@ func (h *Handler) Update(c *gin.Context) {
 }
 
 // Delete 删除任务。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Delete
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/jobs/{id} [delete]
+// KE:SWAGGER-END
 func (h *Handler) Delete(c *gin.Context) {
 	if err := h.svc.Delete(c.Request.Context(), c.Param("id")); err != nil {
 		response.Fail(c, err)
@@ -76,6 +160,24 @@ type StatusInput struct {
 }
 
 // SetStatus 启停任务。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary SetStatus
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/jobs/{id}/status [put]
+// KE:SWAGGER-END
 func (h *Handler) SetStatus(c *gin.Context) {
 	var in StatusInput
 	if !httpx.BindJSON(c, &in) {
@@ -90,6 +192,24 @@ func (h *Handler) SetStatus(c *gin.Context) {
 }
 
 // Run 立即执行。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Run
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/jobs/{id}/run [post]
+// KE:SWAGGER-END
 func (h *Handler) Run(c *gin.Context) {
 	entry, err := h.svc.RunNow(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -101,6 +221,22 @@ func (h *Handler) Run(c *gin.Context) {
 }
 
 // Logs 执行日志。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Logs
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/jobs/logs [get]
+// KE:SWAGGER-END
 func (h *Handler) Logs(c *gin.Context) {
 	p := query.Parse(c)
 	list, total, err := h.svc.Logs(c.Request.Context(), c.Query("jobId"), p)

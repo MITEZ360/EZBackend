@@ -30,12 +30,14 @@
 | 资源占用 | 单二进制、纯 Go SQLite 驱动（零 CGO）、静态资源内嵌 | 空闲进程约 **26MB** 内存、**18** 个 goroutine |
 | 请求速度 | 权限点/字典/参数短时缓存、批量填充避免 N+1、预编译语句 | 列表接口约 **0.45ms**（SQLite，单核） |
 | 日志记录全 | Zap JSON 结构化日志 + 访问日志 + 慢请求 + 操作审计 + 登录日志 | 可落到 ELK/Loki，按 traceId 串联 |
-| 业务覆盖 | 15 个业务模块、141 条 REST 接口、19 个管理页面、5 个内置任务执行器 | 覆盖中小企业通用后台需求 |
+| 业务覆盖 | 16 个业务模块、158 条 REST 接口、26 个页面、6 个内置任务执行器 | 覆盖中小企业通用后台需求 |
+| 上线保障 | 版本化迁移与回滚、定时备份与校验恢复、Swagger 自动接口文档 | 发布流程可控，不靠手写脚本 |
 | 部署弹性 | `mono` / `gateway` / `service` 三种形态同一份代码 | 从 1 台机器平滑演进到微服务 |
 
 **所有能力都基于成熟组件**：HTTP 用 Gin、ORM 用 GORM、配置用 Viper、日志用 Zap + lumberjack、
 缓存用 go-redis、任务用 robfig/cron、JWT 用 golang-jwt、校验用 validator、Excel 用 excelize、
-熔断用 sony/gobreaker、指标用 Prometheus client。框架只做**装配与约定**，不重复造轮子。
+熔断用 sony/gobreaker、指标用 Prometheus client、**迁移用 goose、OAuth2 用 golang.org/x/oauth2、
+接口文档用 swaggo/swag**。框架只做**装配与约定**，不重复造轮子。
 
 ---
 
@@ -57,6 +59,24 @@ go run ./cmd/keel -config configs/config.yaml
 ./bin/keel -mode mono       # 单体（默认）：一个进程装下全部
 ./bin/keel -mode gateway    # 网关：只转发，不连数据库
 ./bin/keel -mode service    # 领域服务：按 modules 裁剪接口
+```
+
+运维与扩展能力开箱可用：
+
+```bash
+# 版本化迁移（默认启动自动执行；生产可设为 migration.mode: off 后由流水线执行）
+./bin/keel -config configs/config.yaml migrate status
+./bin/keel -config configs/config.yaml migrate up
+./bin/keel -config configs/config.yaml migrate down      # 回滚一个版本
+
+# 备份与恢复（另有定时任务 db.backup 与「运维中心 → 备份与迁移」页面）
+./bin/keel -config configs/config.yaml backup
+./bin/keel -config configs/config.yaml restore <备份文件>   # SQLite 需先停服
+
+# 自动接口文档：dev 环境默认开启，打开 http://localhost:9000/docs/
+make swag-install && make docs                              # 重新生成 OpenAPI 描述
+
+# 配置化第三方登录：复制 configs/config.oauth.example.yaml 中的 oauth 段即可新增渠道
 ```
 
 > 生产环境务必替换 `jwt.secret`（≥32 位）与 `security.internal_token`；
@@ -104,7 +124,7 @@ go run ./cmd/keel -config configs/config.yaml
 │   ├── middleware/          # trace/日志/恢复/CORS/限流/审计/指标/鉴权鉴权点
 │   ├── micro/               # 网关：前缀路由 + 服务发现 + 重试 + 熔断
 │   ├── model/               # GORM 模型（用户/角色/菜单/部门/字典/参数/日志/任务/文件/消息）
-│   ├── modules/             # 15 个业务模块，统一 service.go + handler.go
+│   ├── modules/             # 16 个业务模块，统一 service.go + handler.go
 │   └── platform/            # 基础设施：config logger database cache authn authz crypto idgen httpx
 ├── pkg/                     # 通用库：errs response query utils event client discovery version
 ├── web/                     # 管理控制台：Vue 3 + TS + Element Plus + Vite

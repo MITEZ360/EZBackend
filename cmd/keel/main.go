@@ -22,6 +22,14 @@ func main() {
 		fmt.Printf("%s %s (%s %s)\n", version.Name, version.Version, version.Commit, version.BuildTime)
 		return
 	}
+	// 运维子命令只需加载配置与数据库，不启动 HTTP 服务与定时任务
+	if args := flag.Args(); len(args) > 0 {
+		if _, err := bootstrap.RunCommand(args, *configPath); err != nil {
+			fmt.Fprintf(os.Stderr, "命令执行失败: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	// -mode 通过环境变量注入，供配置装配阶段读取（装配必须先于运行期覆盖）
 	if *mode != "" {
 		switch *mode {

@@ -14,9 +14,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/keel-framework/keel/internal/apidocs"
 	"github.com/keel-framework/keel/internal/micro"
 	"github.com/keel-framework/keel/internal/middleware"
 	"github.com/keel-framework/keel/internal/modules/apikey"
@@ -26,6 +29,7 @@ import (
 	"github.com/keel-framework/keel/internal/modules/dept"
 	"github.com/keel-framework/keel/internal/modules/file"
 	"github.com/keel-framework/keel/internal/modules/job"
+	"github.com/keel-framework/keel/internal/modules/maintenance"
 	"github.com/keel-framework/keel/internal/modules/membership"
 	"github.com/keel-framework/keel/internal/modules/menu"
 	"github.com/keel-framework/keel/internal/modules/message"
@@ -64,25 +68,26 @@ type Deps struct {
 	// Events 进程内事件总线，可为空；用于发布审计等业务事件。
 	Events *event.Bus
 
-	Auth       *auth.Handler
-	User       *user.Handler
-	Role       *role.Handler
-	Menu       *menu.Handler
-	Dept       *dept.Handler
-	Dict       *system.DictHandler
-	Config     *system.ConfigHandler
-	Notice     *system.NoticeHandler
-	Message    *message.Handler
-	Membership *membership.Handler
-	APIKey     *apikey.Handler
-	APIKeySvc  *apikey.Service
-	News       *news.Handler
-	NewsOpen   *news.OpenHandler
-	Audit      *audit.Handler
-	Job        *job.Handler
-	File       *file.Handler
-	Dashboard  *dashboard.Handler
-	Monitor    *monitor.Handler
+	Auth        *auth.Handler
+	User        *user.Handler
+	Role        *role.Handler
+	Menu        *menu.Handler
+	Dept        *dept.Handler
+	Dict        *system.DictHandler
+	Config      *system.ConfigHandler
+	Notice      *system.NoticeHandler
+	Message     *message.Handler
+	Membership  *membership.Handler
+	APIKey      *apikey.Handler
+	APIKeySvc   *apikey.Service
+	News        *news.Handler
+	NewsOpen    *news.OpenHandler
+	Audit       *audit.Handler
+	Job         *job.Handler
+	File        *file.Handler
+	Dashboard   *dashboard.Handler
+	Monitor     *monitor.Handler
+	Maintenance *maintenance.Handler
 }
 
 // New 创建 HTTP 引擎。
@@ -132,6 +137,11 @@ func New(d Deps) *gin.Engine {
 
 	// ---- 静态资源与单页应用 ----
 	mountSPA(e)
+
+	// ---- 自动接口文档（开发环境默认开启，生产默认关闭）----
+	if d.Cfg.Docs.UseDocs(d.Cfg.IsProd()) {
+		mountDocs(e, d.Cfg.Docs)
+	}
 
 	// ---- 网关形态：只做转发 ----
 	if d.Gateway != nil {
@@ -210,6 +220,9 @@ func New(d Deps) *gin.Engine {
 	if d.on("monitor") {
 		d.monitorRoutes(authed)
 	}
+	if d.on("maintenance") && d.Maintenance != nil {
+		d.maintenanceRoutes(authed)
+	}
 
 	// ---- 开放接口：面向程序调用方，用 API 密钥认证，不经过用户会话 ----
 	if d.APIKeySvc != nil {
@@ -245,6 +258,11 @@ func (d Deps) publicRoutes(v1 *gin.RouterGroup) {
 	v1.GET("/public/configs", d.Config.Public)
 	v1.GET("/public/dicts/:code", d.Dict.Data)
 	v1.GET("/public/notices", d.Notice.Latest)
+
+	// 配置化第三方登录：渠道列表、发起授权与回调均无需登录
+	v1.GET("/oauth/providers", d.Auth.OAuthProviders)
+	v1.GET("/oauth/authorize/:name", d.Auth.OAuthAuthorize)
+	v1.GET("/oauth/callback/:name", d.Auth.OAuthCallback)
 }
 
 // healthRoutes 注册存活与就绪探针。
@@ -324,6 +342,27 @@ func (s sessionValidator) ValidateSession(ctx context.Context, sid, uid string) 
 		return true, nil
 	}
 	return s.h.ValidateSession(ctx, sid, uid)
+}
+
+// mountDocs 挂载 Swagger UI 与生成的 OpenAPI 描述。
+// 描述来自 swag 生成的 apidocs 包，随二进制嵌入，不依赖外部文件。
+func mountDocs(e *gin.Engine, cfg config.Docs) {
+	base := cfg.EffectivePath()
+	docJSON := base + "/doc.json"
+	ui := ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL(docJSON))
+	// 只注册一条通配路由：同一层既有静态段又有 *any 会触发 Gin 路由冲突，
+	// 因此 doc.json 在 handler 内分流，而不是单独注册静态路径。
+	e.GET(base+"/*any", func(c *gin.Context) {
+		switch c.Param("any") {
+		case "/doc.json":
+			c.Header("Content-Type", "application/json; charset=utf-8")
+			c.String(http.StatusOK, apidocs.SwaggerInfo.ReadDoc())
+		case "", "/":
+			c.Redirect(http.StatusFound, base+"/index.html")
+		default:
+			ui(c)
+		}
+	})
 }
 
 // mountSPA 托管 Vite 产物：带 hash 的静态资源长缓存，其余交给单页应用兜底。

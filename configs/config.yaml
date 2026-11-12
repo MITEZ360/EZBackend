@@ -154,3 +154,65 @@ news:
   # 资讯保留天数。超过该窗口的条目由 news.cleanup 任务物理删除，
   # 查询侧也会强制加上时间窗，即使清理延迟也不会读到过期数据。
   retention_days: 7
+
+# ---------------------------------------------------------------- 数据库结构变更
+migration:
+  # versioned（默认）：按版本号执行迁移，支持回滚与数据回填，版本表 keel_schema_migrations
+  # auto：沿用 GORM AutoMigrate（只增不减，适合本地快速迭代）
+  # off：启动时不动表结构，由 CI / DBA 执行 `keel migrate up`
+  mode: versioned
+  table_name: keel_schema_migrations
+
+# ---------------------------------------------------------------- 数据库备份与恢复
+backup:
+  enabled: true          # 定时任务 db.backup 是否真正执行备份
+  dir: data/backups      # 备份产物目录
+  retain: 7              # 保留最近 N 份，超出自动清理
+  compress: true         # gzip 压缩
+  # 在线恢复默认关闭：恢复会覆盖当前数据，MySQL/PostgreSQL 需显式开启；
+  # SQLite 必须停机后用 `keel restore <文件>` 替换数据文件。
+  allow_restore: false
+  mysql_dump: mysqldump
+  mysql_restore: mysql
+  pg_dump: pg_dump
+  pg_restore: psql
+
+# ---------------------------------------------------------------- 第三方登录（配置化）
+oauth:
+  # enabled=true 且至少有一个完整 provider 时，登录页才会出现第三方登录按钮
+  enabled: false
+  # 部署在网关 / 域名后面时必填，如 https://console.example.com；留空按请求 Host 推断
+  callback_base: ""
+  frontend_path: /oauth/callback
+  state_ttl: 10m
+  providers: []
+  # 新增渠道只需在下面加一段，代码无需改动。凭据建议用环境变量注入，避免落盘：
+  #   KEEL_OAUTH_GITHUB_CLIENT_ID / KEEL_OAUTH_GITHUB_CLIENT_SECRET
+  # providers:
+  #   - name: github
+  #     label: GitHub 登录
+  #     icon: ""                # 可选，按钮图标 URL
+  #     enabled: true
+  #     client_id: ""
+  #     client_secret: ""
+  #     auth_url: https://github.com/login/oauth/authorize
+  #     token_url: https://github.com/login/oauth/access_token
+  #     user_info_url: https://api.github.com/user
+  #     email_url: https://api.github.com/user/emails
+  #     scopes: [read:user, user:email]
+  #     field_map:             # 用户信息字段 -> 系统字段，支持点路径与逗号分隔的候选
+  #       id: id
+  #       username: login
+  #       nickname: name
+  #       avatar: avatar_url
+  #     link_existing: true    # 允许按已验证邮箱关联已有本地账号
+  #     match_by: email        # email / username
+  #     auto_register: false   # 匹配不到时自动注册（随机密码 + default_roles）
+  #     default_roles: []      # 自动注册时分配的角色编码
+  #     auth_style: auto       # auto / in_header / in_params
+
+# ---------------------------------------------------------------- 自动接口文档
+docs:
+  # 不配置时：dev 自动开启、prod 自动关闭；显式 true/false 可覆盖
+  # enabled: true
+  path: /docs             # Swagger UI 与 swagger.json 的挂载前缀

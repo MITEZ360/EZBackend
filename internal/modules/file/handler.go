@@ -21,6 +21,23 @@ type Handler struct{ svc *Service }
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Upload 上传文件。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Upload
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/files [post]
+// KE:SWAGGER-END
 func (h *Handler) Upload(c *gin.Context) {
 	fh, err := c.FormFile("file")
 	if err != nil {
@@ -37,6 +54,22 @@ func (h *Handler) Upload(c *gin.Context) {
 }
 
 // List 文件列表。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary List
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/files [get]
+// KE:SWAGGER-END
 func (h *Handler) List(c *gin.Context) {
 	p := query.Parse(c)
 	list, total, err := h.svc.List(c.Request.Context(), p)
@@ -48,6 +81,23 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 // Delete 删除文件。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Delete
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/files/{id} [delete]
+// KE:SWAGGER-END
 func (h *Handler) Delete(c *gin.Context) {
 	if err := h.svc.Delete(c.Request.Context(), c.Param("id")); err != nil {
 		response.Fail(c, err)
@@ -58,6 +108,23 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 // Download 下载文件。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Download
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Param id path string true "id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/files/{id}/download [get]
+// KE:SWAGGER-END
 func (h *Handler) Download(c *gin.Context) {
 	fh, f, err := h.svc.Open(c.Request.Context(), c.Param("id"))
 	if err != nil {

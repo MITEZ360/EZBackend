@@ -35,12 +35,15 @@ type Service struct {
 	log     *zap.Logger
 	authz   *authz.Loader
 	menuSvc *menu.Service
+	oauth   *oauthFlow
 }
 
 // NewService 创建认证服务。
 func NewService(db *gorm.DB, c cache.Cache, jwtMgr *authn.Manager, captcha *authn.Captcha,
 	cfg *config.Config, log *zap.Logger, al *authz.Loader, ms *menu.Service) *Service {
-	return &Service{db: db, cache: c, jwt: jwtMgr, captcha: captcha, cfg: cfg, log: log, authz: al, menuSvc: ms}
+	s := &Service{db: db, cache: c, jwt: jwtMgr, captcha: captcha, cfg: cfg, log: log, authz: al, menuSvc: ms}
+	s.oauth = newOAuthFlow(s)
+	return s
 }
 
 // ClientMeta 客户端环境信息。
