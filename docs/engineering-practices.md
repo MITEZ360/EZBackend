@@ -123,6 +123,10 @@
 - **落地目标**：定义 `Module` 契约（`Name()`、`DependsOn()`、`Setup(ctx, *Deps)`、`Teardown()`）；`router.Deps` 逐步改为按注册表装配；配置 `modules.enabled` 白名单；启动日志结构化输出 `[kernel] 已挂载模块: ...`，自检不通过则 fail-fast；补启动测试「只挂载 auth + system 时 `/healthz` 返回 200」。
 - **涉及文件**：`internal/bootstrap/app.go`、`internal/router/router.go`、`internal/platform/config/config.go`、`docs/microservices.md`。
 - **风险提示**：这是本清单里唯一的大范围结构性改动，必须在 P0 全部完成后进行，并保证现有 158 条路由零回归。
+- **落地结论（已完成）**：采用声明式契约（`Module.Name/DependsOn/AlwaysOn`）+ 注册表 + `modules.enabled`；
+  服务/处理器仍由 `app.go` 统一构造，路由按注册表结果挂载，因此风险受控。
+  全量模式实测 159 条路由（原 158 + P0 的 prune-plan 1 条）零回归；基础模块常驻、
+  依赖自动补齐、未知模块 fail-fast 均有单测与集成测试覆盖。
 
 ### P1-3　测试分层与启动自检
 
@@ -198,7 +202,7 @@
 | P0-2 | 恢复演练 dry-run + 恢复后自检 | P0 | ✅ 已实现 | `restore --dry-run` / `?dry_run=true`，恢复后逐表比对 + 文件资产还原计数 |
 | P0-3 | GFS 备份保留策略 | P0 | ✅ 已实现 | `retain_hourly/daily/weekly/monthly` 分档按槽位挑选，`backup-prune --dry-run`，最新必留 |
 | P1-1 | 架构约束自动化 | P1 | ✅ 已实现 | `make check-arch` 三条规则，已纳入 `make verify`；违规可定位到文件:行号 |
-| P1-2 | 模块可拔插契约与启动自检 | P1 | ☐ 未实现 | 结构性改动，最后做 |
+| P1-2 | 模块可拔插契约与启动自检 | P1 | ✅ 已实现 | `Module` 契约 + 注册表 + `modules.enabled` 白名单，依赖自动补齐、未知模块 fail-fast；全量 159 路由零回归 |
 | P1-3 | 测试分层与启动自检 | P1 | ✅ 已实现 | `test-unit`/`test-integration`/`verify`/`verify-full` 四档；`bootstrap.New` 关键依赖 fail-fast + 自检报告 |
 | P1-4 | 跨方言契约验证 | P1 | ✅ 已实现 | `test/dialect_test.go` 同套断言跑 MySQL/PG，`make test-dialect` 起停容器；已在真实 MySQL 8.0 + PG 16 实测通过 |
 | P2-1 | 决策日志与踩坑录 | P2 | ☐ 未实现 | 建议与首次落地同步建立 |

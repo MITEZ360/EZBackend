@@ -97,6 +97,16 @@ func New(cfgPath string) (*App, error) {
 		return newGateway(cfg, lg)
 	}
 
+	// 模块注册表：解析启停白名单、补齐依赖、未知模块 fail-fast。
+	registry, err := resolveModules(cfg)
+	if err != nil {
+		return nil, err
+	}
+	lg.Info("业务模块已解析",
+		zap.String("source", registry.Source),
+		zap.Int("count", len(registry.Ordered)),
+		zap.Strings("modules", registry.Ordered))
+
 	db, err := database.Open(cfg.DB, lg)
 	if err != nil {
 		return nil, err
@@ -239,7 +249,7 @@ func New(cfgPath string) (*App, error) {
 	engine = router.New(router.Deps{
 		Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
 		JWT: jwtMgr, Authz: authzLoader, AuditSvc: auditSvc,
-		Modules:     moduleSet(cfg.Micro),
+		Modules:     registry.asSet(),
 		Events:      bus,
 		Auth:        auth.NewHandler(authSvc, cfg.Security.CaptchaEnabled, cfg.Server.TrustProxy),
 		User:        user.NewHandler(userSvc),
@@ -431,17 +441,6 @@ func newGateway(cfg *config.Config, lg *zap.Logger) (*App, error) {
 }
 
 // moduleSet 计算 service 模式下启用的模块集合；返回 nil 表示全部启用。
-func moduleSet(m config.Micro) map[string]bool {
-	if !strings.EqualFold(m.Mode, "service") || len(m.Modules) == 0 {
-		return nil
-	}
-	set := make(map[string]bool, len(m.Modules))
-	for _, name := range m.Modules {
-		set[strings.ToLower(strings.TrimSpace(name))] = true
-	}
-	return set
-}
-
 func newServer(cfg *config.Config, engine *gin.Engine) *http.Server {
 	return &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),

@@ -29,12 +29,20 @@ type Config struct {
 	RateLimit RateLimit `mapstructure:"rate_limit"`
 	Metrics   Metrics   `mapstructure:"metrics"`
 	Micro     Micro     `mapstructure:"micro"`
+	Modules   Modules   `mapstructure:"modules"`
 	Runtime   Runtime   `mapstructure:"runtime"`
 	News      News      `mapstructure:"news"`
 	Migration Migration `mapstructure:"migration"`
 	Backup    Backup    `mapstructure:"backup"`
 	OAuth     OAuth     `mapstructure:"oauth"`
 	Docs      Docs      `mapstructure:"docs"`
+}
+
+// Modules 业务模块启停参数。
+// Enabled 为空时全部启用；非空时只启用列出的模块（自动补齐依赖，基础模块常驻）。
+// 与 micro.modules 的区别：后者只在 micro.mode=service 生效，本项在单体模式也能裁剪。
+type Modules struct {
+	Enabled []string `mapstructure:"enabled"`
 }
 
 // News 资讯聚合参数。

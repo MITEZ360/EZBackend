@@ -267,6 +267,29 @@ KEEL_GATEWAY_ROUTES="/api/v1=keel-core,/uploads=keel-file"
 
 ---
 
+## 12.1 modules（业务模块启停，P1-2）
+
+| 键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `modules.enabled` | `[]` | 空表示全部启用；非空时只挂载列出的模块 |
+
+- **依赖自动补齐**：启用某模块时会自动启用它依赖的模块（如 `news` → `apikey`，`user` → `role` → `menu`）。
+- **基础模块常驻**：`auth` / `config` / `dict` / `notice` 因公开路由依赖，始终挂载。
+- **未知模块 fail-fast**：列出不存在的模块名会在装配阶段直接拒绝启动，并打印可用清单。
+- **与 `micro.modules` 的关系**：`micro.modules` 仅在 `micro.mode=service` 生效；`modules.enabled` 在 mono 模式也能裁剪，单调优先生效。
+- **可观测**：启动日志 `业务模块已解析` 打印 `source` / `count` / `modules` 清单；自检报告附在 `app.SelfCheck`。
+
+```yaml
+modules:
+  enabled: [dashboard, user, news]   # 仅挂载这些 + 依赖 + 基础模块
+```
+
+> 这是声明式模块契约的一部分（`Module.Name/DependsOn/AlwaysOn`），服务与处理器仍由
+> `bootstrap/app.go` 统一构造，路由按注册表结果挂载。详见
+> [工程实践借鉴与改进路线](engineering-practices.md) P1-2。
+
+---
+
 ## 13. 配置热更新
 
 `bootstrap` 启动时会调用 `config.Watch()`，监听配置文件变更：

@@ -137,6 +137,13 @@ micro:
   mode: mono               # mono / gateway / service
   modules: []              # service 模式下启用的模块，空表示全部
   timeout: 5s
+
+# ---------------------------------------------------------------- 业务模块启停
+# 不配置（默认）：全部 18 个模块挂载；配置后只挂载列出的模块，自动补齐依赖。
+# 基础模块 auth/config/dict/notice 常驻（公开路由依赖），不可裁剪。
+# 与 micro.modules 区别：micro.modules 仅在 service 模式生效，本项在 mono 也能裁剪。
+# modules:
+#   enabled: [dashboard, user, news]
   retries: 2
   registry:
     type: static
