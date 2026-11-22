@@ -31,6 +31,9 @@ cmd/keel                进程入口：解析参数 → bootstrap.New → Run
 业务模块之间**不互相 import**（唯一例外是 `auth` 复用 `menu` 的导航树、`job` 依赖 `audit` 的清理接口，
 均以接口或服务注入方式解耦）。
 
+> 以上两条约束目前依赖人工 Review。用脚本 + Makefile 自动把关的方案（import 边界、
+> 方言分支白名单、`pkg` 导出签名快照）见 [工程实践借鉴与改进路线](engineering-practices.md) 的 P1-1。
+
 ### 各层职责
 
 | 层 | 职责 | 不该做的事 |
