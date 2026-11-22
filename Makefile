@@ -75,6 +75,10 @@ test-pg: ## 用临时 PostgreSQL 容器跑跨方言契约测试
 test-dialect: ## 用临时 MySQL + PostgreSQL 容器跑跨方言契约测试
 	bash scripts/dialect_test.sh all
 
+.PHONY: test-regression
+test-regression: ## 一键接口回归（临时起服务 + mock OAuth，跑全部脚本后清理）
+	bash test/regression/run_all.sh
+
 .PHONY: check-arch
 check-arch: ## 架构约束检查（import 边界 / 方言白名单 / pkg 签名快照）
 	python3 scripts/check_architecture.py

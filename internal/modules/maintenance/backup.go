@@ -45,10 +45,10 @@ type BackupMeta struct {
 	SHA256      string            `json:"sha256"`
 	Tables      []string          `json:"tables,omitempty"`
 	UserCount   int64             `json:"userCount,omitempty"`
-	Files       int               `json:"files,omitempty"`       // 归档内文件资产数量
-	FileBytes   int64             `json:"fileBytes,omitempty"`   // 文件资产总字节
+	Files       int               `json:"files"`                 // 归档内文件资产数量
+	FileBytes   int64             `json:"fileBytes"`             // 文件资产总字节
 	StorageRoot string            `json:"storageRoot,omitempty"` // 备份时的本地存储根目录
-	StorageMode string            `json:"storageMode,omitempty"` // local / s3 / 其它
+	StorageMode string            `json:"storageMode"`           // local / s3 / 其它
 	FileList    []BackupFileEntry `json:"fileList,omitempty"`    // 文件清单（含 SHA-256）
 }
 
@@ -673,7 +673,7 @@ type VerifyResult struct {
 	Integrity   string   `json:"integrity,omitempty"`
 	Tables      []string `json:"tables,omitempty"`
 	UserCount   int64    `json:"userCount,omitempty"`
-	Files       int      `json:"files,omitempty"`
+	Files       int      `json:"files"`
 	FileCheck   string   `json:"fileCheck,omitempty"`
 }
 
