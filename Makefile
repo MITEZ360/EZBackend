@@ -55,6 +55,10 @@ vet: ## 静态检查
 test: ## 运行全部测试
 	go test -count=1 -race ./...
 
+.PHONY: check-arch
+check-arch: ## 架构约束检查（import 边界 / 方言白名单 / pkg 签名快照）
+	python3 scripts/check_architecture.py
+
 .PHONY: cover
 cover: ## 生成覆盖率报告
 	go test -count=1 -coverprofile=coverage.out ./...
@@ -134,6 +138,9 @@ compose-down: ## 停止编排
 .PHONY: compose-logs
 compose-logs: ## 查看编排日志
 	docker compose -f deploy/docker-compose.yml logs -f keel
+
+.PHONY: verify
+verify: vet check-arch test ## 提交前校验：静态检查 + 架构约束 + 全量测试
 
 .PHONY: clean
 clean: ## 清理构建产物

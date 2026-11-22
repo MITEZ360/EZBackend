@@ -194,7 +194,7 @@
 | P0-1 | 备份纳入文件资产 | P0 | ✅ 已实现 | 备份改为 tar 容器，含 `database.db` + `files/` + `manifest.json`；对象存储显式跳过 |
 | P0-2 | 恢复演练 dry-run + 恢复后自检 | P0 | ✅ 已实现 | `restore --dry-run` / `?dry_run=true`，恢复后逐表比对 + 文件资产还原计数 |
 | P0-3 | GFS 备份保留策略 | P0 | ✅ 已实现 | `retain_hourly/daily/weekly/monthly` 分档按槽位挑选，`backup-prune --dry-run`，最新必留 |
-| P1-1 | 架构约束自动化 | P1 | ☐ 未实现 | 依赖铁律目前只靠人工 Review |
+| P1-1 | 架构约束自动化 | P1 | ✅ 已实现 | `make check-arch` 三条规则，已纳入 `make verify`；违规可定位到文件:行号 |
 | P1-2 | 模块可拔插契约与启动自检 | P1 | ☐ 未实现 | 结构性改动，最后做 |
 | P1-3 | 测试分层与启动自检 | P1 | ☐ 未实现 | 当前 `go test ./...` 一把跑 |
 | P1-4 | 跨方言契约验证 | P1 | ☐ 未实现 | 日常测试只跑 SQLite |

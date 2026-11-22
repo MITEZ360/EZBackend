@@ -31,8 +31,11 @@ cmd/keel                进程入口：解析参数 → bootstrap.New → Run
 业务模块之间**不互相 import**（唯一例外是 `auth` 复用 `menu` 的导航树、`job` 依赖 `audit` 的清理接口，
 均以接口或服务注入方式解耦）。
 
-> 以上两条约束目前依赖人工 Review。用脚本 + Makefile 自动把关的方案（import 边界、
-> 方言分支白名单、`pkg` 导出签名快照）见 [工程实践借鉴与改进路线](engineering-practices.md) 的 P1-1。
+> **机器把关**：`make check-arch` 已把上述边界固化为自动检查（P1-1 已落地）：
+> ① `internal/platform/**` 与 `pkg/**` 不得 import `internal/modules/**`；
+> ② 方言/驱动字面量判断只允许出现在白名单文件（驱动选择层与备份模块）；
+> ③ `pkg/**` 公开导出签名变更必须先更新快照 `pkg/.api-snapshot.json`（`python3 scripts/check_architecture.py --update`）。
+> `make verify` 已包含该检查。方案来源见 [工程实践借鉴与改进路线](engineering-practices.md) P1-1。
 
 ### 各层职责
 

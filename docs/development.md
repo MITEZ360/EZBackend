@@ -16,8 +16,9 @@
 | 权限 | 每个写操作都要挂 `middleware.RequirePerm("模块:资源:动作")` |
 | 审计 | 写操作成功后调用 `middleware.AuditInfo(c, "模块名", "动作名")` |
 
-> 分层与依赖方向的自动检查方案（边界扫描、契约快照）见
-> [工程实践借鉴与改进路线](engineering-practices.md) 的 P1-1；新增重要取舍时建议同步补一条决策记录（P2-1）。
+> 提交前跑 `make verify`（= `vet` + `check-arch` + `test`）。`check-arch` 已自动检查依赖边界、
+> 方言分支白名单与 `pkg` 导出签名快照（改公共 API 需 `python3 scripts/check_architecture.py --update`），
+> 方案见 [工程实践借鉴与改进路线](engineering-practices.md) P1-1；新增重要取舍时建议同步补一条决策记录（P2-1）。
 
 ---
 
