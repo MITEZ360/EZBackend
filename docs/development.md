@@ -16,9 +16,11 @@
 | 权限 | 每个写操作都要挂 `middleware.RequirePerm("模块:资源:动作")` |
 | 审计 | 写操作成功后调用 `middleware.AuditInfo(c, "模块名", "动作名")` |
 
-> 提交前跑 `make verify`（= `vet` + `check-arch` + `test`）。`check-arch` 已自动检查依赖边界、
-> 方言分支白名单与 `pkg` 导出签名快照（改公共 API 需 `python3 scripts/check_architecture.py --update`），
-> 方案见 [工程实践借鉴与改进路线](engineering-practices.md) P1-1；新增重要取舍时建议同步补一条决策记录（P2-1）。
+> **提交前校验**：`make verify`（= `vet` + `check-arch` + `test-unit`，快）或
+> `make verify-full`（把 `test-unit` 换成含 race + 集成的全量 `test`）。
+> `check-arch` 自动检查依赖边界、方言分支白名单与 `pkg` 导出签名快照（改公共 API 需
+> `python3 scripts/check_architecture.py --update`）；方案见 [工程实践借鉴与改进路线](engineering-practices.md) P1-1 / P1-3。
+> 新增重要取舍时建议同步补一条决策记录（P2-1）。
 
 ---
 
@@ -536,8 +538,25 @@ func TestCustomerCRUD(t *testing.T) {
 
 ```bash
 go test ./test/ -run TestCustomerCRUD -v
-make test
+make test-unit          # 仅单元测试，日常开发最快
+make test-integration   # 仅 test/ 集成测试
+make test               # 全量（含 -race）
+make verify             # vet + check-arch + 单元测试（提交前）
+make verify-full        # vet + check-arch + 全量测试（发版前）
 ```
+
+**测试分层**（P1-3）：
+
+| 层 | 位置 | 时机 | 命令 |
+| --- | --- | --- | --- |
+| 单元 | `internal/**/*_test.go`、`pkg/**/*_test.go` | 每次改动 | `make test-unit` |
+| 集成 / 启动自检 | `test/*_test.go` | 提交前、发版前 | `make test-integration` |
+| 端到端 / 压测 | `test/e2e_test.go`、`test/bench_test.go` | 里程碑 | `make verify-full` |
+
+**启动自检**：`bootstrap.New` 装配完成后会探测数据库连通性、缓存读写、存储可用性
+（关键项，失败即拒绝启动），并检查迁移版本与种子状态（非关键，只告警）。
+报告挂 `app.SelfCheck`，启动日志打印 `selfcheck=true/false`；`test/selfcheck_test.go`
+断言健康装配全绿、关键依赖不可达时 fail-fast。
 
 ---
 

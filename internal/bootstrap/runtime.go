@@ -38,6 +38,9 @@ func (a *App) logRuntime() {
 	if a.Cfg.MultiInstance() {
 		fields = append(fields, zap.Int("instances", maxInt(a.Cfg.Runtime.Instances, 1)))
 	}
+	if a.SelfCheck != nil {
+		fields = append(fields, zap.Bool("selfcheck", a.SelfCheck.OK), zap.Int("selfcheckItems", len(a.SelfCheck.Items)))
+	}
 	a.Log.Info("依赖组件已装配", fields...)
 }
 

@@ -52,8 +52,16 @@ vet: ## 静态检查
 	go vet ./...
 
 .PHONY: test
-test: ## 运行全部测试
+test: ## 运行全部测试（含 race 检测与集成测试）
 	go test -count=1 -race ./...
+
+.PHONY: test-unit
+test-unit: ## 仅跑单元测试（不含 test/ 集成，毫秒级）
+	go test -count=1 $$(go list ./... | grep -v '/test$$')
+
+.PHONY: test-integration
+test-integration: ## 仅跑 test/ 下的集成测试
+	go test -count=1 ./test/...
 
 .PHONY: check-arch
 check-arch: ## 架构约束检查（import 边界 / 方言白名单 / pkg 签名快照）
@@ -140,7 +148,10 @@ compose-logs: ## 查看编排日志
 	docker compose -f deploy/docker-compose.yml logs -f keel
 
 .PHONY: verify
-verify: vet check-arch test ## 提交前校验：静态检查 + 架构约束 + 全量测试
+verify: vet check-arch test-unit ## 快速校验：静态检查 + 架构约束 + 单元测试
+
+.PHONY: verify-full
+verify-full: vet check-arch test ## 完整校验：静态检查 + 架构约束 + 全量测试（含 race + 集成）
 
 .PHONY: clean
 clean: ## 清理构建产物

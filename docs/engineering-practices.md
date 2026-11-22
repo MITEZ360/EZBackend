@@ -196,7 +196,7 @@
 | P0-3 | GFS 备份保留策略 | P0 | ✅ 已实现 | `retain_hourly/daily/weekly/monthly` 分档按槽位挑选，`backup-prune --dry-run`，最新必留 |
 | P1-1 | 架构约束自动化 | P1 | ✅ 已实现 | `make check-arch` 三条规则，已纳入 `make verify`；违规可定位到文件:行号 |
 | P1-2 | 模块可拔插契约与启动自检 | P1 | ☐ 未实现 | 结构性改动，最后做 |
-| P1-3 | 测试分层与启动自检 | P1 | ☐ 未实现 | 当前 `go test ./...` 一把跑 |
+| P1-3 | 测试分层与启动自检 | P1 | ✅ 已实现 | `test-unit`/`test-integration`/`verify`/`verify-full` 四档；`bootstrap.New` 关键依赖 fail-fast + 自检报告 |
 | P1-4 | 跨方言契约验证 | P1 | ☐ 未实现 | 日常测试只跑 SQLite |
 | P2-1 | 决策日志与踩坑录 | P2 | ☐ 未实现 | 建议与首次落地同步建立 |
 | P2-2 | 内容中台能力参考 | P2 | ☐ 未实现 | 仅当业务需要，不排期 |

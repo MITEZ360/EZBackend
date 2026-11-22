@@ -52,20 +52,21 @@ import (
 
 // App 是应用容器。
 type App struct {
-	Cfg      *config.Config
-	Log      *zap.Logger
-	DB       *gorm.DB
-	Cache    cache.Cache
-	Limiter  cache.Limiter
-	Storage  *storage.Manager
-	Mailer   mailer.Mailer
-	Engine   *gin.Engine
-	Jobs     *job.Service
-	Audit    *audit.Service
-	Events   *event.Bus
-	Gateway  *micro.Gateway
-	Instance string
-	Started  time.Time
+	Cfg       *config.Config
+	Log       *zap.Logger
+	DB        *gorm.DB
+	Cache     cache.Cache
+	Limiter   cache.Limiter
+	Storage   *storage.Manager
+	Mailer    mailer.Mailer
+	Engine    *gin.Engine
+	Jobs      *job.Service
+	Audit     *audit.Service
+	Events    *event.Bus
+	Gateway   *micro.Gateway
+	Instance  string
+	Started   time.Time
+	SelfCheck *SelfCheckReport
 
 	server *http.Server
 }
@@ -265,6 +266,16 @@ func New(cfgPath string) (*App, error) {
 	app := &App{Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
 		Mailer: mail, Engine: engine, Jobs: jobSvc,
 		Audit: auditSvc, Events: bus, Instance: resolveInstanceID(cfg), Started: time.Now()}
+	// 启动自检：关键依赖（数据库/缓存/存储）不可用时直接 fail-fast；
+	// 迁移版本落后、种子为空等只告警不阻断。报告挂在 App 上便于测试断言。
+	report, err := runSelfChecks(context.Background(), selfCheckDeps{
+		DB: db, Cache: ch, Storage: store,
+		MigrationRunner: migrationRunner, MigrationMode: migrationMode, SeedEnabled: cfg.DB.Seed,
+	}, lg)
+	if err != nil {
+		return nil, err
+	}
+	app.SelfCheck = report
 	if err := app.checkStateless(); err != nil {
 		return nil, err
 	}
