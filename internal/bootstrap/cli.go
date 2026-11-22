@@ -54,14 +54,20 @@ func RunCommand(args []string, cfgPath string) (bool, error) {
 		return true, backupCommand(cfgPath)
 	case "restore":
 		if len(args) < 2 {
-			return true, fmt.Errorf("用法: keel restore <备份文件名或路径>")
+			return true, fmt.Errorf("用法: keel restore [--dry-run] <备份文件名或路径>")
 		}
-		return true, restoreCommand(cfgPath, args[1])
+		if len(args) >= 3 && (args[1] == "--dry-run" || args[1] == "-n") {
+			return true, restoreCommand(cfgPath, args[2], true)
+		}
+		return true, restoreCommand(cfgPath, args[1], false)
+	case "backup-prune":
+		dryRun := len(args) >= 2 && (args[1] == "--dry-run" || args[1] == "-n")
+		return true, pruneCommand(cfgPath, dryRun)
 	case "help", "-h", "--help":
 		printCommandUsage()
 		return true, nil
 	default:
-		return false, fmt.Errorf("未知子命令: %s（可用 migrate / backup / restore / help）", args[0])
+		return false, fmt.Errorf("未知子命令: %s（可用 migrate / backup / restore / backup-prune / help）", args[0])
 	}
 }
 
@@ -73,10 +79,13 @@ func printCommandUsage() {
   keel -config configs/config.yaml migrate down            回滚最近一个版本
   keel -config configs/config.yaml migrate up-to 2         升级到指定版本
   keel -config configs/config.yaml migrate down-to 1       回滚到指定版本
-  keel -config configs/config.yaml backup                 立即生成一份备份
-  keel -config configs/config.yaml restore <文件名|路径>   停机恢复 SQLite 数据文件
+  keel -config configs/config.yaml backup                 生成一份备份（数据库 + 本地文件资产）
+  keel -config configs/config.yaml restore <文件名|路径>   停机恢复 SQLite 数据文件与文件资产
+  keel -config configs/config.yaml restore --dry-run <文件> 只输出恢复计划，不改动任何文件
+  keel -config configs/config.yaml backup-prune --dry-run  演练 GFS 保留策略，列出将删除的备份
 
-恢复 SQLite 前必须先停止服务；恢复会自动把当前库另存为 pre-restore-*.db。`)
+恢复 SQLite 前必须先停止服务；恢复会自动把当前库另存为 pre-restore-*.db，
+文件资产会先改名保留旧目录再原子替换。备份产物为 tar 容器，含 database.db 与 files/。`)
 }
 
 func migrateCommand(args []string, cfgPath string) error {
@@ -144,7 +153,7 @@ func backupCommand(cfgPath string) error {
 		return err
 	}
 	defer cleanup()
-	svc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, zap.NewNop())
+	svc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, cfg.Storage, zap.NewNop())
 	meta, err := svc.Backup(context.Background())
 	if err != nil {
 		return err
@@ -152,16 +161,47 @@ func backupCommand(cfgPath string) error {
 	return printJSON(meta)
 }
 
-func restoreCommand(cfgPath, name string) error {
+func restoreCommand(cfgPath, name string, dryRun bool) error {
 	cfg, db, cleanup, err := openDB(cfgPath)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-	svc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, zap.NewNop())
+	svc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, cfg.Storage, zap.NewNop())
+	if dryRun {
+		res, err := svc.RestorePlan(name)
+		if err != nil {
+			return err
+		}
+		return printJSON(res)
+	}
 	res, err := svc.RestoreOffline(name)
 	if err != nil {
 		return err
 	}
 	return printJSON(res)
+}
+
+func pruneCommand(cfgPath string, dryRun bool) error {
+	cfg, db, cleanup, err := openDB(cfgPath)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	svc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, cfg.Storage, zap.NewNop())
+	plan, err := svc.PruneDryRun()
+	if err != nil {
+		return err
+	}
+	if dryRun {
+		return printJSON(plan)
+	}
+	// 非演练：真正执行删除，再返回执行后的保留/删除清单
+	for _, name := range plan.Remove {
+		if err := svc.Delete(name); err != nil {
+			return err
+		}
+	}
+	plan.DryRun = false
+	return printJSON(plan)
 }

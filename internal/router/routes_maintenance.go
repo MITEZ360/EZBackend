@@ -15,6 +15,7 @@ func (d Deps) maintenanceRoutes(g *gin.RouterGroup) {
 	g.POST("/maintenance/backups/:name/verify", middleware.RequirePerm("ops:backup:list"), d.Maintenance.VerifyBackup)
 	g.POST("/maintenance/backups/:name/restore", middleware.RequirePerm("ops:backup:restore"), d.Maintenance.RestoreBackup)
 	g.DELETE("/maintenance/backups/:name", middleware.RequirePerm("ops:backup:delete"), d.Maintenance.DeleteBackup)
+	g.GET("/maintenance/prune-plan", middleware.RequirePerm("ops:backup:list"), d.Maintenance.PrunePlan)
 
 	g.GET("/maintenance/migrations", middleware.RequirePerm("ops:backup:list"), d.Maintenance.MigrationStatus)
 	g.POST("/maintenance/migrations/up", middleware.RequirePerm("ops:backup:restore"), d.Maintenance.MigrateUp)

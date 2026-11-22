@@ -70,8 +70,10 @@ go run ./cmd/keel -config configs/config.yaml
 ./bin/keel -config configs/config.yaml migrate down      # 回滚一个版本
 
 # 备份与恢复（另有定时任务 db.backup 与「运维中心 → 备份与迁移」页面）
-./bin/keel -config configs/config.yaml backup
-./bin/keel -config configs/config.yaml restore <备份文件>   # SQLite 需先停服
+./bin/keel -config configs/config.yaml backup                        # tar 容器：数据库 + files/ 文件资产
+./bin/keel -config configs/config.yaml restore --dry-run <备份文件>  # 只看计划，不改文件
+./bin/keel -config configs/config.yaml restore <备份文件>            # SQLite 需先停服
+./bin/keel -config configs/config.yaml backup-prune --dry-run        # GFS 保留策略演练
 
 # 自动接口文档：dev 环境默认开启，打开 http://localhost:9000/docs/
 make swag-install && make docs                              # 重新生成 OpenAPI 描述

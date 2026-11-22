@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"context"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -180,6 +181,16 @@ func (h *Handler) VerifyBackup(c *gin.Context) {
 // @Router /api/v1/maintenance/backups/{name}/restore [post]
 // KE:SWAGGER-END
 func (h *Handler) RestoreBackup(c *gin.Context) {
+	// dry_run=true 只返回恢复计划，不改动任何文件（SQLite 停机恢复也可安全演练）
+	if strings.EqualFold(c.Query("dry_run"), "true") || c.Query("dry_run") == "1" {
+		res, err := h.backup.RestorePlan(c.Param("name"))
+		if err != nil {
+			response.Fail(c, errs.BadRequest(err.Error()))
+			return
+		}
+		response.OK(c, res)
+		return
+	}
 	res, err := h.backup.RestoreOnline(c.Request.Context(), c.Param("name"))
 	if err != nil {
 		response.Fail(c, errs.BadRequest(err.Error()))
@@ -187,6 +198,32 @@ func (h *Handler) RestoreBackup(c *gin.Context) {
 	}
 	middleware.AuditInfo(c, "运维", "在线恢复数据库")
 	response.OK(c, res)
+}
+
+// PrunePlan 备份保留策略演练：返回将保留/删除的集合，不改动文件。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary PrunePlan
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/maintenance/prune-plan [get]
+// KE:SWAGGER-END
+func (h *Handler) PrunePlan(c *gin.Context) {
+	plan, err := h.backup.PruneDryRun()
+	if err != nil {
+		response.Fail(c, errs.Internal(err.Error()))
+		return
+	}
+	response.OK(c, plan)
 }
 
 // DeleteBackup 删除备份。

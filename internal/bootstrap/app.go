@@ -206,7 +206,7 @@ func New(cfgPath string) (*App, error) {
 		return fmt.Sprintf("已清理 %d 条过期资讯", n), nil
 	})
 	// 备份与版本迁移：同一份服务供 HTTP 管理接口、定时任务与 CLI 复用
-	backupSvc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, lg)
+	backupSvc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, cfg.Storage, lg)
 	maintenanceHandler := maintenance.NewHandler(backupSvc, migrationRunner, migrationMode)
 	jobSvc.Register("db.backup", func(ctx context.Context, _ map[string]any) (string, error) {
 		if !cfg.Backup.Enabled {

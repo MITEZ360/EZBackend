@@ -167,8 +167,14 @@ migration:
 backup:
   enabled: true          # 定时任务 db.backup 是否真正执行备份
   dir: data/backups      # 备份产物目录
-  retain: 7              # 保留最近 N 份，超出自动清理
-  compress: true         # gzip 压缩
+  retain: 7              # 兜底：保留最近 N 份（GFS 四档全为 0 时生效）
+  # GFS 分档保留（推荐）：按小时/天/周/月的槽位各留 N 份，断档时不会误删唯一备份。
+  # 任一项 >0 即启用分档；无论哪档都永不删除最新一份。
+  retain_hourly: 24
+  retain_daily: 14
+  retain_weekly: 8
+  retain_monthly: 12
+  compress: true         # gzip 压缩（备份为 tar 容器，含数据库快照与 files/ 文件资产）
   # 在线恢复默认关闭：恢复会覆盖当前数据，MySQL/PostgreSQL 需显式开启；
   # SQLite 必须停机后用 `keel restore <文件>` 替换数据文件。
   allow_restore: false

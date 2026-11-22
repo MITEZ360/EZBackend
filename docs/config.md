@@ -354,9 +354,17 @@ KEEL_OAUTH_ENABLED=true
 | --- | --- | --- |
 | `backup.enabled` | `true` | `db.backup` 定时任务是否真正执行 |
 | `backup.dir` | `data/backups` | 产物目录 |
-| `backup.retain` | `7` | 保留最近 N 份 |
-| `backup.compress` | `true` | gzip 压缩 |
+| `backup.retain` | `7` | 兜底：保留最近 N 份（GFS 四档全为 0 时生效） |
+| `backup.retain_hourly` | `24` | GFS：保留最近 N 个小时槽位（同槽位只留最新一份） |
+| `backup.retain_daily` | `14` | GFS：保留最近 N 个天槽位 |
+| `backup.retain_weekly` | `8` | GFS：保留最近 N 个周槽位（ISO 周） |
+| `backup.retain_monthly` | `12` | GFS：保留最近 N 个月槽位 |
+| `backup.compress` | `true` | gzip 压缩（备份为 tar 容器，含数据库 + `files/` 文件资产） |
 | `backup.allow_restore` | `false` | 是否允许在线恢复（高危） |
+
+> **GFS 保留**：任一分档 >0 即启用；按槽位挑选而非时间窗，避免断档时误删窗口内唯一备份，
+> **最新一份永不删除**。演练命令 `keel -config ... backup-prune --dry-run`。
+> 备份会一并纳入本地存储目录（`storage.local_dir`）的文件资产；对象存储模式跳过并在元信息标注。
 | `backup.mysql_dump` / `mysql_restore` | `mysqldump` / `mysql` | 外部工具路径 |
 | `backup.pg_dump` / `pg_restore` | `pg_dump` / `psql` | 外部工具路径 |
 

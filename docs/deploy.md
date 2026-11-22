@@ -289,32 +289,46 @@ keel -config configs/config.yaml migrate down-to 1  # 回滚到指定版本
 
 内置 `db.backup` 定时任务（默认每天 02:00）与「运维中心 → 备份与迁移」页面，无需手写脚本：
 
-- 产物：`data/backups/keel-<driver>-<时间戳>.db.gz`（SQLite）或 `.sql.gz`（MySQL / PostgreSQL）
-- 每份附带 `.meta.json`：时间、大小、SHA-256、表清单、用户数；按 `backup.retain` 保留最近 N 份
+- 产物：`data/backups/keel-<driver>-<时间戳>.tar.gz`（SQLite）或 `.sql.tar.gz`，是 **tar 容器**，内含：
+  - `database.db`（或 `database.sql`）：数据库快照
+  - `manifest.json`：归档内清单（数据库名 + 文件资产路径/大小/SHA-256）
+  - `files/`：`storage.local_dir` 下的全部文件资产（资讯图标、上传附件等）
+- 每份附带 `.meta.json`：时间、大小、SHA-256、表清单、用户数、文件数与文件清单
 - SQLite 用 `VACUUM INTO` 生成在线一致性快照（含 WAL 已提交数据），**不需要停服**
-- 页面支持立即备份、校验（gzip + SHA-256 + `PRAGMA integrity_check`）、下载、删除
+- 旧格式 `*.db[.gz]` / `*.sql[.gz]` 仍可正常校验与恢复（读取时自动识别）
+- 对象存储模式（`storage.type: s3`）跳过文件资产，元信息标注 `storageMode: s3`，由对象存储自身保障
+
+**保留策略（GFS）**：默认按小时/天/周/月分档保留 24/14/8/12 份，逐档按**槽位**挑选
+（同槽位只留最新），避免断档时误删窗口内唯一备份；**最新一份永不删除**。四档全设 0 时退回
+`backup.retain` 的「最近 N 份」。可用演练命令先看保留/删除集合：
 
 ```bash
 # 手动备份（与页面等价）
 keel -config configs/config.yaml backup
+# 保留策略演练（不删任何文件）
+keel -config configs/config.yaml backup-prune --dry-run
+# 实际执行清理
+keel -config configs/config.yaml backup-prune
 ```
 
-SQLite 恢复必须停机后替换数据文件；恢复前会自动把当前库另存为 `pre-restore-*.db`：
+SQLite 恢复必须停机后替换数据文件；恢复前会自动把当前库另存为 `pre-restore-*.db`、
+把旧文件资产目录改名保留，并用 `.meta.json` 做恢复后逐表行数比对：
 
 ```bash
+# 先演练：只输出计划，不改动任何文件
+keel -config configs/config.yaml restore --dry-run keel-sqlite-20261122-020000.tar.gz
 systemctl stop keel
-keel -config configs/config.yaml restore keel-sqlite-20261112-020000.db.gz
+keel -config configs/config.yaml restore keel-sqlite-20261122-020000.tar.gz
 systemctl start keel
 ```
 
-MySQL / PostgreSQL 在设置 `backup.allow_restore: true` 后可通过页面「恢复」在线导入
-（会覆盖当前数据，建议低峰期执行并另留一份备份）。外部工具路径由
-`backup.mysql_dump` / `backup.pg_dump` 等配置指定。
+页面上的「演练」「恢复」按钮对 MySQL / PostgreSQL 同样有效（需 `backup.allow_restore: true`），
+恢复后会展示逐表比对结果与文件资产还原数量。外部工具路径由 `backup.mysql_dump` / `backup.pg_dump`
+等配置指定。
 
-> **已知局限与改进路线**：当前备份只包含数据库，`/uploads` 下的文件资产（资讯来源/分类图标等）
-> 不在备份范围内，恢复后需重新上传；尚无恢复演练（dry-run）与恢复后逐表比对；保留策略为简单的
-> 「最近 N 份」。这三项的落地方案与验收标准见
-> [工程实践借鉴与改进路线](engineering-practices.md) 的 P0-1 ~ P0-3。
+> **演练与自检**：dry-run 前后数据库与备份目录的 SHA-256 不变、不产生 `pre-restore-*` 安全副本；
+> 真实恢复后逐表比对行数，发现不一致时提示核查安全副本。方案与验收标准见
+> [工程实践借鉴与改进路线](engineering-practices.md) P0-1 ~ P0-3（已落地）。
 
 ### 7.3 容量参考
 

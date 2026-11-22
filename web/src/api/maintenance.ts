@@ -8,6 +8,8 @@ export interface BackupFile {
   compressed: boolean
   sha256: string
   verified: boolean
+  files?: number
+  fileBytes?: number
 }
 
 export interface BackupMeta {
@@ -19,6 +21,9 @@ export interface BackupMeta {
   sha256: string
   tables?: string[]
   userCount?: number
+  files?: number
+  fileBytes?: number
+  storageMode?: string
 }
 
 export interface VerifyResult {
@@ -32,6 +37,8 @@ export interface VerifyResult {
   integrity?: string
   tables?: string[]
   userCount?: number
+  files?: number
+  fileCheck?: string
 }
 
 export interface RestoreResult {
@@ -39,7 +46,20 @@ export interface RestoreResult {
   mode: string
   restartRequired: boolean
   safetyCopy?: string
+  dryRun?: boolean
+  plan?: string[]
+  postCheck?: string[]
+  filesRestored?: number
+  filesSkipped?: number
   message: string
+}
+
+export interface PrunePlan {
+  dryRun?: boolean
+  keep: string[]
+  remove: string[]
+  removeBytes: number
+  slots?: Record<string, number>
 }
 
 export interface MigrationVersion {
@@ -72,6 +92,9 @@ export const maintenanceApi = {
     api.post<VerifyResult>(`/maintenance/backups/${encodeURIComponent(name)}/verify`, {}),
   restore: (name: string) =>
     api.post<RestoreResult>(`/maintenance/backups/${encodeURIComponent(name)}/restore`, {}),
+  restorePlan: (name: string) =>
+    api.post<RestoreResult>(`/maintenance/backups/${encodeURIComponent(name)}/restore?dry_run=true`, {}),
+  prunePlan: () => api.get<PrunePlan>('/maintenance/prune-plan'),
   remove: (name: string) =>
     api.del<void>(`/maintenance/backups/${encodeURIComponent(name)}`),
   migrations: () => api.get<MigrationResult>('/maintenance/migrations'),

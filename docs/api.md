@@ -635,16 +635,26 @@ X-API-Key: ak_c_...
 | POST | `/maintenance/backups` | `ops:backup:create` | 立即备份，返回元信息 |
 | GET | `/maintenance/backups/:name/meta` | `ops:backup:list` | 备份元信息 |
 | GET | `/maintenance/backups/:name/download` | `ops:backup:list` | 下载备份文件 |
-| POST | `/maintenance/backups/:name/verify` | `ops:backup:list` | 校验和 + 完整性 + 表清单 |
-| POST | `/maintenance/backups/:name/restore` | `ops:backup:restore` | 在线恢复（需 `backup.allow_restore`） |
+| POST | `/maintenance/backups/:name/verify` | `ops:backup:list` | 校验和 + 完整性 + 表清单 + 文件资产哈希 |
+| POST | `/maintenance/backups/:name/restore` | `ops:backup:restore` | 恢复；带 `?dry_run=true` 时只返回计划不改文件 |
+| GET | `/maintenance/prune-plan` | `ops:backup:list` | GFS 保留策略演练（保留/删除集合、各档槽位数） |
 | DELETE | `/maintenance/backups/:name` | `ops:backup:delete` | 删除备份及元信息 |
 | GET | `/maintenance/migrations` | `ops:backup:list` | 版本状态（驱动、当前/最新版本、清单） |
 | POST | `/maintenance/migrations/up` | `ops:backup:restore` | 升级到最新 |
 | POST | `/maintenance/migrations/down` | `ops:backup:restore` | 回滚最近一个版本 |
 
-备份定时执行器 `db.backup` 默认每天 02:00 运行，按 `backup.retain` 保留最近 N 份。
-SQLite 恢复需停机执行 `keel -config ... restore <文件>`；MySQL / PostgreSQL 可在开启
-`backup.allow_restore` 后在线导入。等价的 CLI 子命令见 `docs/deploy.md` 7.1 / 7.2。
+备份产物是 **tar 容器**（`keel-<驱动>-<时间>.tar[.gz]`），内含 `database.db`（或 `database.sql`）、
+`manifest.json` 与 `files/` 本地文件资产目录；下载一份即拿到数据库 + 图标/附件。旧格式
+`*.db[.gz]` / `*.sql[.gz]` 仍可正常校验与恢复。对象存储模式下跳过文件资产并在元信息标注 `storageMode: s3`。
+
+`VerifyResult.fileCheck` 报告文件资产哈希比对结论；`RestoreResult` 在演练时返回 `plan`，
+真实恢复后返回 `postCheck`（逐表行数比对）与 `filesRestored`。
+
+备份定时执行器 `db.backup` 默认每天 02:00 运行，保留策略默认 GFS 分档
+（`retain_hourly=24` / `retain_daily=14` / `retain_weekly=8` / `retain_monthly=12`），
+四档全为 0 时退回 `retain` 保留最近 N 份，**最新一份永不删除**。
+SQLite 恢复需停机执行 `keel -config ... restore [--dry-run] <文件>`；MySQL / PostgreSQL
+可在开启 `backup.allow_restore` 后在线导入。CLI 子命令见 `docs/deploy.md` 7.1 / 7.2。
 
 ### 4.23 自动接口文档
 

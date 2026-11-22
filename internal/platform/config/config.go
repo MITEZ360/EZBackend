@@ -90,6 +90,18 @@ type Backup struct {
 	// AllowRestore 打开后才允许通过管理接口触发恢复；恢复会替换当前库，
 	// 需要重启进程，默认关闭以免误操作。
 	AllowRestore bool `mapstructure:"allow_restore"`
+
+	// GFS 分档保留：按小时/天/周/月的「槽位」各留 N 份，避免断档时把窗口内唯一备份删掉。
+	// 均为 0 时退回旧行为（仅按 Retain 保留最近 N 份）；无论哪档都永不删除最新一份。
+	RetainHourly  int `mapstructure:"retain_hourly"`
+	RetainDaily   int `mapstructure:"retain_daily"`
+	RetainWeekly  int `mapstructure:"retain_weekly"`
+	RetainMonthly int `mapstructure:"retain_monthly"`
+}
+
+// UseGFS 是否启用了分档保留策略。
+func (b Backup) UseGFS() bool {
+	return b.RetainHourly > 0 || b.RetainDaily > 0 || b.RetainWeekly > 0 || b.RetainMonthly > 0
 }
 
 // EffectiveDir 返回实际备份目录。
@@ -699,6 +711,14 @@ func (c *Config) Validate() error {
 	if c.Backup.Retain <= 0 {
 		// 未配置时补默认值，兼容直接构造 Config 的调用方（如单测）
 		c.Backup.Retain = 7
+	}
+	for label, n := range map[string]int{
+		"retain_hourly": c.Backup.RetainHourly, "retain_daily": c.Backup.RetainDaily,
+		"retain_weekly": c.Backup.RetainWeekly, "retain_monthly": c.Backup.RetainMonthly,
+	} {
+		if n < 0 {
+			return fmt.Errorf("backup.%s 不能为负数", label)
+		}
 	}
 	if seen := map[string]bool{}; len(c.OAuth.Providers) > 0 {
 		for _, p := range c.OAuth.Providers {

@@ -7,6 +7,8 @@ import {
   maintenanceApi,
   type BackupFile,
   type MigrationResult,
+  type PrunePlan,
+  type RestoreResult,
   type VerifyResult,
 } from '@/api/maintenance'
 import { useAuthStore } from '@/stores/auth'
@@ -14,10 +16,13 @@ import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
 const rows = ref<BackupFile[]>([])
 const migration = ref<MigrationResult | null>(null)
+const prune = ref<PrunePlan | null>(null)
 const loading = ref(false)
 const creating = ref(false)
 const activeTab = ref('backups')
 const busy = ref('')
+
+const totalFiles = computed(() => rows.value.reduce((n, r) => n + (r.files ?? 0), 0))
 
 const latest = computed(() => rows.value[0]?.createdAt ?? '')
 const pending = computed(() => migration.value?.status?.pending ?? 0)
@@ -40,12 +45,14 @@ function fmtSize(n: number) {
 async function load() {
   loading.value = true
   try {
-    const [backups, mig] = await Promise.all([
+    const [backups, mig, plan] = await Promise.all([
       maintenanceApi.backups(),
       maintenanceApi.migrations().catch(() => null),
+      maintenanceApi.prunePlan().catch(() => null),
     ])
     rows.value = backups ?? []
     migration.value = mig
+    prune.value = plan
   } finally {
     loading.value = false
   }
@@ -85,6 +92,7 @@ async function doVerify(row: BackupFile) {
       `完整性：${res.integrity || '—'}`,
       `元信息比对：${res.metaMatched ? '一致' : '不一致 / 缺失'}`,
       `表数量：${res.tables?.length ?? 0}${res.userCount ? `，用户 ${res.userCount} 条` : ''}`,
+      `文件资产：${res.files ?? 0} 个${res.fileCheck ? `（${res.fileCheck}）` : ''}`,
       `SHA-256：${res.sha256 || '—'}`,
     ]
     await ElMessageBox.alert(lines.join('\n'), `校验 ${row.name}`, { confirmButtonText: '知道了' })
@@ -96,20 +104,57 @@ async function doVerify(row: BackupFile) {
   }
 }
 
+function fmtPlan(res: RestoreResult) {
+  const lines = [
+    `模式：${res.mode === 'offline' ? '停机恢复（SQLite）' : '在线恢复'}`,
+    '—— 演练计划（未改动任何文件）——',
+    ...(res.plan ?? []).map((p) => `· ${p}`),
+  ]
+  return lines.join('\n')
+}
+
+async function doRestorePlan(row: BackupFile) {
+  busy.value = row.name
+  try {
+    const res = await maintenanceApi.restorePlan(row.name)
+    await ElMessageBox.alert(fmtPlan(res), `恢复演练 ${row.name}`, { confirmButtonText: '知道了' })
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : '演练失败')
+  } finally {
+    busy.value = ''
+  }
+}
+
 async function doRestore(row: BackupFile) {
+  // 真实恢复前先演练，展示计划并二次确认（演练不会改动文件）
+  busy.value = row.name
+  let preview: RestoreResult
+  try {
+    preview = await maintenanceApi.restorePlan(row.name)
+  } catch (err) {
+    busy.value = ''
+    ElMessage.error(err instanceof Error ? err.message : '演练失败，已中止恢复')
+    return
+  }
   try {
     await ElMessageBox.confirm(
-      '恢复会用该备份覆盖当前数据，属于高危操作。SQLite 需停机后用命令行恢复；MySQL / PostgreSQL 需开启 backup.allow_restore。确定继续？',
+      `${fmtPlan(preview)}\n\n恢复会用该备份覆盖当前数据，属于高危操作。SQLite 需停机后用命令行恢复；MySQL / PostgreSQL 需开启 backup.allow_restore。确定继续？`,
       '恢复数据库',
       { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' },
     )
   } catch {
+    busy.value = ''
     return
   }
-  busy.value = row.name
   try {
     const res = await maintenanceApi.restore(row.name)
-    await ElMessageBox.alert(`${res.message}${res.safetyCopy ? `\n安全副本：${res.safetyCopy}` : ''}`, '恢复结果')
+    const details = [
+      res.message,
+      res.safetyCopy ? `安全副本：${res.safetyCopy}` : '',
+      res.filesRestored ? `已还原文件资产：${res.filesRestored} 个` : '',
+      ...(res.postCheck ?? []),
+    ].filter(Boolean)
+    await ElMessageBox.alert(details.join('\n'), '恢复结果')
   } catch (err) {
     const msg = err instanceof Error ? err.message : '恢复失败'
     await ElMessageBox.alert(msg, '无法在线恢复', { confirmButtonText: '知道了' })
@@ -161,7 +206,7 @@ async function migrateDown() {
       <div>
         <h1>备份与迁移</h1>
         <p class="page-desc">
-          数据库快照、完整性校验与版本化结构变更。定时备份任务默认每天 02:00 执行，按配置保留最近若干份。
+          数据库快照 + 本地文件资产一并归档，完整性校验与版本化结构变更。定时备份任务默认每天 02:00 执行，按 GFS 分档保留。
         </p>
       </div>
       <div class="head-actions">
@@ -197,6 +242,11 @@ async function migrateDown() {
         <strong :class="{ warn: pending > 0 }">{{ pending }}</strong>
         <em>个</em>
       </div>
+      <div class="stat">
+        <span>文件资产</span>
+        <strong>{{ totalFiles }}</strong>
+        <em>个（最新备份）</em>
+      </div>
     </section>
 
     <el-tabs v-model="activeTab" class="tabs">
@@ -217,6 +267,12 @@ async function migrateDown() {
             <el-table-column label="大小" width="110">
               <template #default="{ row }">{{ fmtSize(row.size) }}</template>
             </el-table-column>
+            <el-table-column label="文件资产" width="100">
+              <template #default="{ row }">
+                <span v-if="row.files" class="yes">{{ row.files }} 个</span>
+                <span v-else class="dim">—</span>
+              </template>
+            </el-table-column>
             <el-table-column label="创建时间" width="180">
               <template #default="{ row }">{{ fmt(row.createdAt) }}</template>
             </el-table-column>
@@ -225,12 +281,22 @@ async function migrateDown() {
                 <span :class="row.compressed ? 'yes' : 'dim'">{{ row.compressed ? 'gzip' : '原始' }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="270" fixed="right">
+            <el-table-column label="操作" width="310" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" :icon="Download" :loading="busy === row.name" @click="doDownload(row)">
                   下载
                 </el-button>
                 <el-button link type="primary" :icon="View" @click="doVerify(row)">校验</el-button>
+                <el-button
+                  v-if="auth.can('ops:backup:restore')"
+                  link
+                  type="info"
+                  :icon="View"
+                  :loading="busy === row.name"
+                  @click="doRestorePlan(row)"
+                >
+                  演练
+                </el-button>
                 <el-button
                   v-if="auth.can('ops:backup:restore')"
                   link
@@ -262,9 +328,48 @@ async function migrateDown() {
 
         <div class="tip">
           <div class="tip-title"><el-icon><Upload /></el-icon> 离线恢复（SQLite）</div>
-          <p>SQLite 需要替换数据文件，必须在服务停止后执行，恢复前会自动把当前库另存为 <code>pre-restore-*.db</code>：</p>
-          <pre>keel -config configs/config.yaml restore &lt;备份文件名&gt;</pre>
-          <p class="dim">MySQL / PostgreSQL 可在开启 <code>backup.allow_restore</code> 后使用页面上的「恢复」按钮在线导入。</p>
+          <p>每份备份是 tar 容器，内含数据库快照与 <code>files/</code> 文件资产。SQLite 需要替换数据文件，必须在服务停止后执行，恢复前会自动把当前库另存为 <code>pre-restore-*.db</code>、把旧文件目录改名保留：</p>
+          <pre>keel -config configs/config.yaml restore &lt;备份文件名&gt;
+keel -config configs/config.yaml restore --dry-run &lt;备份文件名&gt;   # 只看计划，不改文件</pre>
+          <p class="dim">恢复后会自动逐表比对行数；MySQL / PostgreSQL 可在开启 <code>backup.allow_restore</code> 后使用页面上的「恢复」按钮在线导入。</p>
+        </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="保留策略" name="prune">
+        <div class="panel prune-panel" v-loading="loading">
+          <div class="prune-head">
+            <div>
+              <strong>GFS 分档保留</strong>
+              <div class="dim">按小时 / 天 / 周 / 月的槽位各保留若干份，断档时不会误删窗口内唯一备份；最新一份永不删除。</div>
+            </div>
+          </div>
+          <div v-if="prune" class="prune-body">
+            <div class="prune-stats">
+              <div><span>当前备份</span><strong>{{ prune.keep.length + prune.remove.length }}</strong></div>
+              <div><span>将保留</span><strong class="yes">{{ prune.keep.length }}</strong></div>
+              <div><span>将清理</span><strong class="warn">{{ prune.remove.length }}</strong></div>
+              <div><span>预计释放</span><strong>{{ fmtSize(prune.removeBytes) }}</strong></div>
+            </div>
+            <div v-if="prune.slots" class="slot-line">
+              <el-tag v-for="(n, k) in prune.slots" :key="k" size="small" effect="plain" class="slot-tag">
+                {{ k }}: {{ n }}
+              </el-tag>
+            </div>
+            <div v-if="prune.remove.length" class="prune-list">
+              <div class="dim">将被清理（演练结果，需 CLI 执行）：</div>
+              <ul>
+                <li v-for="name in prune.remove.slice(0, 10)" :key="name"><code>{{ name }}</code></li>
+              </ul>
+              <div v-if="prune.remove.length > 10" class="dim">… 还有 {{ prune.remove.length - 10 }} 份</div>
+            </div>
+          </div>
+          <div v-else class="disabled-note">未获取到保留策略演练结果</div>
+        </div>
+        <div class="tip">
+          <div class="tip-title">命令行演练与执行</div>
+          <pre>keel -config configs/config.yaml backup-prune --dry-run
+keel -config configs/config.yaml backup-prune</pre>
+          <p class="dim">配置见 <code>backup.retain_hourly / retain_daily / retain_weekly / retain_monthly</code>；四档全为 0 时退回按 <code>retain</code> 保留最近 N 份。</p>
         </div>
       </el-tab-pane>
 
@@ -351,7 +456,7 @@ keel -config configs/config.yaml migrate up</pre>
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -477,6 +582,38 @@ keel -config configs/config.yaml migrate up</pre>
   background: var(--bg-subtle);
 }
 
+.prune-panel { padding: 18px; }
+.prune-head {
+  strong { font-size: 15px; color: var(--ink-800); }
+  .dim { margin-top: 4px; }
+}
+.prune-body { margin-top: 16px; }
+.prune-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  div {
+    padding: 12px 14px;
+    border: 1px solid var(--ink-100);
+    border-radius: 8px;
+    background: var(--bg-subtle);
+  }
+  span { display: block; font-size: 12px; color: var(--ink-400); margin-bottom: 6px; }
+  strong { font-size: 18px; color: var(--ink-800); font-variant-numeric: tabular-nums; }
+  .warn { color: #d97706; }
+}
+.slot-line { margin-top: 14px; display: flex; gap: 6px; flex-wrap: wrap; }
+.slot-tag { font-family: var(--font-mono); }
+.prune-list {
+  margin-top: 16px;
+  ul { margin: 8px 0 0; padding-left: 18px; columns: 2; }
+  li { font-size: 12px; line-height: 1.9; }
+  code { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-600); }
+}
+
+@media (max-width: 1100px) {
+  .stats { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 900px) {
   .stats { grid-template-columns: repeat(2, 1fr); }
   .page-head, .migrate-head { flex-direction: column; }
