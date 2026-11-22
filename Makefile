@@ -63,6 +63,18 @@ test-unit: ## 仅跑单元测试（不含 test/ 集成，毫秒级）
 test-integration: ## 仅跑 test/ 下的集成测试
 	go test -count=1 ./test/...
 
+.PHONY: test-mysql
+test-mysql: ## 用临时 MySQL 容器跑跨方言契约测试
+	bash scripts/dialect_test.sh mysql
+
+.PHONY: test-pg
+test-pg: ## 用临时 PostgreSQL 容器跑跨方言契约测试
+	bash scripts/dialect_test.sh postgres
+
+.PHONY: test-dialect
+test-dialect: ## 用临时 MySQL + PostgreSQL 容器跑跨方言契约测试
+	bash scripts/dialect_test.sh all
+
 .PHONY: check-arch
 check-arch: ## 架构约束检查（import 边界 / 方言白名单 / pkg 签名快照）
 	python3 scripts/check_architecture.py

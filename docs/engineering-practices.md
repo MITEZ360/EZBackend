@@ -137,6 +137,9 @@
 - **借鉴**：对方 CI 起真实 PostgreSQL 跑同一套契约测试；其踩坑记录值得直接引用 —— **「5 张表在 PG 上因 `INTEGER` 装不下 epoch 毫秒完全不可用，而 SQLite 侧测试永远发现不了」**（SQLite 动态类型，`INTEGER` 是 64 位）。
 - **落地目标**：增加 `make test-mysql` / `make test-pg`（容器或 Testcontainers），把核心查询、迁移、备份恢复在 MySQL / PG 各跑一遍；至少覆盖时间列、JSON 列、布尔列、唯一索引、全文/模糊查询的方言差异；差异写入本文档附录。
 - **验收**：同一套 `go test` 在三种驱动下全绿；文档中记录已知差异与规避方式。
+- **落地结论（已完成）**：`test/dialect_test.go` 覆盖 epoch 毫秒 / JSON / 布尔 / 唯一索引 / 中文 LIKE；
+  `make test-dialect` 自动起停 MySQL 8.0 + PostgreSQL 16 容器，未设 DSN 时自动跳过。
+  已在真实两库实测通过：三类型均无差异，无需特殊规避。
 
 ### P2-1　决策日志与踩坑录
 
@@ -197,6 +200,6 @@
 | P1-1 | 架构约束自动化 | P1 | ✅ 已实现 | `make check-arch` 三条规则，已纳入 `make verify`；违规可定位到文件:行号 |
 | P1-2 | 模块可拔插契约与启动自检 | P1 | ☐ 未实现 | 结构性改动，最后做 |
 | P1-3 | 测试分层与启动自检 | P1 | ✅ 已实现 | `test-unit`/`test-integration`/`verify`/`verify-full` 四档；`bootstrap.New` 关键依赖 fail-fast + 自检报告 |
-| P1-4 | 跨方言契约验证 | P1 | ☐ 未实现 | 日常测试只跑 SQLite |
+| P1-4 | 跨方言契约验证 | P1 | ✅ 已实现 | `test/dialect_test.go` 同套断言跑 MySQL/PG，`make test-dialect` 起停容器；已在真实 MySQL 8.0 + PG 16 实测通过 |
 | P2-1 | 决策日志与踩坑录 | P2 | ☐ 未实现 | 建议与首次落地同步建立 |
 | P2-2 | 内容中台能力参考 | P2 | ☐ 未实现 | 仅当业务需要，不排期 |

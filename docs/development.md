@@ -543,6 +543,7 @@ make test-integration   # 仅 test/ 集成测试
 make test               # 全量（含 -race）
 make verify             # vet + check-arch + 单元测试（提交前）
 make verify-full        # vet + check-arch + 全量测试（发版前）
+make test-dialect       # 临时起 MySQL+PG 容器跑跨方言契约测试（需 Docker）
 ```
 
 **测试分层**（P1-3）：
@@ -557,6 +558,21 @@ make verify-full        # vet + check-arch + 全量测试（发版前）
 （关键项，失败即拒绝启动），并检查迁移版本与种子状态（非关键，只告警）。
 报告挂 `app.SelfCheck`，启动日志打印 `selfcheck=true/false`；`test/selfcheck_test.go`
 断言健康装配全绿、关键依赖不可达时 fail-fast。
+
+**跨方言契约验证**（P1-4）：`test/dialect_test.go` 用同一套断言覆盖 MySQL / PostgreSQL，
+重点验证 epoch 毫秒时间列（PG 的 `INTEGER` 装不下，必须 `BIGINT`）、JSON、布尔、唯一索引、
+中文 `LIKE` 模糊查询。未设 DSN 时自动跳过，本地 `go test ./...` 不受影响。两种方式运行：
+
+```bash
+make test-dialect                    # 自动起/停临时容器（需 Docker，推荐）
+# 或手动指定已运行的数据库：
+KEEL_TEST_MYSQL_DSN='root:pwd@tcp(127.0.0.1:3306)/keel' \
+KEEL_TEST_PG_DSN='postgres://u:p@127.0.0.1:5432/keel?sslmode=disable' \
+  go test ./test/ -run TestDialect -v
+```
+
+> 教训来源：某项目曾因 5 张表用 `INTEGER` 存 epoch 毫秒在 PG 上完全不可用，
+> 而 SQLite（动态类型、`INTEGER` 为 64 位）侧的测试永远发现不了。故发布前务必跑一次真库。
 
 ---
 
