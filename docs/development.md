@@ -710,3 +710,24 @@ git push origin main --tags
   当天合并，避免基线长期滞后、下游业务分支越拉越远
 - 本地仓库不需要这些限制，但每次提交后应跑一遍 `scripts/smoke.sh`
 
+---
+
+## 11. 踩坑记录
+
+> 按「现象 → 根因 → 处理」记录真实踩过的坑，靠检索而非口头传递。重要取舍另见
+> [decisions.md](decisions.md)。
+
+| 现象 | 根因 | 处理 |
+| --- | --- | --- |
+| Swagger 挂载 panic：catch-all `*any` 与静态段 `doc.json` 冲突 | Gin 同一层不能同时注册通配与静态段 | 只注册一条 `GET /docs/*any`，在 handler 内按 `c.Param("any")` 分流 `doc.json` / 首页 / UI 资源 |
+| 资讯游标翻页重复、乱序 | 本地时间与 UTC 混用，SQLite 字符串比较时间 | 全链路统一 `UTC()`，游标用 `(published_at, id)` 复合键 |
+| 会员筛选 `member + none != total` | `none` 未排除"等级已停用但未过期"的用户 | 重写三态筛选条件，把停用等级算入非会员 |
+| 会员等级更新时 `benefits` 清不空 | GORM `Updates(map)` 忽略空切片 | 显式传序列化后的 JSON 字符串 `[]` |
+| 图标上传后客户端 404 | 本地存储目录没有公开静态路由 | router 在本地模式挂载 `e.Static(baseURL, localDir)` |
+| `go mod tidy` 把 go.mod 升到 1.23、编译失败 | 新依赖（goose/swag/gin-swagger/x 系列）要求更高 Go 版本 | 锁定兼容版本 + `GOTOOLCHAIN=local`，`replace modernc.org/sqlite v1.23.1` 绕过间接升级 |
+| OAuth 回调路由与静态段冲突 | `/auth/oauth/:name/callback` 与 `/oauth/providers`  Param 层级冲突风险 | 改为 `/api/v1/oauth/callback/:name`，静态段与参数路由分层 |
+| 绑定表允许同一外部账号绑多个用户 | 唯一索引误含 `user_id`，与按 `(provider,subject)` 查询不一致 | v4 迁移重建为两个两列唯一约束，冲突返回 409 |
+| GFS 演练把 40 份备份全保留 | 只做同槽位去重，没限制每档槽位总数 | 每档只取最近 N 个槽位，达上限即停止该档选取 |
+| GORM 故意制造唯一键冲突后，后续查询报错 | 复用同一 `*gorm.DB` 句柄，Statement 被失败的 INSERT 污染 | 每次操作新建句柄 `q()`，不复用带状态的 Session |
+| 前端构建清掉被追踪的 `web/dist/.gitkeep` | Vite 构建清空 dist 目录 | 构建后 `git checkout -- web/dist/.gitkeep` 再提交 |
+
