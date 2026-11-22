@@ -199,6 +199,8 @@ make help       # 查看全部目标
 | [docs/development.md](docs/development.md) | 新增业务模块的完整步骤、分支模型、提交规范、测试分层与踩坑记录 |
 | [docs/engineering-practices.md](docs/engineering-practices.md) | 外部项目调研结论、改进路线与验收标准（P0/P1 已落地，P2 待办） |
 | [docs/decisions.md](docs/decisions.md) | 轻量 ADR：关键设计取舍的背景、决定与后果 |
+| [CHANGELOG.md](CHANGELOG.md) | 版本变更记录（语义化版本） |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献流程、架构铁律与提交规范 |
 
 ---
 
@@ -218,4 +220,4 @@ make help       # 查看全部目标
 
 ## 10. 许可
 
-内部项目模板，可自由用于商业项目；如需开源请补充 LICENSE。
+采用 [MIT License](LICENSE)，可自由用于商业项目与二次开发，保留版权声明即可。
