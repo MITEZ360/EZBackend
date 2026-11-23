@@ -27,7 +27,8 @@ import (
 )
 
 var defaultAllowExt = []string{
-	".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp",
+	// 不接受 SVG：它是可执行脚本的文档类型，放在同源静态目录会形成存储型 XSS。
+	".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp",
 	".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
 	".txt", ".csv", ".md", ".json", ".xml",
 	".zip", ".rar", ".7z", ".tar", ".gz",

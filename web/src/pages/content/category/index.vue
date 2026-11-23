@@ -108,11 +108,15 @@ async function toggle(row: NewsCategory) {
 }
 
 async function remove(row: NewsCategory) {
-  await ElMessageBox.confirm(
-    `删除后爬虫不能再推送该分类。若仍有资讯引用会拒绝删除，可先停用。确认删除「${row.name}」？`,
-    '删除分类',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
-  )
+  try {
+    await ElMessageBox.confirm(
+      `删除后爬虫不能再推送该分类。若仍有资讯引用会拒绝删除，可先停用。确认删除「${row.name}」？`,
+      '删除分类',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
   await newsCategoryApi.remove(row.id)
   ElMessage.success('已删除')
   await load()
@@ -146,7 +150,7 @@ async function remove(row: NewsCategory) {
                 <img v-if="row.icon" :src="row.icon" alt="" />
                 <span v-else>{{ row.name.slice(0, 1) }}</span>
               </div>
-              <div>
+              <div class="cat-body">
                 <div class="cat-name">{{ row.name }}</div>
                 <div v-if="row.remark" class="dim cat-remark">{{ row.remark }}</div>
               </div>
@@ -243,6 +247,11 @@ async function remove(row: NewsCategory) {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+.cat-body {
+  min-width: 0;
 }
 
 .cat-icon {

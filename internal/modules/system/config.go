@@ -38,7 +38,7 @@ func (s *ConfigService) List(ctx context.Context, p *query.Params) ([]*model.Sys
 		return nil, 0, err
 	}
 	var list []*model.SysConfig
-	err := db.Order(p.Order(map[string]string{"created_at": "created_at", "key": "key"}, "group_name ASC, config_key ASC")).
+	err := db.Order(p.Order(map[string]string{"created_at": "created_at", "key": "config_key"}, "group_name ASC, config_key ASC")).
 		Offset(p.Offset()).Limit(p.PageSize).Find(&list).Error
 	if err != nil {
 		return nil, 0, err

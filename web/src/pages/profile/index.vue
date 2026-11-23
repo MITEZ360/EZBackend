@@ -247,7 +247,7 @@ async function changePassword() {
   submitting.value = true
   try {
     await authApi.changePassword({ oldPassword: pwd.oldPassword, newPassword: pwd.newPassword })
-    ElMessage.success('密码已更新，请使用新密码重新登录')
+    ElMessage.success('密码已更新，下次登录请使用新密码')
     pwd.oldPassword = ''
     pwd.newPassword = ''
     pwd.confirm = ''

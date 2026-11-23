@@ -298,9 +298,16 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	}
 
 	newRefresh := idgen.Token(32)
-	if err := s.db.WithContext(ctx).Model(&model.Session{}).Where("id = ?", sess.ID).
-		Updates(map[string]any{"refresh_hash": crypto.SHA256(newRefresh), "last_seen_at": time.Now()}).Error; err != nil {
-		return nil, err
+	// 条件更新保证同一 refreshToken 只能成功轮换一次；并发请求中失败方返回 401，
+	// 避免两个响应各自签发令牌、较早返回的 refreshToken 立即失效。
+	res := s.db.WithContext(ctx).Model(&model.Session{}).
+		Where("id = ? AND refresh_hash = ? AND revoked = ?", sess.ID, hash, false).
+		Updates(map[string]any{"refresh_hash": crypto.SHA256(newRefresh), "last_seen_at": time.Now()})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected != 1 {
+		return nil, errs.New(http.StatusUnauthorized, errs.CodeTokenInvalid, "刷新令牌已失效，请重新登录")
 	}
 	_ = s.cache.Set(ctx, "sess:"+sess.ID, []byte(user.ID), s.jwt.RefreshTTL())
 

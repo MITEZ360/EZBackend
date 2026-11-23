@@ -60,7 +60,10 @@
   --el-box-shadow: var(--sh-md);
   --el-box-shadow-dark: var(--sh-lg);
 
-  --el-mask-color: rgba(16, 24, 40, 0.45);
+  /* 表格/区域 loading 遮罩底色，取 Element Plus 默认值 rgba(255,255,255,.9)。
+     此前误设为深色 rgba(16,24,40,.45)，列表刷新时整片发黑。
+     弹窗遮罩走 --el-overlay-color-lighter，与此无关。 */
+  --el-mask-color: rgba(255, 255, 255, 0.9);
   --el-disabled-bg-color: var(--ink-50);
   --el-disabled-text-color: var(--ink-400);
 }
@@ -76,6 +79,8 @@
   transition: background-color 0.15s ease, border-color 0.15s ease,
     box-shadow 0.15s ease, color 0.15s ease;
 
+  /* 相邻按钮间距收到 8px：Element Plus 默认 12px，表格操作列（最窄 104px）
+     放三个按钮会换行。其余按钮样式全部沿用组件默认。 */
   & + .el-button {
     margin-left: 8px;
   }
@@ -94,8 +99,10 @@
   font-size: 14px;
 }
 
-/* 主按钮：实色 + 极轻投影，不做渐变 */
-.el-button--primary {
+/* 主按钮：实色 + 极轻投影，不做渐变。
+   投影只给实心按钮 —— 文字按钮（is-link / is-text）是透明底，投影会在文字周围
+   洇出一圈浅色方块，看起来像三个小按钮挤在一起。 */
+.el-button--primary:not(.is-link):not(.is-text) {
   --el-button-bg-color: var(--brand-600);
   --el-button-border-color: var(--brand-600);
   --el-button-hover-bg-color: var(--brand-700);
@@ -110,7 +117,7 @@
 }
 
 /* 默认按钮：白底细边 */
-.el-button--default {
+.el-button--default:not(.is-link):not(.is-text) {
   --el-button-bg-color: #ffffff;
   --el-button-border-color: var(--ink-200);
   --el-button-text-color: var(--ink-700);
@@ -120,14 +127,8 @@
   box-shadow: var(--sh-xs);
 }
 
-/* 文字按钮（表格行内操作） */
-.el-button.is-link,
-.el-button.is-text {
-  height: auto;
-  padding: 0 2px;
-  font-size: 13px;
-  font-weight: 500;
-}
+/* 文字按钮（表格行内操作）沿用 Element Plus 默认：透明底、无边框、无投影、
+   padding 2px、相邻间距沿用项目的 8px。上面两条 :not() 只为让投影不误伤到它。 */
 
 /* ------------------------------------------------------- 输入 / 选择器 */
 .el-input__wrapper,
@@ -247,6 +248,18 @@
   .el-table__empty-text {
     color: var(--ink-400);
     font-size: 13px;
+  }
+
+  /* 树形表格首列：展开箭头、缩进/占位是 inline 级，自定义单元格是块级 flex。
+     若 .cell 保持块级，箭头会独占一行、内容掉到下一行；没有箭头的叶子行
+     （按钮权限点）其缩进占位也会与内容分行，导致子项顶在最前面丢失层级。
+     仅对含树形占位元素的单元格改为 inline-flex，让箭头/缩进与内容同行，
+     同时保留 Element Plus 生成的层级缩进。 */
+  td:has(.el-table__expand-icon) .cell,
+  td:has(.el-table__indent) .cell,
+  td:has(.el-table__placeholder) .cell {
+    display: inline-flex;
+    align-items: center;
   }
 }
 

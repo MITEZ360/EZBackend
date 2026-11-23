@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { CopyDocument, Plus, Refresh } from '@element-plus/icons-vue'
 import { apikeyApi, type APIKeyPayload, type IssuedKey } from '@/api/apikey'
 import type { APIKeyRow } from '@/api/types'
+import { fmtTime as formatTime } from '@/utils/format'
 
 const rows = ref<APIKeyRow[]>([])
 const total = ref(0)
@@ -176,11 +177,15 @@ async function copyPlain() {
 
 /* ------------------------------------------------------------ 行内操作 */
 async function rotate(row: APIKeyRow) {
-  await ElMessageBox.confirm(
-    `轮换后旧密钥立即失效，正在使用它的调用方会中断。确认轮换「${row.name}」？`,
-    '轮换密钥',
-    { type: 'warning', confirmButtonText: '确认轮换', cancelButtonText: '取消' },
-  )
+  try {
+    await ElMessageBox.confirm(
+      `轮换后旧密钥立即失效，正在使用它的调用方会中断。确认轮换「${row.name}」？`,
+      '轮换密钥',
+      { type: 'warning', confirmButtonText: '确认轮换', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
   const res = await apikeyApi.rotate(row.id)
   showIssued(res, '新密钥已生成')
   await load()
@@ -194,13 +199,18 @@ async function toggle(row: APIKeyRow) {
 }
 
 async function remove(row: APIKeyRow) {
-  await ElMessageBox.confirm(
-    `删除后该密钥立即失效，且不可恢复。确认删除「${row.name}」？`,
-    '删除密钥',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
-  )
+  try {
+    await ElMessageBox.confirm(
+      `删除后该密钥立即失效，且不可恢复。确认删除「${row.name}」？`,
+      '删除密钥',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
   await apikeyApi.remove(row.id)
   ElMessage.success('已删除')
+  if (rows.value.length === 1 && query.page > 1) query.page -= 1
   await load()
 }
 
@@ -226,8 +236,7 @@ function quotaTone(row: APIKeyRow) {
 }
 
 function fmtTime(v?: string) {
-  if (!v) return '—'
-  return v.replace('T', ' ').slice(0, 16)
+  return v ? formatTime(v, false) : '—'
 }
 
 function expireText(row: APIKeyRow) {
@@ -532,7 +541,7 @@ curl -H "X-API-Key: $KEEL_API_KEY" \
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 16px 20px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line-soft);
 }
 

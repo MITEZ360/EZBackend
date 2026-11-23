@@ -63,12 +63,12 @@ onMounted(async () => {
 .callback {
   display: grid;
   place-items: center;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-subtle);
 }
 
 .card {
-  width: 340px;
+  width: min(340px, calc(100% - 32px));
   padding: 40px 32px;
   border: 1px solid var(--ink-100);
   border-radius: 14px;
@@ -107,7 +107,7 @@ onMounted(async () => {
   height: 30px;
   margin: 0 auto 16px;
   border-radius: 50%;
-  background: #fef2f2;
+  background: var(--danger-bg);
   color: #dc2626;
   font-weight: 700;
 }

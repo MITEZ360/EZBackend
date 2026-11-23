@@ -58,7 +58,7 @@ onBeforeUnmount(() => store.stop())
     @show="onShow"
   >
     <template #reference>
-      <button class="bell" :class="{ active: store.unread > 0 }" title="消息中心">
+      <button class="bell" :class="{ active: store.unread > 0 }" title="消息中心" aria-label="消息中心">
         <el-icon :size="17"><Bell /></el-icon>
         <span v-if="store.unread > 0" class="bell-dot">{{ unreadText }}</span>
       </button>
@@ -120,7 +120,7 @@ onBeforeUnmount(() => store.stop())
   &:hover,
   &.active {
     color: var(--ink-800);
-    background: var(--ink-75, #f4f5f7);
+    background: var(--ink-100);
   }
 }
 

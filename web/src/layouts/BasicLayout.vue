@@ -121,7 +121,7 @@ watch(
 
     <div class="main">
       <header class="top">
-        <button class="icon-btn" :title="mini ? '展开菜单' : '收起菜单'" @click="toggleMini">
+        <button class="icon-btn" :title="mini ? '展开菜单' : '收起菜单'" :aria-label="mini ? '展开菜单' : '收起菜单'" @click="toggleMini">
           <el-icon :size="17"><Expand v-if="mini" /><Fold v-else /></el-icon>
         </button>
 
@@ -137,7 +137,9 @@ watch(
           <MessageBell />
           <span class="divider" />
           <el-dropdown trigger="click" placement="bottom-end" @command="onCommand">
-            <div class="user-chip">
+            <div class="user-chip" role="button" tabindex="0" aria-label="用户菜单"
+              @keydown.enter.self="($event.target as HTMLElement).click()"
+              @keydown.space.prevent.self="($event.target as HTMLElement).click()">
               <div class="avatar">{{ auth.initial }}</div>
               <div class="user-meta">
                 <span class="user-name">
@@ -371,6 +373,11 @@ watch(
   cursor: pointer;
   transition: background-color 0.14s ease;
   outline: none;
+
+  &:focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 2px;
+  }
 
   &:hover {
     background: var(--ink-100);

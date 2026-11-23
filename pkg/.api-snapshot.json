@@ -100,7 +100,7 @@
   ],
   "pkg/utils/utils.go": [
     "func BuildTree[T any](items []T, id func(T) string, parentOf func(T) string, setChildren func(T, []T), isRoot func(string) bool) []T",
-    "func ClientIP(c *gin.Context, trustProxy bool) string",
+    "func ClientIP(c *gin.Context, _ bool) string",
     "func Contains(list []string, target string) bool",
     "func DaysAgo(now time.Time, n int) time.Time",
     "func DefaultIsRoot(pid string) bool { return pid == \"\" || pid == \"0\" }",

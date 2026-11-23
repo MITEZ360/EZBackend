@@ -616,7 +616,7 @@ onMounted(load)
   }
 
   &:hover {
-    border-color: var(--brand-300);
+    border-color: var(--brand-200);
   }
 
   &.active {

@@ -480,7 +480,7 @@ onMounted(() => loadTypes())
   color: var(--ink-500);
   padding: 1px 6px;
   border-radius: 4px;
-  background: var(--ink-75, #f6f7f9);
+  background: var(--ink-100);
 }
 
 .head-actions {

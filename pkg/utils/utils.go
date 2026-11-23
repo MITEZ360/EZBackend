@@ -15,18 +15,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ClientIP 返回客户端 IP。trustProxy 为真时优先取代理头（需确保入口网关可信）。
-func ClientIP(c *gin.Context, trustProxy bool) string {
-	if trustProxy {
-		if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
-			if i := strings.IndexByte(xff, ','); i > 0 {
-				return strings.TrimSpace(xff[:i])
-			}
-			return strings.TrimSpace(xff)
-		}
-		if rip := c.GetHeader("X-Real-Ip"); rip != "" {
-			return strings.TrimSpace(rip)
-		}
+// ClientIP 返回客户端 IP。代理头只由 Gin 按 SetTrustedProxies 的可信列表解析；
+// 直接取 X-Forwarded-For 最左值会让外部请求伪造 IP，绕过白名单和限流。
+// trustProxy 参数保留以兼容调用方，实际信任范围由服务端配置决定。
+func ClientIP(c *gin.Context, _ bool) string {
+	if ip := c.ClientIP(); ip != "" {
+		return ip
 	}
 	host, _, err := net.SplitHostPort(c.Request.RemoteAddr)
 	if err != nil {

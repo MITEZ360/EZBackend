@@ -431,7 +431,7 @@ onMounted(load)
   height: 22px;
   border-radius: 6px;
   color: var(--ink-600);
-  background: var(--ink-75, #f4f5f7);
+  background: var(--ink-100);
   flex-shrink: 0;
 }
 
@@ -478,7 +478,7 @@ onMounted(load)
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--ink-600);
-  background: var(--ink-75, #f6f7f9);
+  background: var(--ink-100);
 }
 
 .form-grid {

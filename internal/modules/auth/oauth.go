@@ -197,7 +197,7 @@ func (f *oauthFlow) Callback(ctx context.Context, name, code, state, redirectURI
 	conf.RedirectURL = redirectURI
 	tok, err := conf.Exchange(ctx, code)
 	if err != nil {
-		return nil, errs.BadRequest("换取访问令牌失败：" + err.Error())
+		return nil, errs.BadRequest("第三方授权失败，请重试")
 	}
 	prof, err := f.fetchProfile(ctx, p, tok.AccessToken)
 	if err != nil {
@@ -439,7 +439,7 @@ func (f *oauthFlow) fetchProfile(ctx context.Context, p *oauthProvider, accessTo
 	}
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return nil, errs.BadRequest("读取第三方用户信息失败：" + err.Error())
+		return nil, errs.BadRequest("读取第三方用户信息失败，请重试")
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
