@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const isDev = import.meta.env.DEV
 const auth = useAuthStore()
 
 const formRef = ref<FormInstance>()
@@ -367,7 +368,8 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="step === 'credential'" class="hint">
+        <!-- 默认凭据只在开发环境提示，生产环境展示等于公开超管账号密码 -->
+        <div v-if="step === 'credential' && isDev" class="hint">
           默认账号 <code>admin</code> / <code>Admin@123456</code>，登录后请尽快修改密码
         </div>
       </div>

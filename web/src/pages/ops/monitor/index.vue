@@ -474,8 +474,8 @@ onUnmounted(() => {
   }
 
   &.is-del {
-    color: #b42318;
-    background: #fdecea;
+    color: var(--danger-deep);
+    background: var(--danger-bg);
   }
 }
 

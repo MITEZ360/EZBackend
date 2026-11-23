@@ -356,8 +356,8 @@ onMounted(load)
   }
 
   &.is-del {
-    color: #b42318;
-    background: #fdecea;
+    color: var(--danger-deep);
+    background: var(--danger-bg);
   }
 }
 
@@ -487,7 +487,7 @@ onMounted(load)
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  background: var(--ink-25, #fbfbfc);
+  background: var(--ink-50);
   font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 1.7;
@@ -496,9 +496,9 @@ onMounted(load)
   word-break: break-all;
 
   &.is-error {
-    color: #b42318;
-    background: #fef6f5;
-    border-color: #f6d3cf;
+    color: var(--danger-deep);
+    background: var(--danger-bg);
+    border-color: var(--danger-border);
   }
 }
 </style>

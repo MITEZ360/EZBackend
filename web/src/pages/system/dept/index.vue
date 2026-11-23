@@ -148,6 +148,10 @@ async function removeDept(node: DeptNode) {
     : (node.userCount ?? 0) > 0
       ? `该部门下还有 ${node.userCount} 名成员，需先调整成员归属。`
       : `删除「${node.name}」后不可恢复，确定继续吗？`
+  if (node.children?.length || (node.userCount ?? 0) > 0) {
+    ElMessage.warning(blocked)
+    return
+  }
   try {
     await ElMessageBox.confirm(blocked, '删除部门', {
       confirmButtonText: '删除',
@@ -157,7 +161,6 @@ async function removeDept(node: DeptNode) {
   } catch {
     return
   }
-  if (node.children?.length || (node.userCount ?? 0) > 0) return
   await deptApi.remove(node.id)
   ElMessage.success('已删除')
   load()

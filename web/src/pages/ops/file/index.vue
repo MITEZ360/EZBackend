@@ -312,7 +312,7 @@ onMounted(load)
   gap: 12px;
   margin: 16px 16px 0;
   padding: 14px 18px;
-  border: 1px dashed var(--ink-250, #d5d9e0);
+  border: 1px dashed var(--ink-200);
   border-radius: var(--r-md);
   color: var(--ink-400);
   cursor: pointer;
@@ -377,8 +377,8 @@ onMounted(load)
   flex-shrink: 0;
 
   &.t-doc {
-    color: #b42318;
-    background: #fdecea;
+    color: var(--danger-deep);
+    background: var(--danger-bg);
   }
 
   &.t-sheet {

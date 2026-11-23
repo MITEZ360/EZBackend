@@ -61,7 +61,9 @@ func Audit(a Auditor, pub Publisher) gin.HandlerFunc {
 			if strings.HasPrefix(c.ContentType(), "multipart/") {
 				reqBody = []byte("[multipart/form-data 内容不记录]")
 			} else {
-				reqBody, _ = io.ReadAll(io.LimitReader(c.Request.Body, 4<<10))
+				// 审计只记录前 2KB（见 sanitizeBody），但必须把完整请求体还给 handler。
+				// 此前按 4KB 截断会破坏更长的 JSON，导致接口确定性失败。
+				reqBody, _ = io.ReadAll(io.LimitReader(c.Request.Body, 32<<20))
 				c.Request.Body = io.NopCloser(bytes.NewReader(reqBody))
 			}
 		}

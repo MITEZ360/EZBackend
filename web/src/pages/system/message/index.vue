@@ -87,6 +87,7 @@ const detail = ref<MessageDetail | null>(null)
 async function openDetail(m: MessageItem) {
   detailVisible.value = true
   detailLoading.value = true
+  detail.value = null
   try {
     detail.value = await messageApi.detail(m.messageId)
     if (!m.readAt) {
@@ -95,7 +96,7 @@ async function openDetail(m: MessageItem) {
       await store.refresh()
     }
   } catch {
-    detailVisible.value = false
+    ElMessage.error('读取消息详情失败')
   } finally {
     detailLoading.value = false
   }
@@ -126,6 +127,7 @@ async function removeOne(m: MessageItem) {
   }
   await messageApi.remove(m.messageId)
   ElMessage.success('已删除')
+  if (items.value.length === 1 && query.page > 1) query.page -= 1
   await Promise.all([loadInbox(), store.refresh()])
 }
 
@@ -143,6 +145,7 @@ async function removeSelected() {
   const res = await messageApi.batchRemove(selected.value)
   selected.value = []
   ElMessage.success(`已删除 ${res.deleted} 条`)
+  if (!items.value.length && query.page > 1) query.page -= 1
   await Promise.all([loadInbox(), store.refresh()])
 }
 
@@ -158,6 +161,7 @@ async function clearRead() {
   }
   const res = await messageApi.clearRead()
   ElMessage.success(`已清空 ${res.deleted} 条已读消息`)
+  if (!items.value.length && query.page > 1) query.page -= 1
   await Promise.all([loadInbox(), store.refresh()])
 }
 

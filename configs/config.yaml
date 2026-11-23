@@ -17,7 +17,7 @@ server:
   idle_timeout: 120s
   shutdown_timeout: 15s
   max_body_size: 33554432  # 32MB
-  trust_proxy: true        # 部署在网关/Nginx 之后时开启
+  trust_proxy: false       # 仅在确认请求来自可信网关时开启，否则 X-Forwarded-For 可被伪造
   web_dir: web
 
 log:

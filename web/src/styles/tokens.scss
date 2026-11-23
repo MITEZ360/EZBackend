@@ -39,8 +39,9 @@
   --warn-deep: #b54708;
   --warn-bg: #fffaeb;
   --danger: #f04438;
-  --danger-deep: #b42318;
+  --danger-deep: var(--danger-deep);
   --danger-bg: #fef3f2;
+  --danger-border: #fecdca;
 
   /* 圆角：小控件 8、卡片 12、浮层 14 */
   --r-xs: 4px;

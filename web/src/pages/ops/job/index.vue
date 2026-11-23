@@ -571,7 +571,7 @@ onMounted(async () => {
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--ink-700);
-  background: var(--ink-75, #f6f7f9);
+  background: var(--ink-100);
 }
 
 .next-run {
@@ -600,8 +600,8 @@ onMounted(async () => {
   }
 
   &.fail {
-    color: #b42318;
-    background: #fdecea;
+    color: var(--danger-deep);
+    background: var(--danger-bg);
   }
 }
 
@@ -687,7 +687,7 @@ onMounted(async () => {
   transition: all 0.14s ease;
 
   &:hover {
-    border-color: var(--brand-300);
+    border-color: var(--brand-200);
     color: var(--brand-700);
   }
 

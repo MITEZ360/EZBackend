@@ -219,7 +219,7 @@ onMounted(load)
 
 .fail-text {
   font-size: 12.5px;
-  color: #b42318;
+  color: var(--danger-deep);
 }
 
 .cell-time {

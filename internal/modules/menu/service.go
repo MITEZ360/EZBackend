@@ -9,17 +9,19 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/keel-framework/keel/internal/model"
+	"github.com/keel-framework/keel/internal/platform/authz"
 	"github.com/keel-framework/keel/pkg/errs"
 	"github.com/keel-framework/keel/pkg/utils"
 )
 
 // Service 菜单业务逻辑。
 type Service struct {
-	db *gorm.DB
+	db    *gorm.DB
+	authz *authz.Loader
 }
 
 // NewService 创建菜单服务。
-func NewService(db *gorm.DB) *Service { return &Service{db: db} }
+func NewService(db *gorm.DB, al *authz.Loader) *Service { return &Service{db: db, authz: al} }
 
 // List 返回扁平菜单列表（含按钮）。
 func (s *Service) List(ctx context.Context) ([]*model.Menu, error) {
@@ -99,6 +101,9 @@ func (s *Service) Create(ctx context.Context, in *CreateInput) (*model.Menu, err
 	if err := s.db.WithContext(ctx).Select("*").Create(m).Error; err != nil {
 		return nil, err
 	}
+	if s.authz != nil {
+		s.authz.Invalidate(ctx)
+	}
 	return m, nil
 }
 
@@ -133,7 +138,13 @@ func (s *Service) Update(ctx context.Context, id string, in *CreateInput) error 
 	if in.Visible != nil {
 		updates["visible"] = *in.Visible
 	}
-	return s.db.WithContext(ctx).Model(&model.Menu{}).Where("id = ?", id).Updates(updates).Error
+	if err := s.db.WithContext(ctx).Model(&model.Menu{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return err
+	}
+	if s.authz != nil {
+		s.authz.Invalidate(ctx)
+	}
+	return nil
 }
 
 // Delete 删除菜单，存在子节点时禁止删除。
@@ -145,12 +156,18 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if n > 0 {
 		return errs.Conflict("请先删除子菜单")
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("menu_id = ?", id).Delete(&model.RoleMenu{}).Error; err != nil {
 			return err
 		}
 		return tx.Delete(&model.Menu{}, "id = ?", id).Error
-	})
+	}); err != nil {
+		return err
+	}
+	if s.authz != nil {
+		s.authz.Invalidate(ctx)
+	}
+	return nil
 }
 
 // ForUser 返回用户可见的导航菜单（不含按钮）与全部权限点。

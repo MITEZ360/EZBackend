@@ -106,22 +106,31 @@ async function openDetail(row: NewsArticle) {
 
 /* ------------------------------------------------------------ 操作 */
 async function remove(row: NewsArticle) {
-  await ElMessageBox.confirm(`删除后不可恢复。确认删除「${row.title}」？`, '删除资讯', {
-    type: 'warning',
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-  })
+  try {
+    await ElMessageBox.confirm(`删除后不可恢复。确认删除「${row.title}」？`, '删除资讯', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
   await newsApi.remove(row.id)
   ElMessage.success('已删除')
+  if (rows.value.length === 1 && query.page > 1) query.page -= 1
   await Promise.all([load(), loadStats()])
 }
 
 async function cleanup() {
-  await ElMessageBox.confirm(
-    `将立即删除超过 ${stats.value?.retentionDays ?? 7} 天保留期的资讯，该操作不可恢复。`,
-    '清理过期资讯',
-    { type: 'warning', confirmButtonText: '开始清理', cancelButtonText: '取消' },
-  )
+  try {
+    await ElMessageBox.confirm(
+      `将立即删除超过 ${stats.value?.retentionDays ?? 7} 天保留期的资讯，该操作不可恢复。`,
+      '清理过期资讯',
+      { type: 'warning', confirmButtonText: '开始清理', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
   const res = await newsApi.cleanup()
   ElMessage.success(res.deleted > 0 ? `已清理 ${res.deleted} 条` : '没有需要清理的数据')
   await Promise.all([load(), loadStats()])
@@ -407,7 +416,7 @@ function sourceOf(code: string) {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 16px 20px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line-soft);
 }
 

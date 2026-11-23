@@ -122,11 +122,15 @@ async function submit() {
 }
 
 async function remove(row: NewsSource) {
-  await ElMessageBox.confirm(
-    `删除后该来源不再出现在筛选中。若仍有资讯引用会拒绝删除，可先停用。确认删除「${row.name}」？`,
-    '删除数据源',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
-  )
+  try {
+    await ElMessageBox.confirm(
+      `删除后该来源不再出现在筛选中。若仍有资讯引用会拒绝删除，可先停用。确认删除「${row.name}」？`,
+      '删除数据源',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
   await newsSourceApi.remove(row.id)
   ElMessage.success('已删除')
   await load()
@@ -322,7 +326,7 @@ const KIND_LABEL: Record<string, string> = {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 16px 20px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line-soft);
 }
 

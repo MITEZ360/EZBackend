@@ -84,7 +84,7 @@ async function doVerify(row: BackupFile) {
       `驱动：${res.driver}`,
       `完整性：${res.integrity || '—'}`,
       `元信息比对：${res.metaMatched ? '一致' : '不一致 / 缺失'}`,
-      `表数量：${res.tables?.length ?? 0}${res.userCount ? `，用户 ${res.userCount} 条` : ''}`,
+      `表数量：${res.tables?.length ?? 0}${res.userCount != null ? `，用户 ${res.userCount} 条` : ''}`,
       `SHA-256：${res.sha256 || '—'}`,
     ]
     await ElMessageBox.alert(lines.join('\n'), `校验 ${row.name}`, { confirmButtonText: '知道了' })
@@ -316,10 +316,6 @@ keel -config configs/config.yaml migrate up</pre>
 </template>
 
 <style scoped lang="scss">
-.page {
-  padding: 4px 2px 24px;
-}
-
 .page-head {
   display: flex;
   align-items: flex-start;
@@ -351,7 +347,7 @@ keel -config configs/config.yaml migrate up</pre>
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }

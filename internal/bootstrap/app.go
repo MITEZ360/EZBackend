@@ -176,7 +176,7 @@ func New(cfgPath string) (*App, error) {
 	captcha := authn.NewCaptcha(ch)
 	authzLoader := authz.NewLoader(db, ch, lg)
 
-	menuSvc := menu.NewService(db)
+	menuSvc := menu.NewService(db, authzLoader)
 	authSvc := auth.NewService(db, ch, jwtMgr, captcha, cfg, lg, authzLoader, menuSvc)
 	membershipSvc := membership.NewService(db, lg)
 	userSvc := user.NewService(db, cfg, lg, authzLoader, membershipSvc)

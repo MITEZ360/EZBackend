@@ -43,7 +43,8 @@ func NewHandler(b *BackupService, runner *migrate.Runner, mode string) *Handler 
 func (h *Handler) Backups(c *gin.Context) {
 	list, err := h.backup.List()
 	if err != nil {
-		response.Fail(c, errs.Internal(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.Internal("服务内部错误，请联系管理员"))
 		return
 	}
 	response.OK(c, list)
@@ -70,7 +71,8 @@ func (h *Handler) Backups(c *gin.Context) {
 func (h *Handler) CreateBackup(c *gin.Context) {
 	meta, err := h.backup.Backup(c.Request.Context())
 	if err != nil {
-		response.Fail(c, errs.Internal(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.Internal("服务内部错误，请联系管理员"))
 		return
 	}
 	middleware.AuditInfo(c, "运维", "立即备份数据库")
@@ -98,7 +100,8 @@ func (h *Handler) CreateBackup(c *gin.Context) {
 func (h *Handler) BackupMeta(c *gin.Context) {
 	meta, err := h.backup.Meta(c.Param("name"))
 	if err != nil {
-		response.Fail(c, errs.NotFound(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.NotFound("资源不存在或已被删除"))
 		return
 	}
 	response.OK(c, meta)
@@ -125,7 +128,8 @@ func (h *Handler) BackupMeta(c *gin.Context) {
 func (h *Handler) DownloadBackup(c *gin.Context) {
 	p, err := h.backup.Path(c.Param("name"))
 	if err != nil {
-		response.Fail(c, errs.NotFound(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.NotFound("资源不存在或已被删除"))
 		return
 	}
 	middleware.AuditInfo(c, "运维", "下载数据库备份")
@@ -154,7 +158,8 @@ func (h *Handler) DownloadBackup(c *gin.Context) {
 func (h *Handler) VerifyBackup(c *gin.Context) {
 	res, err := h.backup.Verify(c.Param("name"))
 	if err != nil {
-		response.Fail(c, errs.BadRequest(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.BadRequest("操作失败，请检查输入或联系管理员"))
 		return
 	}
 	response.OK(c, res)
@@ -182,7 +187,8 @@ func (h *Handler) VerifyBackup(c *gin.Context) {
 func (h *Handler) RestoreBackup(c *gin.Context) {
 	res, err := h.backup.RestoreOnline(c.Request.Context(), c.Param("name"))
 	if err != nil {
-		response.Fail(c, errs.BadRequest(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.BadRequest("操作失败，请检查输入或联系管理员"))
 		return
 	}
 	middleware.AuditInfo(c, "运维", "在线恢复数据库")
@@ -209,7 +215,8 @@ func (h *Handler) RestoreBackup(c *gin.Context) {
 // KE:SWAGGER-END
 func (h *Handler) DeleteBackup(c *gin.Context) {
 	if err := h.backup.Delete(c.Param("name")); err != nil {
-		response.Fail(c, errs.NotFound(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.NotFound("资源不存在或已被删除"))
 		return
 	}
 	middleware.AuditInfo(c, "运维", "删除数据库备份")
@@ -241,7 +248,8 @@ func (h *Handler) MigrationStatus(c *gin.Context) {
 	}
 	st, err := h.runner.Status(c.Request.Context())
 	if err != nil {
-		response.Fail(c, errs.Internal(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.Internal("服务内部错误，请联系管理员"))
 		return
 	}
 	response.OK(c, gin.H{"mode": h.mode, "enabled": true, "status": st})
@@ -272,7 +280,8 @@ func (h *Handler) MigrateUp(c *gin.Context) {
 	}
 	applied, err := h.runner.Up(context.Background())
 	if err != nil {
-		response.Fail(c, errs.Internal(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.Internal("服务内部错误，请联系管理员"))
 		return
 	}
 	middleware.AuditInfo(c, "运维", "执行数据库版本升级")
@@ -304,7 +313,8 @@ func (h *Handler) MigrateDown(c *gin.Context) {
 	}
 	applied, err := h.runner.Down(context.Background())
 	if err != nil {
-		response.Fail(c, errs.Internal(err.Error()))
+		c.Error(err)
+		response.Fail(c, errs.Internal("服务内部错误，请联系管理员"))
 		return
 	}
 	middleware.AuditInfo(c, "运维", "回滚数据库版本")

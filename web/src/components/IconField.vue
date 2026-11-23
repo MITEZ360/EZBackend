@@ -22,7 +22,8 @@ const emit = defineEmits<{
   'update:color': [value: string]
 }>()
 
-const PRESETS = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#B37FEB', '#909399']
+// 与会员等级共用一套色板，避免模块间出现两套冲突的预设色
+const PRESETS = ['#8A94A6', '#C08A2E', '#6D5BD0', '#2E90FA', '#12B76A', '#E0556B']
 const uploading = ref(false)
 
 const initial = computed(() => (props.fallback || '?').trim().slice(0, 1).toUpperCase())

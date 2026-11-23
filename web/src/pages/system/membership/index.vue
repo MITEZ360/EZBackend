@@ -14,7 +14,7 @@ const memberTotal = computed(() => levels.value.reduce((sum, l) => sum + (l.user
 async function load() {
   loading.value = true
   try {
-    const res = await membershipApi.list({ page: 1, page_size: 200 })
+    const res = await membershipApi.list({ page: 1, page_size: 500 })
     levels.value = res.list ?? []
   } finally {
     loading.value = false

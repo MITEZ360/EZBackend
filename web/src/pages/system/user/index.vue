@@ -82,7 +82,7 @@ async function onExport() {
       membershipState: query.membershipState || undefined,
       membershipLevelId: query.membershipLevelId || undefined,
     })
-    saveBlob(blob, `用户列表_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    saveBlob(blob, `用户列表_${fmtDate(new Date())}.xlsx`)
     ElMessage.success('已导出')
   } finally {
     exporting.value = false
@@ -153,28 +153,41 @@ function openCreate() {
   formVisible.value = true
 }
 
+let editSeq = 0
 async function openEdit(row: UserRow) {
-  editingId.value = row.id
-  resetForm()
-  formVisible.value = true
-  // 列表里的手机号是脱敏的，必须先取详情再回填
-  const detail = await userApi.get(row.id)
-  Object.assign(form, {
-    username: detail.username,
-    password: '',
-    nickname: detail.nickname,
-    realName: detail.realName ?? '',
-    email: detail.email ?? '',
-    phone: detail.phone ?? '',
-    deptId: detail.deptId ?? '',
-    roleIds: (detail as unknown as { roleIds?: string[] }).roleIds ?? [],
-    gender: detail.gender ?? 0,
-    status: 1,
-    remark: (detail as unknown as { remark?: string }).remark ?? '',
-  })
+  const seq = ++editSeq
+  try {
+    // 列表里的手机号是脱敏的，必须先取详情再回填；成功后才打开弹窗，
+    // 避免请求期间显示空表单，seq 防止快速切换行时旧响应覆盖新数据。
+    const detail = await userApi.get(row.id)
+    if (seq !== editSeq) return
+    editingId.value = row.id
+    resetForm()
+    Object.assign(form, {
+      username: detail.username,
+      password: '',
+      nickname: detail.nickname,
+      realName: detail.realName ?? '',
+      email: detail.email ?? '',
+      phone: detail.phone ?? '',
+      deptId: detail.deptId ?? '',
+      roleIds: (detail as unknown as { roleIds?: string[] }).roleIds ?? [],
+      gender: detail.gender ?? 0,
+      status: 1,
+      remark: (detail as unknown as { remark?: string }).remark ?? '',
+    })
+    formVisible.value = true
+  } catch {
+    ElMessage.error('读取用户详情失败')
+  }
 }
 
 async function submitForm() {
+  form.nickname = form.nickname?.trim() ?? ''
+  form.realName = form.realName?.trim() ?? ''
+  form.email = form.email?.trim() ?? ''
+  form.phone = form.phone?.trim() ?? ''
+  form.remark = form.remark?.trim() ?? ''
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
@@ -1051,18 +1064,18 @@ onMounted(async () => {
   padding: 11px 14px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  background: var(--ink-25, #fbfbfc);
+  background: var(--ink-50);
 
   &.is-ok .is-value {
     color: var(--ok);
   }
 
   &.is-fail {
-    border-color: #f6d3cf;
-    background: #fef6f5;
+    border-color: var(--danger-border);
+    background: var(--danger-bg);
 
     .is-value {
-      color: #b42318;
+      color: var(--danger-deep);
     }
   }
 }

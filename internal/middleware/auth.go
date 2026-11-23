@@ -96,9 +96,7 @@ func extractToken(c *gin.Context) string {
 		}
 		return strings.TrimSpace(h)
 	}
-	if t := c.Query("token"); t != "" {
-		return t
-	}
+	// 不接受 URL 查询参数中的令牌：URL 会进入访问日志、浏览器历史和 Referer。
 	if ck, err := c.Cookie("keel_token"); err == nil && ck != "" {
 		return ck
 	}

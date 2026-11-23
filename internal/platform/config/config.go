@@ -701,6 +701,9 @@ func (c *Config) Validate() error {
 		c.Backup.Retain = 7
 	}
 	if seen := map[string]bool{}; len(c.OAuth.Providers) > 0 {
+		if c.App.Env == "prod" && strings.TrimSpace(c.OAuth.CallbackBase) == "" {
+			return fmt.Errorf("生产环境启用 OAuth 时必须配置 oauth.callback_base，不能由 Host 头推导回调地址")
+		}
 		for _, p := range c.OAuth.Providers {
 			name := strings.ToLower(strings.TrimSpace(p.Name))
 			if name == "" {
@@ -724,9 +727,17 @@ func (c *Config) Validate() error {
 		if len(c.JWT.Secret) < 32 {
 			return fmt.Errorf("生产环境 jwt.secret 长度必须不少于 32 位")
 		}
-		// 网关不签发令牌，无需校验密钥强度
-		if !strings.EqualFold(c.Micro.Mode, "gateway") && c.JWT.Secret == DefaultJWTSecret {
-			return fmt.Errorf("生产环境必须显式配置 jwt.secret，不能使用内置默认值")
+		// 网关不签发令牌，无需校验密钥强度。
+		// 仓库自带配置里的占位串长度足够但不能当密钥，否则任何人都能自签超管令牌。
+		if !strings.EqualFold(c.Micro.Mode, "gateway") {
+			for _, weak := range []string{
+				DefaultJWTSecret,
+				"请务必在生产环境替换为至少32位的随机字符串-keel-default-secret",
+			} {
+				if strings.EqualFold(strings.TrimSpace(c.JWT.Secret), weak) {
+					return fmt.Errorf("生产环境必须显式配置 jwt.secret，不能使用内置默认值或仓库占位符")
+				}
+			}
 		}
 	}
 	if c.JWT.AccessTTL <= 0 {

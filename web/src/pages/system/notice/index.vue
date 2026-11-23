@@ -99,16 +99,20 @@ function openCreate() {
 }
 
 async function openEdit(row: NoticeRow) {
-  editingId.value = row.id
-  formRef.value?.clearValidate()
-  formVisible.value = true
-  const detail = row.content ? row : await noticeApi.get(row.id)
-  Object.assign(form, {
-    title: detail.title,
-    content: detail.content,
-    type: detail.type,
-    status: detail.status,
-  })
+  try {
+    const detail = row.content ? row : await noticeApi.get(row.id)
+    editingId.value = row.id
+    formRef.value?.clearValidate()
+    Object.assign(form, {
+      title: detail.title,
+      content: detail.content,
+      type: detail.type,
+      status: detail.status,
+    })
+    formVisible.value = true
+  } catch {
+    ElMessage.error('读取公告详情失败')
+  }
 }
 
 async function submitForm() {
@@ -335,7 +339,7 @@ onMounted(load)
   transition: background 0.14s ease;
 
   &:hover {
-    background: var(--ink-25, #fbfbfc);
+    background: var(--ink-50);
 
     .ni-actions {
       opacity: 1;
@@ -409,6 +413,7 @@ onMounted(load)
   color: var(--ink-500);
   display: -webkit-box;
   -webkit-line-clamp: 1;
+  line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

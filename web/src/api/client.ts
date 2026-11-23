@@ -37,6 +37,8 @@ declare module 'axios' {
 
 interface RetriableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
+  /** 该请求实际携带的令牌，用于判断晚到的 401 是否已经刷新过 */
+  _token?: string
   silent?: boolean
 }
 
@@ -70,12 +72,17 @@ const http = axios.create({
 
 http.interceptors.request.use((cfg: RetriableConfig) => {
   const token = tokenStore.access()
-  if (token) cfg.headers.Authorization = `Bearer ${token}`
+  if (token) {
+    cfg.headers.Authorization = `Bearer ${token}`
+    cfg._token = token
+  }
   return cfg
 })
 
 /** 单飞刷新：并发 401 只发起一次刷新，其余请求排队等待 */
 let refreshing: Promise<boolean> | null = null
+/** 已经用它发起过刷新的 accessToken，避免刷新完成后晚到的 401 触发二次轮换 */
+let refreshedFrom = ''
 
 async function refreshToken(): Promise<boolean> {
   const rt = tokenStore.refresh()
@@ -109,12 +116,16 @@ http.interceptors.response.use(
 
     if (status === 401 && cfg && !cfg._retried && !isLoginCall) {
       cfg._retried = true
-      if (!refreshing) {
+      // 用请求发出时的令牌判断；刷新完成后 tokenStore 已是新值，
+      // 若在这里读当前令牌会误判为“未刷新过”而触发第二次轮换。
+      const seenToken = cfg._token ?? ''
+      if (!refreshing && seenToken !== refreshedFrom) {
+        refreshedFrom = seenToken
         refreshing = refreshToken().finally(() => {
           refreshing = null
         })
       }
-      const ok = await refreshing
+      const ok = refreshing ? await refreshing : true
       if (ok) {
         cfg.headers.Authorization = `Bearer ${tokenStore.access()}`
         return http.request(cfg)

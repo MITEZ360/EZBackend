@@ -108,6 +108,7 @@ onMounted(() => {
       :key="i"
       :ref="(el) => (boxes[i] = el as HTMLInputElement)"
       :value="digits[i]"
+      :aria-label="`第 ${i + 1} 位动态码`"
       class="otp-box"
       type="text"
       inputmode="numeric"
