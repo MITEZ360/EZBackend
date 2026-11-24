@@ -4,7 +4,6 @@ package user
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/authz"
 	"github.com/keel-framework/keel/internal/platform/config"
 	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/query"
 )
 
@@ -288,7 +288,7 @@ func (s *Service) Create(ctx context.Context, in *CreateInput) (*model.User, err
 			return nil, errs.Conflict("手机号已被使用")
 		}
 	}
-	if err := checkStrength(in.Password, s.cfg.Security.PasswordMinLen, s.cfg.Security.PasswordStrength); err != nil {
+	if err := checkStrength(ctx, in.Password, s.cfg.Security.PasswordMinLen, s.cfg.Security.PasswordStrength); err != nil {
 		return nil, err
 	}
 	hash, err := authn.HashPassword(in.Password)
@@ -427,7 +427,7 @@ func isUniqueViolation(err error) bool {
 
 // ResetPassword 管理员重置密码，同时踢下线所有会话。
 func (s *Service) ResetPassword(ctx context.Context, id, password string) error {
-	if err := checkStrength(password, s.cfg.Security.PasswordMinLen, s.cfg.Security.PasswordStrength); err != nil {
+	if err := checkStrength(ctx, password, s.cfg.Security.PasswordMinLen, s.cfg.Security.PasswordStrength); err != nil {
 		return err
 	}
 	hash, err := authn.HashPassword(password)
@@ -607,12 +607,12 @@ func (s *Service) Export(ctx context.Context, p *query.Params, sc Scope, deptFil
 	return f, nil
 }
 
-func checkStrength(pw string, minLen, level int) error {
+func checkStrength(ctx context.Context, pw string, minLen, level int) error {
 	if minLen < 8 {
 		minLen = 8
 	}
 	if len([]rune(pw)) < minLen {
-		return errs.BadRequest(fmt.Sprintf("密码长度至少 %d 位", minLen))
+		return errs.BadRequest(i18n.Tf(ctx, "密码长度至少 {0} 位", minLen))
 	}
 	if level <= 1 {
 		return nil

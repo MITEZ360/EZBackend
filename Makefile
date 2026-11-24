@@ -26,7 +26,12 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 help: ## 显示帮助
 	@awk 'BEGIN{FS=":.*##"; printf "\n用法: make <目标>\n\n"} /^[a-zA-Z_-]+:.*?##/ {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-SWAG      := $(shell go env GOPATH)/bin/swag
+# GOBIN 优先；未设置时回退 GOPATH/bin（go install 实际写到 GOBIN）
+SWAG_DIR  := $(shell go env GOBIN)
+ifeq ($(SWAG_DIR),)
+SWAG_DIR  := $(shell go env GOPATH)/bin
+endif
+SWAG      := $(SWAG_DIR)/swag
 SWAG_VER  := v1.16.4
 
 .PHONY: tidy

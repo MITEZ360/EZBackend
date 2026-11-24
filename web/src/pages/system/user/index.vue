@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { ArrowDown, Delete, Download, MoreFilled, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import { userApi, type CreateUserPayload, type ImportResult } from '@/api/user'
@@ -10,6 +11,7 @@ import { fmtDate, fmtTime, fromNow, saveBlob } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const { t } = useI18n()
 
 const rows = ref<UserRow[]>([])
 const total = ref(0)
@@ -83,7 +85,7 @@ async function onExport() {
       membershipLevelId: query.membershipLevelId || undefined,
     })
     saveBlob(blob, `用户列表_${fmtDate(new Date())}.xlsx`)
-    ElMessage.success('已导出')
+    ElMessage.success(t('已导出'))
   } finally {
     exporting.value = false
   }
@@ -110,25 +112,25 @@ const form = reactive<CreateUserPayload>({
   remark: '',
 })
 
-const rules: FormRules = {
+const rules = computed<FormRules>(() => ({
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 2, max: 32, message: '用户名 2-32 位', trigger: 'blur' },
-    { pattern: /^[a-zA-Z][a-zA-Z0-9_]{1,31}$/, message: '以字母开头，仅含字母、数字、下划线', trigger: 'blur' },
+    { required: true, message: t('请输入用户名'), trigger: 'blur' },
+    { min: 2, max: 32, message: t('用户名 2-32 位'), trigger: 'blur' },
+    { pattern: /^[a-zA-Z][a-zA-Z0-9_]{1,31}$/, message: t('以字母开头，仅含字母、数字、下划线'), trigger: 'blur' },
   ],
   password: [
-    { required: true, message: '请输入初始密码', trigger: 'blur' },
-    { min: 8, max: 64, message: '密码长度 8-64 位', trigger: 'blur' },
+    { required: true, message: t('请输入初始密码'), trigger: 'blur' },
+    { min: 8, max: 64, message: t('密码长度 8-64 位'), trigger: 'blur' },
     {
       pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
-      message: '需同时包含大小写字母与数字',
+      message: t('需同时包含大小写字母与数字'),
       trigger: 'blur',
     },
   ],
-  nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
-  email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }],
-  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }],
-}
+  nickname: [{ required: true, message: t('请输入昵称'), trigger: 'blur' }],
+  email: [{ type: 'email', message: t('邮箱格式不正确'), trigger: 'blur' }],
+  phone: [{ pattern: /^1[3-9]\d{9}$/, message: t('手机号格式不正确'), trigger: 'blur' }],
+}))
 
 function resetForm() {
   Object.assign(form, {
@@ -178,7 +180,7 @@ async function openEdit(row: UserRow) {
     })
     formVisible.value = true
   } catch {
-    ElMessage.error('读取用户详情失败')
+    ElMessage.error(t('读取用户详情失败'))
   }
 }
 
@@ -204,10 +206,10 @@ async function submitForm() {
         gender: form.gender,
         remark: form.remark,
       })
-      ElMessage.success('已保存')
+      ElMessage.success(t('已保存'))
     } else {
       await userApi.create({ ...form })
-      ElMessage.success('用户已创建')
+      ElMessage.success(t('用户已创建'))
     }
     formVisible.value = false
     load()
@@ -229,8 +231,8 @@ const memberForm = reactive({
 })
 
 const previewExpire = computed(() => {
-  if (memberForm.mode === 'forever') return '长期有效'
-  if (memberForm.mode === 'date') return memberForm.expireAt || '请选择日期'
+  if (memberForm.mode === 'forever') return t('长期有效')
+  if (memberForm.mode === 'date') return memberForm.expireAt || t('请选择日期')
   const d = new Date()
   d.setDate(d.getDate() + (memberForm.days || 0))
   return fmtDate(d)
@@ -263,7 +265,7 @@ async function submitMember() {
   const target = memberTarget.value
   if (!target) return
   if (!memberForm.levelId) {
-    ElMessage.warning('请选择会员等级')
+    ElMessage.warning(t('请选择会员等级'))
     return
   }
   const payload: GrantMembershipPayload = { levelId: memberForm.levelId }
@@ -271,7 +273,7 @@ async function submitMember() {
     payload.days = memberForm.days
   } else if (memberForm.mode === 'date') {
     if (!memberForm.expireAt) {
-      ElMessage.warning('请选择到期日期')
+      ElMessage.warning(t('请选择到期日期'))
       return
     }
     payload.expireAt = memberForm.expireAt
@@ -282,7 +284,7 @@ async function submitMember() {
   memberSaving.value = true
   try {
     await membershipApi.grant(target.id, payload)
-    ElMessage.success('会员已更新')
+    ElMessage.success(t('会员已更新'))
     memberVisible.value = false
     await load()
   } finally {
@@ -295,15 +297,15 @@ async function revokeMember() {
   if (!target) return
   try {
     await ElMessageBox.confirm(
-      `取消后「${target.nickname}」立即变为非会员，相关权益同时失效。确定继续吗？`,
-      '取消会员',
-      { confirmButtonText: '取消会员', cancelButtonText: '返回', type: 'warning' },
+      t('取消后「{name}」立即变为非会员，相关权益同时失效。确定继续吗？', { name: target.nickname }),
+      t('取消会员'),
+      { confirmButtonText: t('取消会员'), cancelButtonText: t('返回'), type: 'warning' },
     )
   } catch {
     return
   }
   await membershipApi.revoke(target.id)
-  ElMessage.success('已取消会员')
+  ElMessage.success(t('已取消会员'))
   memberVisible.value = false
   await load()
 }
@@ -311,18 +313,22 @@ async function revokeMember() {
 /* ---------------------------------------------------------- 行内操作 */
 async function toggleStatus(row: UserRow) {
   const next = row.status === 1 ? 0 : 1
-  const action = next === 1 ? '启用' : '停用'
+  const action = next === 1 ? t('启用') : t('停用')
+  const question = next === 1
+    ? t('确定启用用户「{name}」？', { name: row.nickname })
+    : t('确定停用用户「{name}」？', { name: row.nickname })
+  const title = next === 1 ? t('启用确认') : t('停用确认')
   try {
-    await ElMessageBox.confirm(`确定${action}用户「${row.nickname}」？`, `${action}确认`, {
+    await ElMessageBox.confirm(question, title, {
       confirmButtonText: action,
-      cancelButtonText: '取消',
+      cancelButtonText: t('取消'),
       type: 'warning',
     })
   } catch {
     return
   }
   await userApi.setStatus(row.id, next)
-  ElMessage.success(`已${action}`)
+  ElMessage.success(next === 1 ? t('已启用') : t('已停用'))
   load()
 }
 
@@ -330,14 +336,14 @@ async function resetPassword(row: UserRow) {
   let value: string
   try {
     const res = await ElMessageBox.prompt(
-      `为用户「${row.nickname}」设置新密码，需包含大小写字母与数字，至少 8 位。`,
-      '重置密码',
+      t('为用户「{name}」设置新密码，需包含大小写字母与数字，至少 8 位。', { name: row.nickname }),
+      t('重置密码'),
       {
-        confirmButtonText: '确认重置',
-        cancelButtonText: '取消',
+        confirmButtonText: t('确认重置'),
+        cancelButtonText: t('取消'),
         inputType: 'password',
         inputPattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,64}$/,
-        inputErrorMessage: '密码需 8-64 位且包含大小写字母与数字',
+        inputErrorMessage: t('密码需 8-64 位且包含大小写字母与数字'),
       },
     )
     value = res.value
@@ -345,21 +351,21 @@ async function resetPassword(row: UserRow) {
     return
   }
   await userApi.resetPassword(row.id, value)
-  ElMessage.success('密码已重置')
+  ElMessage.success(t('密码已重置'))
 }
 
 async function removeUser(row: UserRow) {
   try {
     await ElMessageBox.confirm(
-      `删除后该账号将无法登录，且不可恢复。确定删除「${row.nickname}」吗？`,
-      '删除用户',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'error' },
+      t('删除后该账号将无法登录，且不可恢复。确定删除「{name}」吗？', { name: row.nickname }),
+      t('删除用户'),
+      { confirmButtonText: t('删除'), cancelButtonText: t('取消'), type: 'error' },
     )
   } catch {
     return
   }
   await userApi.remove(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   if (rows.value.length === 1 && query.page > 1) query.page -= 1
   load()
 }
@@ -375,15 +381,15 @@ function onCommand(cmd: string, row: UserRow) {
 async function resetTOTP(row: UserRow) {
   try {
     await ElMessageBox.confirm(
-      `将清除「${row.nickname}」的两步验证配置，并强制其重新登录后重新绑定认证器。确定继续吗？`,
-      '重置两步验证',
-      { confirmButtonText: '重置', cancelButtonText: '取消', type: 'warning' },
+      t('将清除「{name}」的两步验证配置，并强制其重新登录后重新绑定认证器。确定继续吗？', { name: row.nickname }),
+      t('重置两步验证'),
+      { confirmButtonText: t('重置'), cancelButtonText: t('取消'), type: 'warning' },
     )
   } catch {
     return
   }
   await userApi.resetTOTP(row.id)
-  ElMessage.success('已重置两步验证')
+  ElMessage.success(t('已重置两步验证'))
   await load()
 }
 
@@ -402,9 +408,9 @@ async function batchRemove() {
   if (!ids.length) return
   try {
     await ElMessageBox.confirm(
-      `已选择 ${ids.length} 个账号，删除后立即失效且不可恢复。确定继续吗？`,
-      '批量删除',
-      { confirmButtonText: `删除 ${ids.length} 项`, cancelButtonText: '取消', type: 'error' },
+      t('已选择 {count} 个账号，删除后立即失效且不可恢复。确定继续吗？', { count: ids.length }),
+      t('批量删除'),
+      { confirmButtonText: t('删除 {count} 项', { count: ids.length }), cancelButtonText: t('取消'), type: 'error' },
     )
   } catch {
     return
@@ -413,9 +419,9 @@ async function batchRemove() {
   try {
     const res = await userApi.batchDelete(ids)
     if (res.skipped?.length) {
-      ElMessage.warning(`已删除 ${res.deleted} 个，${res.skipped.length} 个被跳过（内置管理员或当前账号不可删除）`)
+      ElMessage.warning(t('已删除 {deleted} 个，{skipped} 个被跳过（内置管理员或当前账号不可删除）', { deleted: res.deleted, skipped: res.skipped.length }))
     } else {
-      ElMessage.success(`已删除 ${res.deleted} 个账号`)
+      ElMessage.success(t('已删除 {count} 个账号', { count: res.deleted }))
     }
     if (rows.value.length === ids.length && query.page > 1) query.page -= 1
     load()
@@ -484,31 +490,31 @@ onMounted(async () => {
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">用户管理</h1>
-        <p class="page-desc">管理账号、所属部门与角色授权</p>
+        <h1 class="page-title">{{ $t('用户管理') }}</h1>
+        <p class="page-desc">{{ $t('管理账号、所属部门与角色授权') }}</p>
       </div>
       <div class="page-actions">
         <el-dropdown trigger="click" @command="onImportCommand">
           <el-button :icon="Upload" :loading="importing">
-            导入<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            {{ $t('导入') }}<el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="import" :disabled="!auth.can('system:user:create')">
-                从 Excel 导入
+                {{ $t('从 Excel 导入') }}
               </el-dropdown-item>
-              <el-dropdown-item command="template" divided>下载导入模板</el-dropdown-item>
+              <el-dropdown-item command="template" divided>{{ $t('下载导入模板') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button :icon="Download" :loading="exporting" @click="onExport">导出</el-button>
+        <el-button :icon="Download" :loading="exporting" @click="onExport">{{ $t('导出') }}</el-button>
         <el-button
           v-perm="'system:user:create'"
           type="primary"
           :icon="Plus"
           @click="openCreate"
         >
-          新增用户
+          {{ $t('新增用户') }}
         </el-button>
       </div>
     </div>
@@ -520,7 +526,7 @@ onMounted(async () => {
         <div class="toolbar-left">
           <el-input
             v-model="query.keyword"
-            placeholder="搜索用户名 / 昵称 / 手机号"
+            :placeholder="$t('搜索用户名 / 昵称 / 手机号')"
             :prefix-icon="Search"
             clearable
             style="width: 248px"
@@ -530,7 +536,7 @@ onMounted(async () => {
           <el-tree-select
             v-model="query.deptId"
             :data="deptOptions"
-            placeholder="全部部门"
+            :placeholder="$t('全部部门')"
             check-strictly
             clearable
             style="width: 160px"
@@ -538,27 +544,27 @@ onMounted(async () => {
           />
           <el-select
             v-model="query.status"
-            placeholder="全部状态"
+            :placeholder="$t('全部状态')"
             clearable
             style="width: 118px"
             @change="reload"
           >
-            <el-option label="正常" :value="1" />
-            <el-option label="停用" :value="0" />
+            <el-option :label="$t('正常')" :value="1" />
+            <el-option :label="$t('停用')" :value="0" />
           </el-select>
           <el-select
             v-model="query.membershipState"
-            placeholder="会员状态"
+            :placeholder="$t('会员状态')"
             clearable
             style="width: 128px"
             @change="reload"
           >
-            <el-option label="有效会员" value="member" />
-            <el-option label="已过期" value="expired" />
-            <el-option label="非会员" value="none" />
+            <el-option :label="$t('有效会员')" value="member" />
+            <el-option :label="$t('已过期')" value="expired" />
+            <el-option :label="$t('非会员')" value="none" />
           </el-select>
-          <el-button @click="reload">查询</el-button>
-          <el-button text @click="resetQuery">重置</el-button>
+          <el-button @click="reload">{{ $t('查询') }}</el-button>
+          <el-button text @click="resetQuery">{{ $t('重置') }}</el-button>
         </div>
         <div class="toolbar-right">
           <el-button
@@ -569,9 +575,9 @@ onMounted(async () => {
             :loading="batchDeleting"
             @click="batchRemove"
           >
-            删除选中 {{ selected.length }}
+            {{ $t('删除选中 {count}', { count: selected.length }) }}
           </el-button>
-          <el-button :icon="Refresh" circle title="刷新" @click="load" />
+          <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
@@ -583,14 +589,14 @@ onMounted(async () => {
         @selection-change="onSelectionChange"
       >
         <el-table-column type="selection" width="44" :selectable="canSelect" />
-        <el-table-column label="用户" min-width="200">
+        <el-table-column :label="$t('用户')" min-width="200">
           <template #default="{ row }">
             <div class="user-cell">
               <div class="avatar-dot">{{ (row.nickname || row.username).slice(0, 1) }}</div>
               <div class="user-lines">
                 <span class="u-name">
                   {{ row.nickname }}
-                  <em v-if="row.isSuper" class="badge">超管</em>
+                  <em v-if="row.isSuper" class="badge">{{ $t('超管') }}</em>
                 </span>
                 <span class="u-sub">@{{ row.username }}</span>
               </div>
@@ -598,24 +604,24 @@ onMounted(async () => {
           </template>
         </el-table-column>
 
-        <el-table-column label="部门" min-width="120">
+        <el-table-column :label="$t('部门')" min-width="120">
           <template #default="{ row }">
             <span class="muted">{{ row.dept?.name || '-' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="角色" min-width="150">
+        <el-table-column :label="$t('角色')" min-width="150">
           <template #default="{ row }">
             <div class="role-tags">
               <el-tag v-for="name in roleNames(row)" :key="name" type="primary" size="small">
                 {{ name }}
               </el-tag>
-              <span v-if="!roleNames(row).length" class="dim">未分配</span>
+              <span v-if="!roleNames(row).length" class="dim">{{ $t('未分配') }}</span>
             </div>
           </template>
         </el-table-column>
 
-        <el-table-column label="会员" width="136">
+        <el-table-column :label="$t('会员')" width="136">
           <template #default="{ row }">
             <div
               v-if="row.membership"
@@ -627,35 +633,35 @@ onMounted(async () => {
                 <span class="member-name">{{ row.membership.name }}</span>
                 <span class="member-sub">
                   <template v-if="row.membershipState === 'expired'">
-                    {{ row.membershipExpireAt ? `${fmtDate(row.membershipExpireAt)} 已过期` : '已过期' }}
+                    {{ row.membershipExpireAt ? $t('{date} 已过期', { date: fmtDate(row.membershipExpireAt) }) : $t('已过期') }}
                   </template>
-                  <template v-else-if="row.membershipState === 'disabled'">等级已停用</template>
+                  <template v-else-if="row.membershipState === 'disabled'">{{ $t('等级已停用') }}</template>
                   <template v-else-if="row.membershipExpireAt">
-                    {{ fmtDate(row.membershipExpireAt) }} 到期
+                    {{ $t('{date} 到期', { date: fmtDate(row.membershipExpireAt) }) }}
                   </template>
-                  <template v-else>长期有效</template>
+                  <template v-else>{{ $t('长期有效') }}</template>
                 </span>
               </div>
             </div>
-            <span v-else class="dim">非会员</span>
+            <span v-else class="dim">{{ $t('非会员') }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="手机号" width="140">
+        <el-table-column :label="$t('手机号')" width="140">
           <template #default="{ row }">
             <span class="num muted">{{ row.phone || '-' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="96">
+        <el-table-column :label="$t('状态')" width="96">
           <template #default="{ row }">
             <span class="status-dot" :class="row.status === 1 ? 'is-on' : 'is-off'">
-              {{ row.status === 1 ? '正常' : '停用' }}
+              {{ row.status === 1 ? $t('正常') : $t('停用') }}
             </span>
           </template>
         </el-table-column>
 
-        <el-table-column label="最后登录" width="150">
+        <el-table-column :label="$t('最后登录')" width="150">
           <template #default="{ row }">
             <template v-if="row.lastLoginAt">
               <div class="cell-time" :title="fmtTime(row.lastLoginAt)">
@@ -663,7 +669,7 @@ onMounted(async () => {
               </div>
               <div class="cell-sub num">{{ row.lastLoginIp || '-' }}</div>
             </template>
-            <span v-else class="dim">从未登录</span>
+            <span v-else class="dim">{{ $t('从未登录') }}</span>
           </template>
         </el-table-column>
 
@@ -675,7 +681,7 @@ onMounted(async () => {
               type="primary"
               @click="openEdit(row)"
             >
-              编辑
+              {{ $t('编辑') }}
             </el-button>
             <el-dropdown trigger="click" @command="(c: string) => onCommand(c, row)">
               <el-button link type="primary" :icon="MoreFilled" />
@@ -685,10 +691,10 @@ onMounted(async () => {
                     command="member"
                     :disabled="!auth.can('system:user:grant-membership')"
                   >
-                    设置会员
+                    {{ $t('设置会员') }}
                   </el-dropdown-item>
                   <el-dropdown-item command="reset" divided :disabled="!auth.can('system:user:reset')">
-                    重置密码
+                    {{ $t('重置密码') }}
                   </el-dropdown-item>
                   <el-dropdown-item
                     command="totp"
@@ -696,20 +702,20 @@ onMounted(async () => {
                       !auth.can('system:user:reset-totp') || !row.totpEnabled || row.isSuper
                     "
                   >
-                    重置两步验证
+                    {{ $t('重置两步验证') }}
                   </el-dropdown-item>
                   <el-dropdown-item
                     command="status"
                     :disabled="!auth.can('system:user:update') || row.isSuper"
                   >
-                    {{ row.status === 1 ? '停用账号' : '启用账号' }}
+                    {{ row.status === 1 ? $t('停用账号') : $t('启用账号') }}
                   </el-dropdown-item>
                   <el-dropdown-item
                     command="delete"
                     divided
                     :disabled="!auth.can('system:user:delete') || row.isSuper"
                   >
-                    删除用户
+                    {{ $t('删除用户') }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -719,7 +725,7 @@ onMounted(async () => {
       </el-table>
 
       <div class="pager">
-        <span class="total">共 {{ total }} 条</span>
+        <span class="total">{{ $t('共 {count} 条', { count: total }) }}</span>
         <el-pagination
           v-model:current-page="query.page"
           v-model:page-size="query.page_size"
@@ -736,7 +742,7 @@ onMounted(async () => {
     <!-- 新增 / 编辑 -->
     <el-dialog
       v-model="formVisible"
-      :title="isEdit ? '编辑用户' : '新增用户'"
+      :title="isEdit ? $t('编辑用户') : $t('新增用户')"
       width="640px"
       append-to-body
       :close-on-click-modal="false"
@@ -744,118 +750,118 @@ onMounted(async () => {
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <div class="form-grid">
-          <el-form-item label="用户名" prop="username">
-            <el-input v-model="form.username" :disabled="isEdit" placeholder="登录账号" />
+          <el-form-item :label="$t('用户名')" prop="username">
+            <el-input v-model="form.username" :disabled="isEdit" :placeholder="$t('登录账号')" />
           </el-form-item>
 
-          <el-form-item v-if="!isEdit" label="初始密码" prop="password">
-            <el-input v-model="form.password" type="password" show-password placeholder="8-64 位，含大小写与数字" />
+          <el-form-item v-if="!isEdit" :label="$t('初始密码')" prop="password">
+            <el-input v-model="form.password" type="password" show-password :placeholder="$t('8-64 位，含大小写与数字')" />
           </el-form-item>
 
-          <el-form-item label="昵称" prop="nickname">
-            <el-input v-model="form.nickname" placeholder="用于界面展示" />
+          <el-form-item :label="$t('昵称')" prop="nickname">
+            <el-input v-model="form.nickname" :placeholder="$t('用于界面展示')" />
           </el-form-item>
 
-          <el-form-item label="姓名" prop="realName">
-            <el-input v-model="form.realName" placeholder="选填" />
+          <el-form-item :label="$t('姓名')" prop="realName">
+            <el-input v-model="form.realName" :placeholder="$t('选填')" />
           </el-form-item>
 
-          <el-form-item label="邮箱" prop="email">
-            <el-input v-model="form.email" placeholder="选填" />
+          <el-form-item :label="$t('邮箱')" prop="email">
+            <el-input v-model="form.email" :placeholder="$t('选填')" />
           </el-form-item>
 
-          <el-form-item label="手机号" prop="phone">
-            <el-input v-model="form.phone" placeholder="选填" />
+          <el-form-item :label="$t('手机号')" prop="phone">
+            <el-input v-model="form.phone" :placeholder="$t('选填')" />
           </el-form-item>
 
-          <el-form-item label="所属部门">
+          <el-form-item :label="$t('所属部门')">
             <el-tree-select
               v-model="form.deptId"
               :data="deptOptions"
-              placeholder="请选择部门"
+              :placeholder="$t('请选择部门')"
               check-strictly
               clearable
             />
           </el-form-item>
 
-          <el-form-item label="性别">
+          <el-form-item :label="$t('性别')">
             <el-radio-group v-model="form.gender">
-              <el-radio :value="0">未知</el-radio>
-              <el-radio :value="1">男</el-radio>
-              <el-radio :value="2">女</el-radio>
+              <el-radio :value="0">{{ $t('未知') }}</el-radio>
+              <el-radio :value="1">{{ $t('男') }}</el-radio>
+              <el-radio :value="2">{{ $t('女') }}</el-radio>
             </el-radio-group>
           </el-form-item>
         </div>
 
-        <el-form-item label="角色">
-          <el-select v-model="form.roleIds" multiple placeholder="选择角色" style="width: 100%">
+        <el-form-item :label="$t('角色')">
+          <el-select v-model="form.roleIds" multiple :placeholder="$t('选择角色')" style="width: 100%">
             <el-option v-for="r in roles" :key="r.id" :label="r.name" :value="r.id" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="备注">
+        <el-form-item :label="$t('备注')">
           <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="255" show-word-limit />
         </el-form-item>
 
-        <el-form-item v-if="!isEdit" label="账号状态">
+        <el-form-item v-if="!isEdit" :label="$t('账号状态')">
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
-          <span class="switch-hint">{{ form.status === 1 ? '创建后可立即登录' : '创建后处于停用状态' }}</span>
+          <span class="switch-hint">{{ form.status === 1 ? $t('创建后可立即登录') : $t('创建后处于停用状态') }}</span>
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+        <el-button @click="formVisible = false">{{ $t('取消') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitForm">{{ $t('保存') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 导入结果 -->
     <el-dialog
       v-model="importVisible"
-      title="导入结果"
+      :title="$t('导入结果')"
       width="640px"
       append-to-body
       @closed="closeImport"
     >
       <div v-if="importResult" class="import-summary">
         <div class="is-item">
-          <span class="is-label">总行数</span>
+          <span class="is-label">{{ $t('总行数') }}</span>
           <b class="is-value">{{ importResult.total }}</b>
         </div>
         <div class="is-item is-ok">
-          <span class="is-label">导入成功</span>
+          <span class="is-label">{{ $t('导入成功') }}</span>
           <b class="is-value">{{ importResult.success }}</b>
         </div>
         <div class="is-item" :class="{ 'is-fail': importResult.failed }">
-          <span class="is-label">导入失败</span>
+          <span class="is-label">{{ $t('导入失败') }}</span>
           <b class="is-value">{{ importResult.failed }}</b>
         </div>
       </div>
 
       <div v-if="importResult?.errors?.length" class="import-errors">
         <div class="ie-head">
-          <span>失败明细</span>
-          <span v-if="importResult.truncated" class="dim">仅展示前 100 条</span>
+          <span>{{ $t('失败明细') }}</span>
+          <span v-if="importResult.truncated" class="dim">{{ $t('仅展示前 100 条') }}</span>
         </div>
         <el-table :data="importResult.errors" size="small" max-height="300">
-          <el-table-column prop="row" label="行号" width="70" align="center" />
-          <el-table-column prop="username" label="用户名" width="150" />
-          <el-table-column prop="message" label="失败原因" />
+          <el-table-column prop="row" :label="$t('行号')" width="70" align="center" />
+          <el-table-column prop="username" :label="$t('用户名')" width="150" />
+          <el-table-column prop="message" :label="$t('失败原因')" />
         </el-table>
       </div>
 
-      <p v-else-if="importResult" class="import-ok">全部账号导入成功，可立即登录。</p>
+      <p v-else-if="importResult" class="import-ok">{{ $t('全部账号导入成功，可立即登录。') }}</p>
 
       <template #footer>
-        <el-button @click="downloadTemplate">下载模板</el-button>
-        <el-button type="primary" @click="closeImport">知道了</el-button>
+        <el-button @click="downloadTemplate">{{ $t('下载模板') }}</el-button>
+        <el-button type="primary" @click="closeImport">{{ $t('知道了') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 设置会员 -->
     <el-dialog
       v-model="memberVisible"
-      title="设置会员"
+      :title="$t('设置会员')"
       width="540px"
       append-to-body
       :close-on-click-modal="false"
@@ -876,16 +882,16 @@ onMounted(async () => {
             effect="plain"
             :style="{ color: memberTarget.membership.color, borderColor: memberTarget.membership.color }"
           >
-            当前 {{ memberTarget.membership.name }}
+            {{ $t('当前 {name}', { name: memberTarget.membership.name }) }}
           </el-tag>
-          <span v-else class="dim">当前非会员</span>
+          <span v-else class="dim">{{ $t('当前非会员') }}</span>
         </div>
 
         <el-form label-position="top">
-          <el-form-item label="会员等级">
+          <el-form-item :label="$t('会员等级')">
             <el-select
               v-model="memberForm.levelId"
-              placeholder="选择会员等级"
+              :placeholder="$t('选择会员等级')"
               style="width: 100%"
               @change="onMemberLevelChange"
             >
@@ -900,24 +906,24 @@ onMounted(async () => {
                   <span class="member-dot" :style="{ '--lv-color': lv.color || '#6366f1' }" />
                   <span>{{ lv.name }}</span>
                   <span class="dim">{{ lv.code }}</span>
-                  <span v-if="lv.status === 0" class="dim">已停用</span>
+                  <span v-if="lv.status === 0" class="dim">{{ $t('已停用') }}</span>
                 </div>
               </el-option>
             </el-select>
             <p v-if="!memberLevels.length" class="member-tip">
-              还没有可用的会员等级，请先到「系统管理 → 会员等级」创建。
+              {{ $t('还没有可用的会员等级，请先到「系统管理 → 会员等级」创建。') }}
             </p>
           </el-form-item>
 
-          <el-form-item label="有效期">
+          <el-form-item :label="$t('有效期')">
             <el-radio-group v-model="memberForm.mode">
-              <el-radio-button value="days">按天数</el-radio-button>
-              <el-radio-button value="date">指定日期</el-radio-button>
-              <el-radio-button value="forever">长期有效</el-radio-button>
+              <el-radio-button value="days">{{ $t('按天数') }}</el-radio-button>
+              <el-radio-button value="date">{{ $t('指定日期') }}</el-radio-button>
+              <el-radio-button value="forever">{{ $t('长期有效') }}</el-radio-button>
             </el-radio-group>
           </el-form-item>
 
-          <el-form-item v-if="memberForm.mode === 'days'" label="有效天数">
+          <el-form-item v-if="memberForm.mode === 'days'" :label="$t('有效天数')">
             <el-input-number
               v-model="memberForm.days"
               :min="1"
@@ -925,25 +931,25 @@ onMounted(async () => {
               controls-position="right"
               style="width: 170px"
             />
-            <span class="expire-hint">到期日 {{ previewExpire }}</span>
+            <span class="expire-hint">{{ $t('到期日 {date}', { date: previewExpire }) }}</span>
           </el-form-item>
 
-          <el-form-item v-else-if="memberForm.mode === 'date'" label="到期日期">
+          <el-form-item v-else-if="memberForm.mode === 'date'" :label="$t('到期日期')">
             <el-date-picker
               v-model="memberForm.expireAt"
               type="date"
               value-format="YYYY-MM-DD"
-              placeholder="选择到期日期"
+              :placeholder="$t('选择到期日期')"
               :disabled-date="(d: Date) => d.getTime() < Date.now() - 86400000"
             />
           </el-form-item>
 
           <p v-if="memberForm.mode === 'forever'" class="member-tip">
-            长期有效不会自动到期，需要手动取消会员。
+            {{ $t('长期有效不会自动到期，需要手动取消会员。') }}
           </p>
 
           <p class="member-tip">
-            同等级续费会在原到期日上顺延；切换等级则从今天重新计算。到期后自动按非会员处理，无需手动清理。
+            {{ $t('同等级续费会在原到期日上顺延；切换等级则从今天重新计算。到期后自动按非会员处理，无需手动清理。') }}
           </p>
         </el-form>
       </div>
@@ -956,12 +962,12 @@ onMounted(async () => {
             plain
             @click="revokeMember"
           >
-            取消会员
+            {{ $t('取消会员') }}
           </el-button>
           <span v-else />
           <div>
-            <el-button @click="memberVisible = false">返回</el-button>
-            <el-button type="primary" :loading="memberSaving" @click="submitMember">保存</el-button>
+            <el-button @click="memberVisible = false">{{ $t('返回') }}</el-button>
+            <el-button type="primary" :loading="memberSaving" @click="submitMember">{{ $t('保存') }}</el-button>
           </div>
         </div>
       </template>

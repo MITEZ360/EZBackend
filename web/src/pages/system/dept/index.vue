@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { Translation, useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { deptApi, type DeptPayload } from '@/api/system'
 import type { DeptNode } from '@/api/types'
+
+const { t } = useI18n()
 
 const tree = ref<DeptNode[]>([])
 const loading = ref(false)
@@ -77,11 +80,11 @@ const form = reactive<DeptPayload>({
   status: 1,
 })
 
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入部门名称', trigger: 'blur' }],
-  email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }],
-  phone: [{ pattern: /^[\d\-+() ]{6,20}$/, message: '联系电话格式不正确', trigger: 'blur' }],
-}
+const rules = computed<FormRules>(() => ({
+  name: [{ required: true, message: t('请输入部门名称'), trigger: 'blur' }],
+  email: [{ type: 'email', message: t('邮箱格式不正确'), trigger: 'blur' }],
+  phone: [{ pattern: /^[\d\-+() ]{6,20}$/, message: t('联系电话格式不正确'), trigger: 'blur' }],
+}))
 
 function resetForm() {
   Object.assign(form, {
@@ -130,10 +133,10 @@ async function submitForm() {
   try {
     if (isEdit.value) {
       await deptApi.update(editingId.value, { ...form })
-      ElMessage.success('已保存')
+      ElMessage.success(t('已保存'))
     } else {
       await deptApi.create({ ...form })
-      ElMessage.success('部门已创建')
+      ElMessage.success(t('部门已创建'))
     }
     formVisible.value = false
     load()
@@ -144,25 +147,25 @@ async function submitForm() {
 
 async function removeDept(node: DeptNode) {
   const blocked = node.children?.length
-    ? `该部门下还有 ${node.children.length} 个下级部门，需先删除下级。`
+    ? t('该部门下还有 {count} 个下级部门，需先删除下级。', { count: node.children.length })
     : (node.userCount ?? 0) > 0
-      ? `该部门下还有 ${node.userCount} 名成员，需先调整成员归属。`
-      : `删除「${node.name}」后不可恢复，确定继续吗？`
+      ? t('该部门下还有 {count} 名成员，需先调整成员归属。', { count: node.userCount })
+      : t('删除「{name}」后不可恢复，确定继续吗？', { name: node.name })
   if (node.children?.length || (node.userCount ?? 0) > 0) {
     ElMessage.warning(blocked)
     return
   }
   try {
-    await ElMessageBox.confirm(blocked, '删除部门', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(blocked, t('删除部门'), {
+      confirmButtonText: t('删除'),
+      cancelButtonText: t('取消'),
       type: 'error',
     })
   } catch {
     return
   }
   await deptApi.remove(node.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   load()
 }
 
@@ -173,12 +176,12 @@ onMounted(load)
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">部门管理</h1>
-        <p class="page-desc">维护组织架构，部门层级同时决定数据权限的可见范围</p>
+        <h1 class="page-title">{{ $t('部门管理') }}</h1>
+        <p class="page-desc">{{ $t('维护组织架构，部门层级同时决定数据权限的可见范围') }}</p>
       </div>
       <div class="page-actions">
         <el-button v-perm="'system:dept:create'" type="primary" :icon="Plus" @click="openCreate()">
-          新增部门
+          {{ $t('新增部门') }}
         </el-button>
       </div>
     </div>
@@ -187,11 +190,14 @@ onMounted(load)
       <div class="toolbar">
         <div class="toolbar-left">
           <span class="hint">
-            <b class="num">{{ deptCount }}</b> 个部门 · <b class="num">{{ memberTotal }}</b> 名成员
+            <Translation keypath="{count} 个部门 · {members} 名成员">
+              <template #count><b class="num">{{ deptCount }}</b></template>
+              <template #members><b class="num">{{ memberTotal }}</b></template>
+            </Translation>
           </span>
         </div>
         <div class="toolbar-right">
-          <el-button :icon="Refresh" circle title="刷新" @click="load" />
+          <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
@@ -203,7 +209,7 @@ onMounted(load)
         :tree-props="{ children: 'children' }"
         :indent="18"
       >
-        <el-table-column label="部门名称" min-width="240">
+        <el-table-column :label="$t('部门名称')" min-width="240">
           <template #default="{ row }">
             <div class="dept-cell">
               <span class="dept-mark" :class="{ root: !row.parentId || row.parentId === '0' }">
@@ -214,40 +220,40 @@ onMounted(load)
           </template>
         </el-table-column>
 
-        <el-table-column label="负责人" width="130">
+        <el-table-column :label="$t('负责人')" width="130">
           <template #default="{ row }">
             <span :class="row.leader ? '' : 'dim'">{{ row.leader || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="联系电话" width="150">
+        <el-table-column :label="$t('联系电话')" width="150">
           <template #default="{ row }">
             <span class="num" :class="row.phone ? 'muted' : 'dim'">{{ row.phone || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="邮箱" min-width="180">
+        <el-table-column :label="$t('邮箱')" min-width="180">
           <template #default="{ row }">
             <span :class="row.email ? 'muted' : 'dim'">{{ row.email || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="直属成员" width="96" align="right">
+        <el-table-column :label="$t('直属成员')" width="96" align="right">
           <template #default="{ row }">
             <span class="num member" :class="{ zero: !row.userCount }">{{ row.userCount ?? 0 }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="排序" width="70" align="right">
+        <el-table-column :label="$t('排序')" width="70" align="right">
           <template #default="{ row }">
             <span class="num dim">{{ row.sort }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="88" align="center">
+        <el-table-column :label="$t('状态')" width="88" align="center">
           <template #default="{ row }">
             <span class="status-dot" :class="row.status === 1 ? 'is-on' : 'is-off'">
-              {{ row.status === 1 ? '正常' : '停用' }}
+              {{ row.status === 1 ? $t('正常') : $t('停用') }}
             </span>
           </template>
         </el-table-column>
@@ -255,13 +261,13 @@ onMounted(load)
         <el-table-column label="" width="180" align="right" fixed="right">
           <template #default="{ row }">
             <el-button v-perm="'system:dept:create'" link type="primary" @click="openCreate(row)">
-              新增下级
+              {{ $t('新增下级') }}
             </el-button>
             <el-button v-perm="'system:dept:update'" link type="primary" @click="openEdit(row)">
-              编辑
+              {{ $t('编辑') }}
             </el-button>
             <el-button v-perm="'system:dept:delete'" link type="danger" @click="removeDept(row)">
-              删除
+              {{ $t('删除') }}
             </el-button>
           </template>
         </el-table-column>
@@ -270,59 +276,59 @@ onMounted(load)
 
     <el-dialog
       v-model="formVisible"
-      :title="isEdit ? '编辑部门' : '新增部门'"
+      :title="isEdit ? $t('编辑部门') : $t('新增部门')"
       width="560px"
       append-to-body
       :close-on-click-modal="false"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
-        <el-form-item label="上级部门">
+        <el-form-item :label="$t('上级部门')">
           <el-tree-select
             v-model="form.parentId"
             :data="parentTree"
             :props="{ label: 'name', children: 'children', value: 'id' }"
             node-key="id"
-            placeholder="选择上级部门"
+            :placeholder="$t('选择上级部门')"
             check-strictly
             default-expand-all
             clearable
             style="width: 100%"
           />
-          <span class="field-hint">留空表示作为顶级部门</span>
+          <span class="field-hint">{{ $t('留空表示作为顶级部门') }}</span>
         </el-form-item>
 
         <div class="form-grid">
-          <el-form-item label="部门名称" prop="name">
-            <el-input v-model="form.name" placeholder="如 研发中心" />
+          <el-form-item :label="$t('部门名称')" prop="name">
+            <el-input v-model="form.name" :placeholder="$t('如 研发中心')" />
           </el-form-item>
-          <el-form-item label="负责人">
-            <el-input v-model="form.leader" placeholder="选填" />
-          </el-form-item>
-        </div>
-
-        <div class="form-grid">
-          <el-form-item label="联系电话" prop="phone">
-            <el-input v-model="form.phone" placeholder="选填" />
-          </el-form-item>
-          <el-form-item label="邮箱" prop="email">
-            <el-input v-model="form.email" placeholder="选填" />
+          <el-form-item :label="$t('负责人')">
+            <el-input v-model="form.leader" :placeholder="$t('选填')" />
           </el-form-item>
         </div>
 
         <div class="form-grid">
-          <el-form-item label="排序">
+          <el-form-item :label="$t('联系电话')" prop="phone">
+            <el-input v-model="form.phone" :placeholder="$t('选填')" />
+          </el-form-item>
+          <el-form-item :label="$t('邮箱')" prop="email">
+            <el-input v-model="form.email" :placeholder="$t('选填')" />
+          </el-form-item>
+        </div>
+
+        <div class="form-grid">
+          <el-form-item :label="$t('排序')">
             <el-input-number v-model="form.sort" :min="0" :max="9999" controls-position="right" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="状态">
-            <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="正常" inactive-text="停用" />
+          <el-form-item :label="$t('状态')">
+            <el-switch v-model="form.status" :active-value="1" :inactive-value="0" :active-text="$t('正常')" :inactive-text="$t('停用')" />
           </el-form-item>
         </div>
       </el-form>
 
       <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+        <el-button @click="formVisible = false">{{ $t('取消') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitForm">{{ $t('保存') }}</el-button>
       </template>
     </el-dialog>
   </div>

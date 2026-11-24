@@ -6,7 +6,9 @@ import { fileApi } from '@/api/ops'
 import type { FileRow } from '@/api/types'
 import { fmtBytes, fmtTime, fromNow, saveBlob } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 
 const rows = ref<FileRow[]>([])
@@ -85,12 +87,12 @@ async function uploadFiles(files: File[]) {
     const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase()
     if (!ACCEPT.includes(ext)) {
       uploadFailed.value += 1
-      ElMessage.warning(`「${f.name}」类型不支持`)
+      ElMessage.warning(t('「{name}」类型不支持', { name: f.name }))
       continue
     }
     if (f.size > MAX_SIZE) {
       uploadFailed.value += 1
-      ElMessage.warning(`「${f.name}」超过 20MB`)
+      ElMessage.warning(t('「{name}」超过 20MB', { name: f.name }))
       continue
     }
     try {
@@ -104,8 +106,8 @@ async function uploadFiles(files: File[]) {
   if (uploadDone.value) {
     ElMessage.success(
       uploadFailed.value
-        ? `成功上传 ${uploadDone.value} 个，${uploadFailed.value} 个失败`
-        : `已上传 ${uploadDone.value} 个文件`,
+        ? t('成功上传 {done} 个，{failed} 个失败', { done: uploadDone.value, failed: uploadFailed.value })
+        : t('已上传 {count} 个文件', { count: uploadDone.value }),
     )
     reload()
   }
@@ -126,15 +128,15 @@ async function download(row: FileRow) {
 async function removeFile(row: FileRow) {
   try {
     await ElMessageBox.confirm(
-      `删除后文件将从存储中移除且不可恢复。确定删除「${row.name}」吗？`,
-      '删除文件',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'error' },
+      t('删除后文件将从存储中移除且不可恢复。确定删除「{name}」吗？', { name: row.name }),
+      t('删除文件'),
+      { confirmButtonText: t('删除'), cancelButtonText: t('取消'), type: 'error' },
     )
   } catch {
     return
   }
   await fileApi.remove(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   if (rows.value.length === 1 && query.page > 1) query.page -= 1
   load()
 }
@@ -179,12 +181,12 @@ onMounted(load)
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">文件管理</h1>
-        <p class="page-desc">本地磁盘存储，按日期分目录；扩展名白名单与大小限制在服务端二次校验</p>
+        <h1 class="page-title">{{ $t('文件管理') }}</h1>
+        <p class="page-desc">{{ $t('本地磁盘存储，按日期分目录；扩展名白名单与大小限制在服务端二次校验') }}</p>
       </div>
       <div class="page-actions">
         <el-button v-perm="'ops:file:upload'" type="primary" :icon="Upload" :loading="uploading" @click="pick">
-          {{ uploading ? `上传中 ${uploadDone}/${uploadDone + uploadFailed}` : '上传文件' }}
+          {{ uploading ? $t('上传中 {done}/{total}', { done: uploadDone, total: uploadDone + uploadFailed }) : $t('上传文件') }}
         </el-button>
       </div>
     </div>
@@ -203,8 +205,8 @@ onMounted(load)
       >
         <el-icon :size="18"><Upload /></el-icon>
         <div class="dz-text">
-          <span class="dz-main">拖拽文件到此处，或<em>点击选择</em></span>
-          <span class="dz-sub">支持图片、文档、表格、压缩包与音视频，单个不超过 20MB，可多选</span>
+          <span class="dz-main">{{ $t('拖拽文件到此处，或') }}<em>{{ $t('点击选择') }}</em></span>
+          <span class="dz-sub">{{ $t('支持图片、文档、表格、压缩包与音视频，单个不超过 20MB，可多选') }}</span>
         </div>
       </div>
 
@@ -212,29 +214,29 @@ onMounted(load)
         <div class="toolbar-left">
           <el-input
             v-model="query.keyword"
-            placeholder="搜索文件名"
+            :placeholder="$t('搜索文件名')"
             :prefix-icon="Search"
             clearable
             style="width: 236px"
             @keyup.enter="reload"
             @clear="reload"
           />
-          <el-select v-model="query.ext" placeholder="全部类型" clearable style="width: 130px" @change="reload">
+          <el-select v-model="query.ext" :placeholder="$t('全部类型')" clearable style="width: 130px" @change="reload">
             <el-option v-for="e in ACCEPT" :key="e" :label="e" :value="e" />
           </el-select>
-          <el-button @click="reload">查询</el-button>
-          <el-button text @click="resetQuery">重置</el-button>
+          <el-button @click="reload">{{ $t('查询') }}</el-button>
+          <el-button text @click="resetQuery">{{ $t('重置') }}</el-button>
         </div>
         <div class="toolbar-right">
           <span class="count-hint">
-            共 <b class="num">{{ total }}</b> 个文件 · 本页 <b class="num">{{ fmtBytes(pageSize) }}</b>
+            {{ $t('共') }} <b class="num">{{ total }}</b> {{ $t('个文件 · 本页') }} <b class="num">{{ fmtBytes(pageSize) }}</b>
           </span>
-          <el-button :icon="Refresh" circle title="刷新" @click="load" />
+          <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
       <el-table v-loading="loading" :data="rows" row-key="id">
-        <el-table-column label="文件名" min-width="300">
+        <el-table-column :label="$t('文件名')" min-width="300">
           <template #default="{ row }">
             <div class="file-cell">
               <span class="ext-badge" :class="`t-${toneOf(row.ext)}`">{{ extLabel(row.ext) }}</span>
@@ -246,26 +248,26 @@ onMounted(load)
           </template>
         </el-table-column>
 
-        <el-table-column label="类型" width="120">
+        <el-table-column :label="$t('类型')" width="120">
           <template #default="{ row }">
             <span class="muted fs-12">{{ row.mime || row.ext || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="大小" width="100" align="right">
+        <el-table-column :label="$t('大小')" width="100" align="right">
           <template #default="{ row }">
             <span class="num size">{{ fmtBytes(row.size) }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="上传时间" width="160">
+        <el-table-column :label="$t('上传时间')" width="160">
           <template #default="{ row }">
             <div class="cell-time" :title="fmtTime(row.createdAt)">{{ fromNow(row.createdAt) }}</div>
             <div class="cell-sub num">{{ fmtTime(row.createdAt, false) }}</div>
           </template>
         </el-table-column>
 
-        <el-table-column label="存储" width="90">
+        <el-table-column :label="$t('存储')" width="90">
           <template #default="{ row }">
             <el-tag size="small" type="info" effect="plain">{{ row.storage || 'local' }}</el-tag>
           </template>
@@ -273,23 +275,23 @@ onMounted(load)
 
         <el-table-column label="" width="140" align="right" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" :icon="Download" @click="download(row)">下载</el-button>
-            <el-button v-perm="'ops:file:delete'" link type="danger" @click="removeFile(row)">删除</el-button>
+            <el-button link type="primary" :icon="Download" @click="download(row)">{{ $t('下载') }}</el-button>
+            <el-button v-perm="'ops:file:delete'" link type="danger" @click="removeFile(row)">{{ $t('删除') }}</el-button>
           </template>
         </el-table-column>
 
         <template #empty>
           <div class="table-empty">
-            <p>{{ query.keyword || query.ext ? '没有匹配的文件' : '还没有上传过文件' }}</p>
+            <p>{{ query.keyword || query.ext ? $t('没有匹配的文件') : $t('还没有上传过文件') }}</p>
             <el-button v-if="!query.keyword && !query.ext && auth.can('ops:file:upload')" size="small" type="primary" plain @click="pick">
-              上传第一个文件
+              {{ $t('上传第一个文件') }}
             </el-button>
           </div>
         </template>
       </el-table>
 
       <div class="pager">
-        <span class="total">共 {{ total }} 个文件</span>
+        <span class="total">{{ $t('共 {count} 个文件', { count: total }) }}</span>
         <el-pagination
           v-model:current-page="query.page"
           v-model:page-size="query.page_size"

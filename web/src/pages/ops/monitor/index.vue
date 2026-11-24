@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { monitorApi } from '@/api/ops'
 import type { RouteInfo, SystemInfo } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
 import { fmtDuration, fmtTime } from '@/utils/format'
 
+const { t } = useI18n()
+const auth = useAuthStore()
 const info = ref<SystemInfo | null>(null)
 const routes = ref<RouteInfo[]>([])
 const loading = ref(false)
@@ -34,6 +39,26 @@ function setupTimer() {
 
 function toggleAuto() {
   setupTimer()
+}
+
+async function restart() {
+  try {
+    await ElMessageBox.confirm(
+      t('重启后服务会短暂不可用，当前请求将被中断。确认继续？'),
+      t('重启服务'),
+      { type: 'warning', confirmButtonText: t('确认重启'), cancelButtonText: t('取消') },
+    )
+  } catch {
+    return
+  }
+  try {
+    await monitorApi.restart()
+    ElMessage.success(t('重启指令已受理，页面将在数秒后恢复'))
+    if (timer) window.clearInterval(timer)
+    window.setTimeout(() => window.location.reload(), 3000)
+  } catch {
+    // 请求拦截器已提示错误
+  }
 }
 
 const fresh = computed(() => (lastUpdated.value ? fmtTime(lastUpdated.value) : '—'))
@@ -69,10 +94,10 @@ const methodGroups = computed(() => {
 
 const methodSummary = computed(() => {
   const list = methodGroups.value
-  if (!list.length) return '暂无路由'
+  if (!list.length) return t('暂无路由')
   if (list.length <= 2) return list.map(([m, n]) => `${m} ${n}`).join(' · ')
   const rest = list.slice(1).reduce((s, [, n]) => s + n, 0)
-  return `${list[0][0]} ${list[0][1]} · 其余 ${rest}`
+  return t('{method} {count} · 其余 {rest}', { method: list[0][0], count: list[0][1], rest })
 })
 
 function methodTone(m: string) {
@@ -100,39 +125,47 @@ onUnmounted(() => {
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">服务监控</h1>
-        <p class="page-desc">运行时指标与路由清单，每 10 秒自动刷新</p>
+        <h1 class="page-title">{{ $t('服务监控') }}</h1>
+        <p class="page-desc">{{ $t('运行时指标与路由清单，每 10 秒自动刷新') }}</p>
       </div>
       <div class="page-actions">
         <div class="auto-switch">
           <el-switch v-model="autoRefresh" size="small" @change="toggleAuto" />
-          <span class="as-label">自动刷新</span>
-          <span class="as-time">更新于 {{ fresh }}</span>
+          <span class="as-label">{{ $t('自动刷新') }}</span>
+          <span class="as-time">{{ $t('更新于 {time}', { time: fresh }) }}</span>
         </div>
-        <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+        <el-button :icon="Refresh" :loading="loading" @click="load">{{ $t('刷新') }}</el-button>
+        <el-button
+          v-if="auth.can('ops:monitor:restart')"
+          type="danger"
+          plain
+          @click="restart"
+        >
+          {{ $t('重启服务') }}
+        </el-button>
       </div>
     </div>
 
     <div v-if="info" class="stat-row">
       <div class="stat-card">
-        <span class="sc-label">运行时长</span>
+        <span class="sc-label">{{ $t('运行时长') }}</span>
         <div class="sc-value">{{ fmtDuration(info.app.uptime) }}</div>
-        <span class="sc-foot">启动于 {{ fmtTime(info.app.startedAt, false) }}</span>
+        <span class="sc-foot">{{ $t('启动于 {time}', { time: fmtTime(info.app.startedAt, false) }) }}</span>
       </div>
       <div class="stat-card">
-        <span class="sc-label">内存占用</span>
+        <span class="sc-label">{{ $t('内存占用') }}</span>
         <div class="sc-value">
           {{ info.runtime.memAllocMB.toFixed(1) }}<small> MB</small>
         </div>
-        <span class="sc-foot">系统申请 {{ info.runtime.memSysMB.toFixed(1) }} MB</span>
+        <span class="sc-foot">{{ $t('系统申请 {mem} MB', { mem: info.runtime.memSysMB.toFixed(1) }) }}</span>
       </div>
       <div class="stat-card">
         <span class="sc-label">Goroutine</span>
         <div class="sc-value">{{ info.runtime.goroutines }}</div>
-        <span class="sc-foot">GC 累计 {{ info.runtime.gcCount }} 次</span>
+        <span class="sc-foot">{{ $t('GC 累计 {count} 次', { count: info.runtime.gcCount }) }}</span>
       </div>
       <div class="stat-card">
-        <span class="sc-label">REST 路由</span>
+        <span class="sc-label">{{ $t('REST 路由') }}</span>
         <div class="sc-value">{{ info.http.routes }}</div>
         <span class="sc-foot">{{ methodSummary }}</span>
       </div>
@@ -140,66 +173,66 @@ onUnmounted(() => {
 
     <div v-if="info" class="info-grid">
       <div class="card panel">
-        <div class="card-head"><h3>应用信息</h3></div>
+        <div class="card-head"><h3>{{ $t('应用信息') }}</h3></div>
         <dl class="kv">
-          <div><dt>应用名称</dt><dd>{{ info.app.name }}</dd></div>
-          <div><dt>版本</dt><dd class="mono">{{ info.app.version }}</dd></div>
-          <div><dt>运行环境</dt><dd><el-tag size="small" :type="info.app.env === 'prod' ? 'danger' : 'warning'" effect="light">{{ info.app.env }}</el-tag></dd></div>
-          <div><dt>部署形态</dt><dd>{{ info.app.mode }}</dd></div>
-          <div><dt>监听端口</dt><dd class="num">{{ info.http.port }}</dd></div>
-          <div><dt>数据库</dt><dd class="mono">{{ info.database.driver }}</dd></div>
-          <div><dt>缓存类型</dt><dd class="mono">{{ info.cache.kind }}</dd></div>
-          <div><dt>限流实现</dt><dd class="mono">{{ info.ratelimit.kind }}</dd></div>
-          <div><dt>文件存储</dt><dd class="mono">{{ info.storage.kind }}</dd></div>
+          <div><dt>{{ $t('应用名称') }}</dt><dd>{{ info.app.name }}</dd></div>
+          <div><dt>{{ $t('版本') }}</dt><dd class="mono">{{ info.app.version }}</dd></div>
+          <div><dt>{{ $t('运行环境') }}</dt><dd><el-tag size="small" :type="info.app.env === 'prod' ? 'danger' : 'warning'" effect="light">{{ info.app.env }}</el-tag></dd></div>
+          <div><dt>{{ $t('部署形态') }}</dt><dd>{{ info.app.mode }}</dd></div>
+          <div><dt>{{ $t('监听端口') }}</dt><dd class="num">{{ info.http.port }}</dd></div>
+          <div><dt>{{ $t('数据库') }}</dt><dd class="mono">{{ info.database.driver }}</dd></div>
+          <div><dt>{{ $t('缓存类型') }}</dt><dd class="mono">{{ info.cache.kind }}</dd></div>
+          <div><dt>{{ $t('限流实现') }}</dt><dd class="mono">{{ info.ratelimit.kind }}</dd></div>
+          <div><dt>{{ $t('文件存储') }}</dt><dd class="mono">{{ info.storage.kind }}</dd></div>
         </dl>
       </div>
 
       <div class="card panel">
-        <div class="card-head"><h3>运行时</h3></div>
+        <div class="card-head"><h3>{{ $t('运行时') }}</h3></div>
         <dl class="kv">
-          <div><dt>Go 版本</dt><dd class="mono">{{ info.runtime.goVersion }}</dd></div>
-          <div><dt>系统 / 架构</dt><dd class="mono">{{ info.runtime.os }} / {{ info.runtime.arch }}</dd></div>
-          <div><dt>CPU 核心</dt><dd class="num">{{ info.runtime.cpu }}</dd></div>
-          <div><dt>堆内存</dt><dd class="num">{{ info.runtime.heapMB.toFixed(1) }} MB</dd></div>
-          <div><dt>GC 次数</dt><dd class="num">{{ info.runtime.gcCount }}</dd></div>
-          <div><dt>堆占比</dt><dd class="num">{{ heapRatio }}%</dd></div>
+          <div><dt>{{ $t('Go 版本') }}</dt><dd class="mono">{{ info.runtime.goVersion }}</dd></div>
+          <div><dt>{{ $t('系统 / 架构') }}</dt><dd class="mono">{{ info.runtime.os }} / {{ info.runtime.arch }}</dd></div>
+          <div><dt>{{ $t('CPU 核心') }}</dt><dd class="num">{{ info.runtime.cpu }}</dd></div>
+          <div><dt>{{ $t('堆内存') }}</dt><dd class="num">{{ info.runtime.heapMB.toFixed(1) }} MB</dd></div>
+          <div><dt>{{ $t('GC 次数') }}</dt><dd class="num">{{ info.runtime.gcCount }}</dd></div>
+          <div><dt>{{ $t('堆占比') }}</dt><dd class="num">{{ heapRatio }}%</dd></div>
         </dl>
         <div class="bar-row">
           <div class="bar"><span class="bar-fill is-brand" :style="{ width: `${heapRatio}%` }" /></div>
-          <span class="bar-hint">堆内存 / 系统申请</span>
+          <span class="bar-hint">{{ $t('堆内存 / 系统申请') }}</span>
         </div>
       </div>
 
       <div class="card panel">
-        <div class="card-head"><h3>数据库</h3></div>
+        <div class="card-head"><h3>{{ $t('数据库') }}</h3></div>
         <dl class="kv">
-          <div><dt>驱动</dt><dd class="mono">{{ info.database.driver }}</dd></div>
-          <div><dt>版本</dt><dd class="mono">{{ info.database.version }}</dd></div>
-          <div><dt>打开连接</dt><dd class="num">{{ info.database.pool.open }} / {{ info.database.pool.max_open }}</dd></div>
-          <div><dt>使用中</dt><dd class="num">{{ info.database.pool.in_use }}</dd></div>
-          <div><dt>空闲</dt><dd class="num">{{ info.database.pool.idle }}</dd></div>
-          <div><dt>等待次数</dt><dd class="num">{{ info.database.pool.wait_count }}</dd></div>
+          <div><dt>{{ $t('驱动') }}</dt><dd class="mono">{{ info.database.driver }}</dd></div>
+          <div><dt>{{ $t('版本') }}</dt><dd class="mono">{{ info.database.version }}</dd></div>
+          <div><dt>{{ $t('打开连接') }}</dt><dd class="num">{{ info.database.pool.open }} / {{ info.database.pool.max_open }}</dd></div>
+          <div><dt>{{ $t('使用中') }}</dt><dd class="num">{{ info.database.pool.in_use }}</dd></div>
+          <div><dt>{{ $t('空闲') }}</dt><dd class="num">{{ info.database.pool.idle }}</dd></div>
+          <div><dt>{{ $t('等待次数') }}</dt><dd class="num">{{ info.database.pool.wait_count }}</dd></div>
         </dl>
         <div class="bar-row">
           <div class="bar"><span class="bar-fill is-teal" :style="{ width: `${poolRatio}%` }" /></div>
-          <span class="bar-hint">连接池使用率 · 累计等待 {{ info.database.pool.wait_duration }}</span>
+          <span class="bar-hint">{{ $t('连接池使用率 · 累计等待 {duration}', { duration: info.database.pool.wait_duration }) }}</span>
         </div>
       </div>
 
       <div class="card panel">
-        <div class="card-head"><h3>健康检查</h3></div>
+        <div class="card-head"><h3>{{ $t('健康检查') }}</h3></div>
         <div class="health-list">
           <a class="health-item" href="/healthz" target="_blank" rel="noopener">
             <code>/healthz</code>
-            <span>存活探针，进程可用即返回 200</span>
+            <span>{{ $t('存活探针，进程可用即返回 200') }}</span>
           </a>
           <a class="health-item" href="/readyz" target="_blank" rel="noopener">
             <code>/readyz</code>
-            <span>就绪探针，依赖可用才返回 200</span>
+            <span>{{ $t('就绪探针，依赖可用才返回 200') }}</span>
           </a>
           <a class="health-item" href="/metrics" target="_blank" rel="noopener">
             <code>/metrics</code>
-            <span>Prometheus 指标，含请求量、耗时与业务计数</span>
+            <span>{{ $t('Prometheus 指标，含请求量、耗时与业务计数') }}</span>
           </a>
         </div>
       </div>
@@ -207,11 +240,11 @@ onUnmounted(() => {
 
     <div class="card routes-card">
       <div class="card-head">
-        <h3>路由清单</h3>
+        <h3>{{ $t('路由清单') }}</h3>
         <div class="rh-right">
           <el-input
             v-model="routeKeyword"
-            placeholder="筛选路径"
+            :placeholder="$t('筛选路径')"
             size="small"
             clearable
             style="width: 200px"
@@ -227,7 +260,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-if="!filteredRoutes.length" class="route-empty">没有匹配的路由</div>
+      <div v-if="!filteredRoutes.length" class="route-empty">{{ $t('没有匹配的路由') }}</div>
     </div>
   </div>
 </template>

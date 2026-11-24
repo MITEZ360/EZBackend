@@ -419,6 +419,7 @@ X-API-Key: ak_s_8fQ2mN...
 | --- | --- | --- | --- |
 | GET | `/monitor/system` | 运行时/内存/GC/连接池/缓存/路由数 | `ops:monitor:view` |
 | GET | `/monitor/routes` | 全部注册路由 | `ops:monitor:view` |
+| POST | `/monitor/restart` | 触发服务原地重启（高危操作） | `ops:monitor:restart` |
 
 ### 4.15 公开接口（无需登录）
 

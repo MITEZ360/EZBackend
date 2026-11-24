@@ -41,4 +41,5 @@ func (d Deps) fileRoutes(g *gin.RouterGroup) {
 func (d Deps) monitorRoutes(g *gin.RouterGroup) {
 	g.GET("/monitor/system", middleware.RequirePerm("ops:monitor:view"), d.Monitor.System)
 	g.GET("/monitor/routes", middleware.RequirePerm("ops:monitor:view"), d.Monitor.Routes)
+	g.POST("/monitor/restart", middleware.RequirePerm("ops:monitor:restart"), d.Monitor.Restart)
 }

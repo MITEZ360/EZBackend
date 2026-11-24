@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/keel-framework/keel/internal/middleware"
 	"github.com/keel-framework/keel/internal/platform/cache"
 	"github.com/keel-framework/keel/internal/platform/config"
 	"github.com/keel-framework/keel/internal/platform/database"
@@ -22,6 +23,7 @@ type Service struct {
 	cfg     *config.Config
 	started time.Time
 	routes  func() []RouteInfo
+	restart func()
 }
 
 // RouteInfo 路由信息。
@@ -31,9 +33,13 @@ type RouteInfo struct {
 	Name   string `json:"name,omitempty"`
 }
 
-// NewService 创建监控服务。
-func NewService(db *gorm.DB, c cache.Cache, cfg *config.Config, routes func() []RouteInfo) *Service {
-	return &Service{db: db, cache: c, cfg: cfg, started: time.Now(), routes: routes}
+// NewService 创建监控服务。restart 为可选回调，用于管理端触发原地重启。
+func NewService(db *gorm.DB, c cache.Cache, cfg *config.Config, routes func() []RouteInfo, restart ...func()) *Service {
+	s := &Service{db: db, cache: c, cfg: cfg, started: time.Now(), routes: routes}
+	if len(restart) > 0 {
+		s.restart = restart[0]
+	}
+	return s
 }
 
 // System 返回系统概览。
@@ -117,4 +123,34 @@ func (h *Handler) System(c *gin.Context) {
 // KE:SWAGGER-END
 func (h *Handler) Routes(c *gin.Context) {
 	response.OK(c, h.svc.routes())
+}
+
+// Restart 管理端触发服务重启。先返回应答，再异步执行，避免优雅停机等待当前请求。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary Restart
+// @Tags 运维
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/monitor/restart [post]
+// KE:SWAGGER-END
+func (h *Handler) Restart(c *gin.Context) {
+	middleware.AuditInfo(c, "运维", "重启服务")
+	response.OK(c, gin.H{"message": "重启指令已受理，服务正在重新拉起"})
+	go func() {
+		// 留出时间让响应与审计事件写出，再关闭监听并重新执行进程。
+		time.Sleep(400 * time.Millisecond)
+		if h.svc.restart != nil {
+			h.svc.restart()
+		}
+	}()
 }

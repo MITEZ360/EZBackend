@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Bell, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { noticeApi, type NoticePayload } from '@/api/system'
 import type { NoticeRow } from '@/api/types'
 import { fmtTime, fromNow } from '@/utils/format'
 
-const TYPE_META: Record<string, { label: string; tone: 'primary' | 'success' | 'warning' }> = {
-  notice: { label: '通知', tone: 'primary' },
-  announcement: { label: '公告', tone: 'success' },
-  warning: { label: '预警', tone: 'warning' },
-}
+const { t } = useI18n()
+
+const TYPE_META = computed<Record<string, { label: string; tone: 'primary' | 'success' | 'warning' }>>(() => ({
+  notice: { label: t('通知'), tone: 'primary' },
+  announcement: { label: t('公告'), tone: 'success' },
+  warning: { label: t('预警'), tone: 'warning' },
+}))
 
 const rows = ref<NoticeRow[]>([])
 const total = ref(0)
@@ -83,13 +86,13 @@ const form = reactive<NoticePayload>({
   status: 1,
 })
 
-const rules: FormRules = {
+const rules = computed<FormRules>(() => ({
   title: [
-    { required: true, message: '请输入标题', trigger: 'blur' },
-    { max: 128, message: '标题不超过 128 字', trigger: 'blur' },
+    { required: true, message: t('请输入标题'), trigger: 'blur' },
+    { max: 128, message: t('标题不超过 128 字'), trigger: 'blur' },
   ],
-  content: [{ required: true, message: '请输入正文内容', trigger: 'blur' }],
-}
+  content: [{ required: true, message: t('请输入正文内容'), trigger: 'blur' }],
+}))
 
 function openCreate() {
   editingId.value = ''
@@ -111,7 +114,7 @@ async function openEdit(row: NoticeRow) {
     })
     formVisible.value = true
   } catch {
-    ElMessage.error('读取公告详情失败')
+    ElMessage.error(t('读取公告详情失败'))
   }
 }
 
@@ -122,10 +125,10 @@ async function submitForm() {
   try {
     if (isEdit.value) {
       await noticeApi.update(editingId.value, { ...form })
-      ElMessage.success('已保存')
+      ElMessage.success(t('已保存'))
     } else {
       await noticeApi.create({ ...form })
-      ElMessage.success(form.status === 1 ? '公告已发布' : '公告已保存为草稿')
+      ElMessage.success(form.status === 1 ? t('公告已发布') : t('公告已保存为草稿'))
     }
     formVisible.value = false
     load()
@@ -136,22 +139,22 @@ async function submitForm() {
 
 async function removeNotice(row: NoticeRow) {
   try {
-    await ElMessageBox.confirm(`删除后用户将无法再看到「${row.title}」。确定删除吗？`, '删除公告', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('删除后用户将无法再看到「{title}」。确定删除吗？', { title: row.title }), t('删除公告'), {
+      confirmButtonText: t('删除'),
+      cancelButtonText: t('取消'),
       type: 'error',
     })
   } catch {
     return
   }
   await noticeApi.remove(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   if (rows.value.length === 1 && query.page > 1) query.page -= 1
   load()
 }
 
 function metaOf(type: string) {
-  return TYPE_META[type] ?? { label: type, tone: 'primary' as const }
+  return TYPE_META.value[type] ?? { label: type, tone: 'primary' as const }
 }
 
 onMounted(load)
@@ -161,12 +164,12 @@ onMounted(load)
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">通知公告</h1>
-        <p class="page-desc">面向全员的消息发布，支持草稿、置顶展示与分类标签</p>
+        <h1 class="page-title">{{ $t('通知公告') }}</h1>
+        <p class="page-desc">{{ $t('面向全员的消息发布，支持草稿、置顶展示与分类标签') }}</p>
       </div>
       <div class="page-actions">
         <el-button v-perm="'system:notice:create'" type="primary" :icon="Plus" @click="openCreate">
-          发布公告
+          {{ $t('发布公告') }}
         </el-button>
       </div>
     </div>
@@ -176,27 +179,27 @@ onMounted(load)
         <div class="toolbar-left">
           <el-input
             v-model="query.keyword"
-            placeholder="搜索标题"
+            :placeholder="$t('搜索标题')"
             :prefix-icon="Search"
             clearable
             style="width: 230px"
             @keyup.enter="reload"
             @clear="reload"
           />
-          <el-select v-model="query.type" placeholder="全部类型" clearable style="width: 120px" @change="reload">
-            <el-option label="通知" value="notice" />
-            <el-option label="公告" value="announcement" />
-            <el-option label="预警" value="warning" />
+          <el-select v-model="query.type" :placeholder="$t('全部类型')" clearable style="width: 120px" @change="reload">
+            <el-option :label="$t('通知')" value="notice" />
+            <el-option :label="$t('公告')" value="announcement" />
+            <el-option :label="$t('预警')" value="warning" />
           </el-select>
-          <el-select v-model="query.status" placeholder="全部状态" clearable style="width: 118px" @change="reload">
-            <el-option label="已发布" :value="1" />
-            <el-option label="草稿" :value="0" />
+          <el-select v-model="query.status" :placeholder="$t('全部状态')" clearable style="width: 118px" @change="reload">
+            <el-option :label="$t('已发布')" :value="1" />
+            <el-option :label="$t('草稿')" :value="0" />
           </el-select>
-          <el-button @click="reload">查询</el-button>
-          <el-button text @click="resetQuery">重置</el-button>
+          <el-button @click="reload">{{ $t('查询') }}</el-button>
+          <el-button text @click="resetQuery">{{ $t('重置') }}</el-button>
         </div>
         <div class="toolbar-right">
-          <el-button :icon="Refresh" circle title="刷新" @click="load" />
+          <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
@@ -212,7 +215,7 @@ onMounted(load)
               <el-tag :type="metaOf(row.type).tone" size="small" effect="light">
                 {{ metaOf(row.type).label }}
               </el-tag>
-              <span v-if="row.status === 0" class="draft-tag">草稿</span>
+              <span v-if="row.status === 0" class="draft-tag">{{ $t('草稿') }}</span>
             </div>
             <p class="ni-excerpt">{{ row.content }}</p>
           </div>
@@ -223,10 +226,10 @@ onMounted(load)
             </span>
             <div class="ni-actions" @click.stop>
               <el-button v-perm="'system:notice:update'" link type="primary" @click="openEdit(row)">
-                编辑
+                {{ $t('编辑') }}
               </el-button>
               <el-button v-perm="'system:notice:delete'" link type="danger" @click="removeNotice(row)">
-                删除
+                {{ $t('删除') }}
               </el-button>
             </div>
           </div>
@@ -234,15 +237,15 @@ onMounted(load)
 
         <div v-if="!loading && !rows.length" class="empty">
           <el-icon :size="22"><Bell /></el-icon>
-          <p>还没有发布过公告</p>
+          <p>{{ $t('还没有发布过公告') }}</p>
           <el-button v-perm="'system:notice:create'" type="primary" plain size="small" @click="openCreate">
-            发布第一条
+            {{ $t('发布第一条') }}
           </el-button>
         </div>
       </div>
 
       <div v-if="total > query.page_size" class="pager">
-        <span class="total">共 {{ total }} 条</span>
+        <span class="total">{{ $t('共 {count} 条', { count: total }) }}</span>
         <el-pagination
           v-model:current-page="query.page"
           v-model:page-size="query.page_size"
@@ -261,14 +264,14 @@ onMounted(load)
           <el-tag :type="metaOf(viewing?.type ?? 'notice').tone" size="small" effect="light">
             {{ metaOf(viewing?.type ?? 'notice').label }}
           </el-tag>
-          <span v-if="viewing?.status === 0" class="draft-tag">草稿</span>
+          <span v-if="viewing?.status === 0" class="draft-tag">{{ $t('草稿') }}</span>
         </div>
       </template>
 
       <div v-if="viewing" class="view-body">
         <h2 class="view-title">{{ viewing.title }}</h2>
         <p class="view-meta">
-          发布于 {{ fmtTime(viewing.publishAt || viewing.createdAt) }}
+          {{ $t('发布于 {time}', { time: fmtTime(viewing.publishAt || viewing.createdAt) }) }}
         </p>
         <div class="view-divider" />
         <div class="view-content">{{ viewing.content }}</div>
@@ -278,46 +281,46 @@ onMounted(load)
     <!-- 编辑 -->
     <el-dialog
       v-model="formVisible"
-      :title="isEdit ? '编辑公告' : '发布公告'"
+      :title="isEdit ? $t('编辑公告') : $t('发布公告')"
       width="640px"
       append-to-body
       :close-on-click-modal="false"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="form.title" placeholder="一句话说明这条消息" maxlength="128" show-word-limit />
+        <el-form-item :label="$t('标题')" prop="title">
+          <el-input v-model="form.title" :placeholder="$t('一句话说明这条消息')" maxlength="128" show-word-limit />
         </el-form-item>
 
         <div class="form-grid">
-          <el-form-item label="类型">
+          <el-form-item :label="$t('类型')">
             <el-radio-group v-model="form.type">
-              <el-radio-button value="notice">通知</el-radio-button>
-              <el-radio-button value="announcement">公告</el-radio-button>
-              <el-radio-button value="warning">预警</el-radio-button>
+              <el-radio-button value="notice">{{ $t('通知') }}</el-radio-button>
+              <el-radio-button value="announcement">{{ $t('公告') }}</el-radio-button>
+              <el-radio-button value="warning">{{ $t('预警') }}</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <el-form-item label="发布状态">
-            <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="立即发布" inactive-text="存为草稿" />
+          <el-form-item :label="$t('发布状态')">
+            <el-switch v-model="form.status" :active-value="1" :inactive-value="0" :active-text="$t('立即发布')" :inactive-text="$t('存为草稿')" />
           </el-form-item>
         </div>
 
-        <el-form-item label="正文" prop="content">
+        <el-form-item :label="$t('正文')" prop="content">
           <el-input
             v-model="form.content"
             type="textarea"
             :rows="9"
             maxlength="5000"
             show-word-limit
-            placeholder="支持换行，正文将按纯文本展示"
+            :placeholder="$t('支持换行，正文将按纯文本展示')"
           />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
+        <el-button @click="formVisible = false">{{ $t('取消') }}</el-button>
         <el-button type="primary" :loading="submitting" @click="submitForm">
-          {{ form.status === 1 ? '发布' : '保存草稿' }}
+          {{ form.status === 1 ? $t('发布') : $t('保存草稿') }}
         </el-button>
       </template>
     </el-dialog>

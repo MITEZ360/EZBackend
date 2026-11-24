@@ -46,6 +46,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/storage"
 	"github.com/keel-framework/keel/pkg/errs"
 	"github.com/keel-framework/keel/pkg/event"
+	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/response"
 	"github.com/keel-framework/keel/web"
 )
@@ -107,6 +108,7 @@ func New(d Deps) *gin.Engine {
 
 	e.Use(
 		middleware.Recovery(d.Log),
+		i18n.Middleware(d.Cfg.I18n.DefaultLocale),
 		middleware.Trace(),
 		middleware.AccessLog(d.Log, 500*time.Millisecond),
 		middleware.CORS(d.Cfg.CORS),
@@ -388,7 +390,7 @@ func mountSPA(e *gin.Engine) {
 func serveIndex(c *gin.Context) {
 	data, err := fs.ReadFile(web.FS, "dist/index.html")
 	if err != nil {
-		c.String(http.StatusNotFound, "前端资源未打包")
+		c.String(http.StatusNotFound, i18n.T(c, "前端资源未打包"))
 		return
 	}
 	c.Data(http.StatusOK, "text/html; charset=utf-8", data)

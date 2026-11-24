@@ -2,6 +2,8 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { authApi, type LoginPayload } from '@/api/auth'
 import { tokenStore } from '@/api/client'
+import { normalizeLocale, setLocale, translate } from '@/i18n'
+import { setDisplayTimezone } from '@/utils/format'
 import type { MenuNode, UserInfo } from '@/api/types'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -11,7 +13,7 @@ export const useAuthStore = defineStore('auth', () => {
   const loaded = ref(false)
 
   const isSuper = computed(() => Boolean(user.value?.isSuper) || perms.value.has('*'))
-  const displayName = computed(() => user.value?.nickname || user.value?.username || '未登录')
+  const displayName = computed(() => user.value?.nickname || user.value?.username || translate('未登录'))
   const initial = computed(() => (displayName.value || '?').slice(0, 1).toUpperCase())
 
   /** 是否具备某个权限点；传数组表示「任一满足」 */
@@ -24,6 +26,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   function hasRole(role: string): boolean {
     return Boolean(user.value?.roles?.includes(role))
+  }
+
+  /** 服务端偏好优先，未设置时沿用本地已选语言 */
+  function applyPreferences(u: UserInfo | null) {
+    if (u?.locale) setLocale(normalizeLocale(u.locale))
+    setDisplayTimezone(u?.timezone)
   }
 
   async function login(payload: LoginPayload) {
@@ -39,6 +47,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = res.user
     menus.value = res.menus ?? []
     perms.value = new Set(res.user.perms ?? [])
+    applyPreferences(res.user)
     loaded.value = true
   }
 
@@ -59,5 +68,12 @@ export const useAuthStore = defineStore('auth', () => {
     loaded.value = false
   }
 
-  return { user, menus, perms, loaded, isSuper, displayName, initial, can, hasRole, login, loadProfile, logout, reset }
+  /** 保存语言/时区偏好并即时生效 */
+  async function savePreferences(pref: { locale?: string; timezone?: string }) {
+    await authApi.updatePreferences(pref)
+    if (user.value) Object.assign(user.value, pref)
+    applyPreferences(user.value)
+  }
+
+  return { user, menus, perms, loaded, isSuper, displayName, initial, can, hasRole, login, loadProfile, logout, reset, savePreferences }
 })

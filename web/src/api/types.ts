@@ -35,6 +35,9 @@ export interface UserInfo {
   deptId?: string
   deptName?: string
   isSuper: boolean
+  /** 用户展示偏好：语言与 IANA 时区，空值表示跟随系统默认 */
+  locale?: string
+  timezone?: string
   totpEnabled?: boolean
   /** 剩余可用恢复码数量（仅个人中心接口返回） */
   recoveryCodesLeft?: number

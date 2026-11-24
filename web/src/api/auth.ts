@@ -40,6 +40,10 @@ export const authApi = {
 
   updateProfile: (payload: Partial<UserInfo>) => api.put<void>('/auth/profile', payload),
 
+  /** 语言/时区偏好，与资料更新分离，支持只提交其一 */
+  updatePreferences: (payload: { locale?: string; timezone?: string }) =>
+    api.put<void>('/auth/preferences', payload),
+
   changePassword: (payload: { oldPassword: string; newPassword: string }) =>
     api.put<void>('/auth/password', payload),
 }

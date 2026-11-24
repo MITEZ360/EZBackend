@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+const { t } = useI18n()
 const router = useRouter()
 </script>
 
@@ -8,11 +10,11 @@ const router = useRouter()
   <div class="forbidden">
     <div class="inner">
       <span class="code">403</span>
-      <h1>无权访问</h1>
-      <p>当前账号未被授予该页面的权限，如需访问请联系管理员分配角色。</p>
+      <h1>{{ t('无权访问') }}</h1>
+      <p>{{ t('当前账号未被授予该页面的权限，如需访问请联系管理员分配角色。') }}</p>
       <div class="actions">
-        <el-button type="primary" @click="router.push('/dashboard')">返回仪表盘</el-button>
-        <el-button @click="router.back()">返回上一页</el-button>
+        <el-button type="primary" @click="router.push('/dashboard')">{{ t('返回仪表盘') }}</el-button>
+        <el-button @click="router.back()">{{ t('返回上一页') }}</el-button>
       </div>
     </div>
   </div>

@@ -1,13 +1,27 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { ArrowDown, Expand, Fold, SwitchButton, User } from '@element-plus/icons-vue'
 import SideMenuItem from '@/components/SideMenuItem.vue'
 import MessageBell from '@/components/MessageBell.vue'
 import { useAuthStore } from '@/stores/auth'
 import { membershipApi } from '@/api/membership'
+import { currentLocale, normalizeLocale, setLocale, SUPPORTED_LOCALES, type AppLocale } from '@/i18n'
 import type { MembershipSnapshot, MenuNode } from '@/api/types'
+
+const { t } = useI18n()
+const locale = ref<AppLocale>(currentLocale())
+
+async function onLocaleChange(value: AppLocale) {
+  setLocale(value)
+  locale.value = value
+  // 已登录用户把选择同步到服务端，跨设备登录时保持一致；未登录仅本地生效。
+  if (auth.user) {
+    try { await auth.savePreferences({ locale: value }) } catch { /* 离线时保留本地选择 */ }
+  }
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -60,9 +74,9 @@ async function onCommand(cmd: string) {
   }
   if (cmd === 'logout') {
     try {
-      await ElMessageBox.confirm('退出后需要重新登录才能继续操作。', '确定退出登录？', {
-        confirmButtonText: '退出登录',
-        cancelButtonText: '取消',
+      await ElMessageBox.confirm(t('退出后需要重新登录才能继续操作。'), t('确定退出登录？'), {
+        confirmButtonText: t('退出登录'),
+        cancelButtonText: t('取消'),
         type: 'warning',
       })
     } catch {
@@ -73,7 +87,7 @@ async function onCommand(cmd: string) {
   }
 }
 
-const envLabel = import.meta.env.DEV ? '开发环境' : '生产环境'
+const envLabel = computed(() => t(import.meta.env.DEV ? '开发环境' : '生产环境'))
 
 /**
  * 滚动只发生在内容区：切页后回到顶部。
@@ -81,6 +95,9 @@ const envLabel = import.meta.env.DEV ? '开发环境' : '生产环境'
  * 新页面可能瞬间撑起旧 scrollTop 的高度，导致停留在半截位置。
  */
 const contentRef = ref<HTMLElement>()
+// 登录/刷新后服务端偏好可能覆盖本地语言，跟随用户状态同步指示器。
+watch(() => auth.user?.locale, (v) => { if (v) locale.value = normalizeLocale(v) })
+
 watch(
   () => route.path,
   () => {
@@ -115,29 +132,44 @@ watch(
 
       <div class="side-foot">
         <span class="dot" />
-        <span v-show="!mini">服务正常 · v1.0.0</span>
+        <span v-show="!mini">{{ t('服务正常') }} · v1.0.0</span>
       </div>
     </aside>
 
     <div class="main">
       <header class="top">
-        <button class="icon-btn" :title="mini ? '展开菜单' : '收起菜单'" :aria-label="mini ? '展开菜单' : '收起菜单'" @click="toggleMini">
+        <button class="icon-btn" :title="mini ? t('展开菜单') : t('收起菜单')" :aria-label="mini ? t('展开菜单') : t('收起菜单')" @click="toggleMini">
           <el-icon :size="17"><Expand v-if="mini" /><Fold v-else /></el-icon>
         </button>
 
         <div class="crumb">
           <template v-for="(name, i) in breadcrumbs" :key="i">
             <span v-if="i > 0" class="sep">/</span>
-            <span :class="{ current: i === breadcrumbs.length - 1 }">{{ name }}</span>
+            <span :class="{ current: i === breadcrumbs.length - 1 }">{{ $t(name) }}</span>
           </template>
         </div>
 
         <div class="top-right">
           <span class="env">{{ envLabel }}</span>
+          <el-dropdown trigger="click" @command="onLocaleChange">
+            <button class="icon-btn" :title="t('切换语言')" :aria-label="t('切换语言')">
+              <span class="locale-tag">{{ locale === 'en' ? 'EN' : '中' }}</span>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="opt in SUPPORTED_LOCALES"
+                  :key="opt.value"
+                  :command="opt.value"
+                  :disabled="opt.value === locale"
+                >{{ opt.label }}</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <MessageBell />
           <span class="divider" />
           <el-dropdown trigger="click" placement="bottom-end" @command="onCommand">
-            <div class="user-chip" role="button" tabindex="0" aria-label="用户菜单"
+            <div class="user-chip" role="button" tabindex="0" :aria-label="t('用户菜单')"
               @keydown.enter.self="($event.target as HTMLElement).click()"
               @keydown.space.prevent.self="($event.target as HTMLElement).click()">
               <div class="avatar">{{ auth.initial }}</div>
@@ -152,17 +184,17 @@ watch(
                     {{ membership.level.name }}
                   </em>
                 </span>
-                <span class="user-role">{{ auth.isSuper ? '超级管理员' : '普通用户' }}</span>
+                <span class="user-role">{{ t(auth.isSuper ? '超级管理员' : '普通用户') }}</span>
               </div>
               <el-icon class="caret" :size="12"><ArrowDown /></el-icon>
             </div>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">
-                  <el-icon><User /></el-icon>个人中心
+                  <el-icon><User /></el-icon>{{ t('个人中心') }}
                 </el-dropdown-item>
                 <el-dropdown-item command="logout" divided>
-                  <el-icon><SwitchButton /></el-icon>退出登录
+                  <el-icon><SwitchButton /></el-icon>{{ t('退出登录') }}
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -346,6 +378,12 @@ watch(
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.locale-tag {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .env {

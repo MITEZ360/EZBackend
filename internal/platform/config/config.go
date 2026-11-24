@@ -17,6 +17,7 @@ import (
 // Config 是应用全量配置。
 type Config struct {
 	App       App       `mapstructure:"app"`
+	I18n      I18n      `mapstructure:"i18n"`
 	Server    Server    `mapstructure:"server"`
 	Log       Log       `mapstructure:"log"`
 	DB        DB        `mapstructure:"db"`
@@ -36,6 +37,12 @@ type Config struct {
 	Backup    Backup    `mapstructure:"backup"`
 	OAuth     OAuth     `mapstructure:"oauth"`
 	Docs      Docs      `mapstructure:"docs"`
+}
+
+// I18n 语言协商参数。
+// 支持的语言由 pkg/i18n 决定；此处只配置客户端未声明语言时的兜底。
+type I18n struct {
+	DefaultLocale string `mapstructure:"default_locale"`
 }
 
 // Modules 业务模块启停参数。
@@ -788,6 +795,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("app.env", "dev")
 	v.SetDefault("app.version", "1.0.0")
 	v.SetDefault("app.timezone", "Asia/Shanghai")
+	v.SetDefault("i18n.default_locale", "zh-CN")
 
 	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", 9000)

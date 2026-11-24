@@ -6,17 +6,19 @@ import { jobApi, type JobPayload } from '@/api/ops'
 import type { JobLogRow, JobRow } from '@/api/types'
 import { fmtTime, fromNow } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 
-const CRON_PRESETS = [
-  { label: '每分钟', expr: '* * * * *' },
-  { label: '每 5 分钟', expr: '*/5 * * * *' },
-  { label: '每小时整点', expr: '0 * * * *' },
-  { label: '每天 02:00', expr: '0 2 * * *' },
-  { label: '每周一 09:00', expr: '0 9 * * 1' },
-  { label: '每月 1 日 03:00', expr: '0 3 1 * *' },
-]
+const CRON_PRESETS = computed(() => [
+  { label: t('每分钟'), expr: '* * * * *' },
+  { label: t('每 5 分钟'), expr: '*/5 * * * *' },
+  { label: t('每小时整点'), expr: '0 * * * *' },
+  { label: t('每天 02:00'), expr: '0 2 * * *' },
+  { label: t('每周一 09:00'), expr: '0 9 * * 1' },
+  { label: t('每月 1 日 03:00'), expr: '0 3 1 * *' },
+])
 
 const rows = ref<JobRow[]>([])
 const total = ref(0)
@@ -66,6 +68,8 @@ const isEdit = computed(() => Boolean(editingId.value))
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 
+const PARAMS_EXAMPLE = '{"days": 30}'
+
 const form = reactive<JobPayload>({
   name: '',
   cron: '*/5 * * * *',
@@ -75,36 +79,36 @@ const form = reactive<JobPayload>({
   remark: '',
 })
 
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
+const rules = computed<FormRules>(() => ({
+  name: [{ required: true, message: t('请输入任务名称'), trigger: 'blur' }],
   cron: [
-    { required: true, message: '请输入 cron 表达式', trigger: 'blur' },
+    { required: true, message: t('请输入 cron 表达式'), trigger: 'blur' },
     {
       validator: (_r, v: string, cb) => {
         const parts = String(v ?? '').trim().split(/\s+/)
-        if (parts.length !== 5) cb(new Error('需为标准 5 段格式：分 时 日 月 周'))
+        if (parts.length !== 5) cb(new Error(t('需为标准 5 段格式：分 时 日 月 周')))
         else cb()
       },
       trigger: 'blur',
     },
   ],
-  handler: [{ required: true, message: '请选择执行器', trigger: 'change' }],
+  handler: [{ required: true, message: t('请选择执行器'), trigger: 'change' }],
   params: [
     {
       validator: (_r, v: string, cb) => {
         if (!String(v ?? '').trim()) return cb()
         try {
           const parsed = JSON.parse(String(v))
-          if (typeof parsed !== 'object' || Array.isArray(parsed)) cb(new Error('参数需为 JSON 对象'))
+          if (typeof parsed !== 'object' || Array.isArray(parsed)) cb(new Error(t('参数需为 JSON 对象')))
           else cb()
         } catch {
-          cb(new Error('参数不是合法的 JSON'))
+          cb(new Error(t('参数不是合法的 JSON')))
         }
       },
       trigger: 'blur',
     },
   ],
-}
+}))
 
 function resetForm() {
   Object.assign(form, {
@@ -145,10 +149,10 @@ async function submitForm() {
   try {
     if (isEdit.value) {
       await jobApi.update(editingId.value, { ...form })
-      ElMessage.success('已保存')
+      ElMessage.success(t('已保存'))
     } else {
       await jobApi.create({ ...form })
-      ElMessage.success('任务已创建')
+      ElMessage.success(t('任务已创建'))
     }
     formVisible.value = false
     load()
@@ -159,26 +163,30 @@ async function submitForm() {
 
 async function toggleStatus(row: JobRow) {
   const next = row.status === 1 ? 0 : 1
-  const action = next === 1 ? '启用' : '停用'
+  const action = next === 1 ? t('任务已启用') : t('任务已停用')
   await jobApi.setStatus(row.id, next)
-  ElMessage.success(`已${action}`)
+  ElMessage.success(action)
   load()
 }
 
 async function runNow(row: JobRow) {
   try {
-    await ElMessageBox.confirm(`立即执行「${row.name}」？本次执行不影响原有调度计划。`, '手动执行', {
-      confirmButtonText: '执行',
-      cancelButtonText: '取消',
-      type: 'info',
-    })
+    await ElMessageBox.confirm(
+      t('立即执行「{name}」？本次执行不影响原有调度计划。', { name: row.name }),
+      t('手动执行'),
+      {
+        confirmButtonText: t('执行'),
+        cancelButtonText: t('取消'),
+        type: 'info',
+      },
+    )
   } catch {
     return
   }
   running.value = new Set(running.value).add(row.id)
   try {
     await jobApi.run(row.id)
-    ElMessage.success('已触发执行，可在执行日志中查看结果')
+    ElMessage.success(t('已触发执行，可在执行日志中查看结果'))
     setTimeout(load, 600)
   } finally {
     const next = new Set(running.value)
@@ -189,16 +197,20 @@ async function runNow(row: JobRow) {
 
 async function removeJob(row: JobRow) {
   try {
-    await ElMessageBox.confirm(`删除后该调度计划将停止且不会恢复。确定删除「${row.name}」吗？`, '删除任务', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'error',
-    })
+    await ElMessageBox.confirm(
+      t('删除后该调度计划将停止且不会恢复。确定删除「{name}」吗？', { name: row.name }),
+      t('删除任务'),
+      {
+        confirmButtonText: t('删除'),
+        cancelButtonText: t('取消'),
+        type: 'error',
+      },
+    )
   } catch {
     return
   }
   await jobApi.remove(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   if (rows.value.length === 1 && query.page > 1) query.page -= 1
   load()
 }
@@ -257,12 +269,12 @@ onMounted(async () => {
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">定时任务</h1>
-        <p class="page-desc">基于 cron 的周期调度，支持跳过并发执行与手动触发</p>
+        <h1 class="page-title">{{ $t('定时任务') }}</h1>
+        <p class="page-desc">{{ $t('基于 cron 的周期调度，支持跳过并发执行与手动触发') }}</p>
       </div>
       <div class="page-actions">
         <el-button v-perm="'ops:job:create'" type="primary" :icon="Plus" @click="openCreate">
-          新增任务
+          {{ $t('新增任务') }}
         </el-button>
       </div>
     </div>
@@ -272,27 +284,27 @@ onMounted(async () => {
         <div class="toolbar-left">
           <el-input
             v-model="query.keyword"
-            placeholder="搜索任务名 / 执行器"
+            :placeholder="$t('搜索任务名 / 执行器')"
             :prefix-icon="Search"
             clearable
             style="width: 236px"
             @keyup.enter="reload"
             @clear="reload"
           />
-          <el-select v-model="query.status" placeholder="全部状态" clearable style="width: 118px" @change="reload">
-            <el-option label="运行中" :value="1" />
-            <el-option label="已停用" :value="0" />
+          <el-select v-model="query.status" :placeholder="$t('全部状态')" clearable style="width: 118px" @change="reload">
+            <el-option :label="$t('运行中')" :value="1" />
+            <el-option :label="$t('已停用')" :value="0" />
           </el-select>
-          <el-button @click="reload">查询</el-button>
-          <el-button text @click="resetQuery">重置</el-button>
+          <el-button @click="reload">{{ $t('查询') }}</el-button>
+          <el-button text @click="resetQuery">{{ $t('重置') }}</el-button>
         </div>
         <div class="toolbar-right">
-          <el-button :icon="Refresh" circle title="刷新" @click="load" />
+          <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
       <el-table v-loading="loading" :data="rows" row-key="id">
-        <el-table-column label="任务" min-width="220">
+        <el-table-column :label="$t('任务')" min-width="220">
           <template #default="{ row }">
             <div class="job-cell">
               <div class="job-dot" :class="row.status === 1 ? 'on' : 'off'" />
@@ -304,39 +316,39 @@ onMounted(async () => {
           </template>
         </el-table-column>
 
-        <el-table-column label="执行计划" min-width="150">
+        <el-table-column :label="$t('执行计划')" min-width="150">
           <template #default="{ row }">
             <code class="cron">{{ row.cron }}</code>
-            <div v-if="row.nextRunAt" class="next-run">下次 {{ fromNow(row.nextRunAt) }}</div>
+            <div v-if="row.nextRunAt" class="next-run">{{ $t('下次 {time}', { time: fromNow(row.nextRunAt) }) }}</div>
           </template>
         </el-table-column>
 
-        <el-table-column label="最近执行" width="170">
+        <el-table-column :label="$t('最近执行')" width="170">
           <template #default="{ row }">
             <template v-if="row.lastRunAt">
               <div class="last-run" :title="fmtTime(row.lastRunAt)">
                 {{ fromNow(row.lastRunAt) }}
                 <span class="result" :class="row.lastResult === 'success' ? 'ok' : 'fail'">
-                  {{ row.lastResult === 'success' ? '成功' : '失败' }}
+                  {{ row.lastResult === 'success' ? $t('成功') : $t('失败') }}
                 </span>
               </div>
             </template>
-            <span v-else class="dim">尚未执行</span>
+            <span v-else class="dim">{{ $t('尚未执行') }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="成功 / 失败" width="130">
+        <el-table-column :label="$t('成功 / 失败')" width="130">
           <template #default="{ row }">
             <span class="num stats">
               <b class="ok">{{ row.runCount - row.failCount }}</b>
               <span class="sep">/</span>
               <b :class="row.failCount ? 'fail' : 'dim'">{{ row.failCount }}</b>
             </span>
-            <div class="rate">成功率 {{ successRate(row) }}</div>
+            <div class="rate">{{ $t('成功率 {rate}', { rate: successRate(row) }) }}</div>
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="96" align="center">
+        <el-table-column :label="$t('状态')" width="96" align="center">
           <template #default="{ row }">
             <el-switch
               :model-value="row.status"
@@ -351,10 +363,10 @@ onMounted(async () => {
 
         <template #empty>
           <div class="table-empty">
-            <p>{{ query.keyword || query.status !== undefined ? '没有匹配的任务' : '还没有配置定时任务' }}</p>
-            <span>任务由「cron 表达式 + 已注册执行器」组成，支持手动触发与执行日志追溯</span>
+            <p>{{ query.keyword || query.status !== undefined ? $t('没有匹配的任务') : $t('还没有配置定时任务') }}</p>
+            <span>{{ $t('任务由「cron 表达式 + 已注册执行器」组成，支持手动触发与执行日志追溯') }}</span>
             <el-button v-perm="'ops:job:create'" size="small" type="primary" plain @click="openCreate">
-              创建第一个任务
+              {{ $t('创建第一个任务') }}
             </el-button>
           </div>
         </template>
@@ -368,17 +380,17 @@ onMounted(async () => {
               :loading="running.has(row.id)"
               @click="runNow(row)"
             >
-              执行
+              {{ $t('执行') }}
             </el-button>
-            <el-button link type="primary" @click="openLogs(row)">日志</el-button>
-            <el-button v-perm="'ops:job:update'" link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button v-perm="'ops:job:delete'" link type="danger" @click="removeJob(row)">删除</el-button>
+            <el-button link type="primary" @click="openLogs(row)">{{ $t('日志') }}</el-button>
+            <el-button v-perm="'ops:job:update'" link type="primary" @click="openEdit(row)">{{ $t('编辑') }}</el-button>
+            <el-button v-perm="'ops:job:delete'" link type="danger" @click="removeJob(row)">{{ $t('删除') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <div class="pager">
-        <span class="total">共 {{ total }} 个任务</span>
+        <span class="total">{{ $t('共 {count} 个任务', { count: total }) }}</span>
         <el-pagination
           v-model:current-page="query.page"
           v-model:page-size="query.page_size"
@@ -395,7 +407,7 @@ onMounted(async () => {
     <!-- 任务表单 -->
     <el-dialog
       v-model="formVisible"
-      :title="isEdit ? '编辑任务' : '新增任务'"
+      :title="isEdit ? $t('编辑任务') : $t('新增任务')"
       width="620px"
       append-to-body
       :close-on-click-modal="false"
@@ -403,20 +415,20 @@ onMounted(async () => {
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <div class="form-grid">
-          <el-form-item label="任务名称" prop="name">
-            <el-input v-model="form.name" placeholder="如 清理过期日志" />
+          <el-form-item :label="$t('任务名称')" prop="name">
+            <el-input v-model="form.name" :placeholder="$t('如 清理过期日志')" />
           </el-form-item>
-          <el-form-item label="执行器" prop="handler">
-            <el-select v-model="form.handler" placeholder="选择已注册的执行器" style="width: 100%">
+          <el-form-item :label="$t('执行器')" prop="handler">
+            <el-select v-model="form.handler" :placeholder="$t('选择已注册的执行器')" style="width: 100%">
               <el-option v-for="h in handlers" :key="h" :label="h" :value="h" />
             </el-select>
           </el-form-item>
         </div>
 
-        <el-form-item label="cron 表达式" prop="cron">
-          <el-input v-model="form.cron" placeholder="分 时 日 月 周，如 */5 * * * *" class="mono-input" />
+        <el-form-item :label="$t('cron 表达式')" prop="cron">
+          <el-input v-model="form.cron" :placeholder="$t('分 时 日 月 周，如 */5 * * * *')" class="mono-input" />
           <div class="cron-presets">
-            <span class="cp-label">常用：</span>
+            <span class="cp-label">{{ $t('常用：') }}</span>
             <button
               v-for="p in CRON_PRESETS"
               :key="p.expr"
@@ -430,29 +442,29 @@ onMounted(async () => {
           </div>
         </el-form-item>
 
-        <el-form-item label="执行参数" prop="params">
+        <el-form-item :label="$t('执行参数')" prop="params">
           <el-input
             v-model="form.params"
             type="textarea"
             :rows="3"
-            placeholder='JSON 对象，如 {"days": 30}；无需参数可留空'
+            :placeholder="$t('JSON 对象，如 {example}；无需参数可留空', { example: PARAMS_EXAMPLE })"
             class="mono-input"
           />
         </el-form-item>
 
         <div class="form-grid">
-          <el-form-item label="状态">
-            <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
+          <el-form-item :label="$t('状态')">
+            <el-switch v-model="form.status" :active-value="1" :inactive-value="0" :active-text="$t('启用')" :inactive-text="$t('停用')" />
           </el-form-item>
-          <el-form-item label="备注">
-            <el-input v-model="form.remark" maxlength="255" placeholder="选填" />
+          <el-form-item :label="$t('备注')">
+            <el-input v-model="form.remark" maxlength="255" :placeholder="$t('选填')" />
           </el-form-item>
         </div>
       </el-form>
 
       <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+        <el-button @click="formVisible = false">{{ $t('取消') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitForm">{{ $t('保存') }}</el-button>
       </template>
     </el-dialog>
 
@@ -460,7 +472,7 @@ onMounted(async () => {
     <el-drawer v-model="logVisible" :size="620" append-to-body>
       <template #header>
         <div class="log-head">
-          <h3>执行日志</h3>
+          <h3>{{ $t('执行日志') }}</h3>
           <p v-if="logJob">{{ logJob.name }} · <code class="mono">{{ logJob.cron }}</code></p>
         </div>
       </template>
@@ -473,24 +485,24 @@ onMounted(async () => {
           size="small"
           @row-click="showLogDetail"
         >
-          <el-table-column label="开始时间" min-width="150">
+          <el-table-column :label="$t('开始时间')" min-width="150">
             <template #default="{ row }">
               <span class="num fs-12">{{ fmtTime(row.startedAt) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="结果" width="80">
+          <el-table-column :label="$t('结果')" width="80">
             <template #default="{ row }">
               <span class="status-dot" :class="row.status === 1 ? 'is-on' : 'is-off'">
-                {{ row.status === 1 ? '成功' : '失败' }}
+                {{ row.status === 1 ? $t('成功') : $t('失败') }}
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="耗时" width="86" align="right">
+          <el-table-column :label="$t('耗时')" width="86" align="right">
             <template #default="{ row }">
               <span class="num dim fs-12">{{ row.costMs }} ms</span>
             </template>
           </el-table-column>
-          <el-table-column label="输出" min-width="180" show-overflow-tooltip>
+          <el-table-column :label="$t('输出')" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">
               <span class="dim fs-12">{{ row.output || '—' }}</span>
             </template>
@@ -511,10 +523,10 @@ onMounted(async () => {
 
         <div v-if="logDetail" class="log-output">
           <div class="lo-head">
-            <span>执行输出</span>
+            <span>{{ $t('执行输出') }}</span>
             <span class="dim fs-12">{{ fmtTime(logDetail.startedAt) }}</span>
           </div>
-          <pre class="lo-body">{{ logDetail.output || '（无输出）' }}</pre>
+          <pre class="lo-body">{{ logDetail.output || $t('（无输出）') }}</pre>
         </div>
       </div>
     </el-drawer>

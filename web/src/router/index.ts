@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { translate } from '@/i18n'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -227,9 +228,14 @@ function inMenus(path: string, nodes = useAuthStore().menus): boolean {
   return false
 }
 
+/** 页面标题以中文原文作为翻译 key，切换语言时由 App.vue 重新调用 */
+export function applyDocumentTitle(title?: string) {
+  const base = translate('Keel 管理控制台')
+  document.title = title ? `${translate(title)} · ${base}` : base
+}
+
 router.afterEach((to) => {
-  const base = 'Keel 管理控制台'
-  document.title = to.meta.title ? `${to.meta.title} · ${base}` : base
+  applyDocumentTitle(to.meta.title)
 })
 
 export default router

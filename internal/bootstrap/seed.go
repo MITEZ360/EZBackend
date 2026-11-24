@@ -128,7 +128,9 @@ var menuSeeds = []menuSeed{
 		{ID: "m_loginlog", Name: "登录日志", Type: model.MenuPage, Path: "/ops/login-log", Icon: "login", Perm: "ops:loginlog:list", Sort: 3},
 		{ID: "m_oplog", Name: "操作日志", Type: model.MenuPage, Path: "/ops/operation-log", Icon: "file-text", Perm: "ops:oplog:list", Sort: 4},
 		{ID: "m_online", Name: "在线用户", Type: model.MenuPage, Path: "/ops/online", Icon: "wifi", Perm: "ops:online:list", Sort: 5},
-		{ID: "m_monitor", Name: "服务监控", Type: model.MenuPage, Path: "/ops/monitor", Icon: "activity", Perm: "ops:monitor:view", Sort: 6},
+		{ID: "m_monitor", Name: "服务监控", Type: model.MenuPage, Path: "/ops/monitor", Icon: "activity", Perm: "ops:monitor:view", Sort: 6, Children: []menuSeed{
+			{ID: "m_monitor_restart", Name: "重启服务", Type: model.MenuButton, Perm: "ops:monitor:restart"},
+		}},
 		{ID: "m_maintenance", Name: "备份与迁移", Type: model.MenuPage, Path: "/ops/maintenance", Icon: "server", Perm: "ops:backup:list", Sort: 7, Children: []menuSeed{
 			{ID: "m_maintenance_backup", Name: "立即备份", Type: model.MenuButton, Perm: "ops:backup:create"},
 			{ID: "m_maintenance_restore", Name: "恢复与回滚", Type: model.MenuButton, Perm: "ops:backup:restore"},

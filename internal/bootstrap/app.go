@@ -40,6 +40,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/cache"
 	"github.com/keel-framework/keel/internal/platform/config"
 	"github.com/keel-framework/keel/internal/platform/database"
+	"github.com/keel-framework/keel/internal/platform/datetime"
 	"github.com/keel-framework/keel/internal/platform/idgen"
 	"github.com/keel-framework/keel/internal/platform/logger"
 	"github.com/keel-framework/keel/internal/platform/mailer"
@@ -68,7 +69,19 @@ type App struct {
 	Started   time.Time
 	SelfCheck *SelfCheckReport
 
-	server *http.Server
+	server    *http.Server
+	restartCh chan struct{}
+}
+
+// RequestRestart 由管理端运维接口调用，触发进程原地重启。
+func (a *App) RequestRestart() {
+	if a == nil || a.restartCh == nil {
+		return
+	}
+	select {
+	case a.restartCh <- struct{}{}:
+	default: // 已有重启请求在处理中
+	}
 }
 
 // New 装配应用。
@@ -79,6 +92,11 @@ func New(cfgPath string) (*App, error) {
 	}
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// 时区必须在任何时间相关组件（GORM、cron、日志轮转、备份）之前装配。
+	if err := datetime.Configure(cfg.App.Timezone); err != nil {
+		return nil, err
 	}
 
 	lg, err := logger.New(logger.Options{
@@ -234,6 +252,7 @@ func New(cfgPath string) (*App, error) {
 	dashSvc := dashboard.NewService(db, ch)
 
 	var engine *gin.Engine
+	var app *App // 重启回调在运行时才解引用，此处先声明
 	monitorSvc := monitor.NewService(db, ch, cfg, func() []monitor.RouteInfo {
 		if engine == nil {
 			return nil
@@ -244,7 +263,7 @@ func New(cfgPath string) (*App, error) {
 			out = append(out, monitor.RouteInfo{Method: r.Method, Path: r.Path})
 		}
 		return out
-	})
+	}, func() { app.RequestRestart() })
 
 	engine = router.New(router.Deps{
 		Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
@@ -273,8 +292,8 @@ func New(cfgPath string) (*App, error) {
 		Maintenance: maintenanceHandler,
 	})
 
-	app := &App{Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
-		Mailer: mail, Engine: engine, Jobs: jobSvc,
+	app = &App{Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
+		Mailer: mail, Engine: engine, Jobs: jobSvc, restartCh: make(chan struct{}, 1),
 		Audit: auditSvc, Events: bus, Instance: resolveInstanceID(cfg), Started: time.Now()}
 	// 启动自检：关键依赖（数据库/缓存/存储）不可用时直接 fail-fast；
 	// 迁移版本落后、种子为空等只告警不阻断。报告挂在 App 上便于测试断言。
@@ -366,6 +385,18 @@ func (a *App) Run() error {
 		ctx, cancel := context.WithTimeout(context.Background(), a.Cfg.Server.ShutdownTimeout)
 		defer cancel()
 		return a.Shutdown(ctx)
+	case <-a.restartCh:
+		a.Log.Info("管理端触发重启，正在重新执行进程")
+		ctx, cancel := context.WithTimeout(context.Background(), a.Cfg.Server.ShutdownTimeout)
+		if err := a.Shutdown(ctx); err != nil {
+			a.Log.Warn("重启前优雅停机异常", zap.Error(err))
+		}
+		cancel()
+		if err := execSelf(); err != nil {
+			a.Log.Error("自重启失败", zap.Error(err))
+			return err
+		}
+		return nil
 	}
 }
 

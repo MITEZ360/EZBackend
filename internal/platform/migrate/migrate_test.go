@@ -44,8 +44,9 @@ func TestRunnerUpDownCycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(applied) != 4 {
-		t.Fatalf("应应用 4 个版本, got %d", len(applied))
+	want := len(r.definitions())
+	if len(applied) != want {
+		t.Fatalf("应应用 %d 个版本, got %d", want, len(applied))
 	}
 	st, _ = r.Status(ctx)
 	if st.Current != st.Latest || st.Pending != 0 {
@@ -61,7 +62,7 @@ func TestRunnerUpDownCycle(t *testing.T) {
 		t.Fatalf("重复升级应幂等: applied=%d err=%v", len(applied), err)
 	}
 
-	// 回滚一步（v4）
+	// 回滚一步（最新版本）
 	down, err := r.Down(ctx)
 	if err != nil || len(down) != 1 {
 		t.Fatalf("回滚一步失败: %d %v", len(down), err)
@@ -71,13 +72,15 @@ func TestRunnerUpDownCycle(t *testing.T) {
 		t.Fatalf("回滚后应有 1 个待应用, got %d", st.Pending)
 	}
 
-	// UpTo 指定版本
-	if _, err := r.UpTo(ctx, 4); err != nil {
+	// UpTo 指定版本（最新此前一版）
+	target := r.definitions()[len(r.definitions())-2].Version
+	if _, err := r.UpTo(ctx, target); err != nil {
 		t.Fatal(err)
 	}
 	st, _ = r.Status(ctx)
-	if st.Current != 4 || st.Pending != 0 {
-		t.Fatalf("UpTo(4) 后异常: current=%d", st.Current)
+	// 目标是倒数第二版，最新一版应仍待应用
+	if st.Current != target || st.Pending != 1 {
+		t.Fatalf("UpTo(%d) 后异常: current=%d pending=%d", target, st.Current, st.Pending)
 	}
 }
 

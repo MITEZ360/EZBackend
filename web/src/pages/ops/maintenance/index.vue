@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Download, Plus, Refresh, RefreshLeft, Upload, View } from '@element-plus/icons-vue'
 import {
@@ -13,6 +14,7 @@ import {
 } from '@/api/maintenance'
 import { useAuthStore } from '@/stores/auth'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const rows = ref<BackupFile[]>([])
 const migration = ref<MigrationResult | null>(null)
@@ -64,7 +66,7 @@ async function createBackup() {
   creating.value = true
   try {
     const meta = await maintenanceApi.createBackup()
-    ElMessage.success(`已生成备份 ${meta.name}`)
+    ElMessage.success(t('已生成备份 {name}', { name: meta.name }))
     await load()
   } finally {
     creating.value = false
@@ -76,7 +78,7 @@ async function doDownload(row: BackupFile) {
   try {
     await downloadBackup(row.name)
   } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '下载失败')
+    ElMessage.error(err instanceof Error ? err.message : t('下载失败'))
   } finally {
     busy.value = ''
   }
@@ -87,18 +89,26 @@ async function doVerify(row: BackupFile) {
   try {
     const res: VerifyResult = await maintenanceApi.verify(row.name)
     const lines = [
-      `校验结果：${res.ok ? '通过' : '失败'}`,
-      `驱动：${res.driver}`,
-      `完整性：${res.integrity || '—'}`,
-      `元信息比对：${res.metaMatched ? '一致' : '不一致 / 缺失'}`,
-      `表数量：${res.tables?.length ?? 0}${res.userCount != null ? `，用户 ${res.userCount} 条` : ''}`,
-      `文件资产：${res.files ?? 0} 个${res.fileCheck ? `（${res.fileCheck}）` : ''}`,
-      `SHA-256：${res.sha256 || '—'}`,
+      t('校验结果：{result}', { result: res.ok ? t('通过') : t('失败') }),
+      t('驱动：{driver}', { driver: res.driver }),
+      t('完整性：{value}', { value: res.integrity || '—' }),
+      t('元信息比对：{result}', { result: res.metaMatched ? t('一致') : t('不一致 / 缺失') }),
+      t('表数量：{count}{users}', {
+        count: res.tables?.length ?? 0,
+        users: res.userCount != null ? t('，用户 {count} 条', { count: res.userCount }) : '',
+      }),
+      t('文件资产：{count} 个{note}', {
+        count: res.files ?? 0,
+        note: res.fileCheck ? t('（{check}）', { check: res.fileCheck }) : '',
+      }),
+      t('SHA-256：{value}', { value: res.sha256 || '—' }),
     ]
-    await ElMessageBox.alert(lines.join('\n'), `校验 ${row.name}`, { confirmButtonText: '知道了' })
+    await ElMessageBox.alert(lines.join('\n'), t('校验 {name}', { name: row.name }), {
+      confirmButtonText: t('知道了'),
+    })
     await load()
   } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '校验失败')
+    ElMessage.error(err instanceof Error ? err.message : t('校验失败'))
   } finally {
     busy.value = ''
   }
@@ -106,8 +116,10 @@ async function doVerify(row: BackupFile) {
 
 function fmtPlan(res: RestoreResult) {
   const lines = [
-    `模式：${res.mode === 'offline' ? '停机恢复（SQLite）' : '在线恢复'}`,
-    '—— 演练计划（未改动任何文件）——',
+    t('模式：{mode}', {
+      mode: res.mode === 'offline' ? t('停机恢复（SQLite）') : t('在线恢复'),
+    }),
+    t('—— 演练计划（未改动任何文件）——'),
     ...(res.plan ?? []).map((p) => `· ${p}`),
   ]
   return lines.join('\n')
@@ -117,9 +129,11 @@ async function doRestorePlan(row: BackupFile) {
   busy.value = row.name
   try {
     const res = await maintenanceApi.restorePlan(row.name)
-    await ElMessageBox.alert(fmtPlan(res), `恢复演练 ${row.name}`, { confirmButtonText: '知道了' })
+    await ElMessageBox.alert(fmtPlan(res), t('恢复演练 {name}', { name: row.name }), {
+      confirmButtonText: t('知道了'),
+    })
   } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '演练失败')
+    ElMessage.error(err instanceof Error ? err.message : t('演练失败'))
   } finally {
     busy.value = ''
   }
@@ -133,14 +147,14 @@ async function doRestore(row: BackupFile) {
     preview = await maintenanceApi.restorePlan(row.name)
   } catch (err) {
     busy.value = ''
-    ElMessage.error(err instanceof Error ? err.message : '演练失败，已中止恢复')
+    ElMessage.error(err instanceof Error ? err.message : t('演练失败，已中止恢复'))
     return
   }
   try {
     await ElMessageBox.confirm(
-      `${fmtPlan(preview)}\n\n恢复会用该备份覆盖当前数据，属于高危操作。SQLite 需停机后用命令行恢复；MySQL / PostgreSQL 需开启 backup.allow_restore。确定继续？`,
-      '恢复数据库',
-      { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' },
+      `${fmtPlan(preview)}\n\n${t('恢复会用该备份覆盖当前数据，属于高危操作。SQLite 需停机后用命令行恢复；MySQL / PostgreSQL 需开启 backup.allow_restore。确定继续？')}`,
+      t('恢复数据库'),
+      { type: 'warning', confirmButtonText: t('继续'), cancelButtonText: t('取消') },
     )
   } catch {
     busy.value = ''
@@ -150,14 +164,14 @@ async function doRestore(row: BackupFile) {
     const res = await maintenanceApi.restore(row.name)
     const details = [
       res.message,
-      res.safetyCopy ? `安全副本：${res.safetyCopy}` : '',
-      res.filesRestored ? `已还原文件资产：${res.filesRestored} 个` : '',
+      res.safetyCopy ? t('安全副本：{path}', { path: res.safetyCopy }) : '',
+      res.filesRestored ? t('已还原文件资产：{count} 个', { count: res.filesRestored }) : '',
       ...(res.postCheck ?? []),
     ].filter(Boolean)
-    await ElMessageBox.alert(details.join('\n'), '恢复结果')
+    await ElMessageBox.alert(details.join('\n'), t('恢复结果'))
   } catch (err) {
-    const msg = err instanceof Error ? err.message : '恢复失败'
-    await ElMessageBox.alert(msg, '无法在线恢复', { confirmButtonText: '知道了' })
+    const msg = err instanceof Error ? err.message : t('恢复失败')
+    await ElMessageBox.alert(msg, t('无法在线恢复'), { confirmButtonText: t('知道了') })
   } finally {
     busy.value = ''
   }
@@ -165,37 +179,41 @@ async function doRestore(row: BackupFile) {
 
 async function doDelete(row: BackupFile) {
   try {
-    await ElMessageBox.confirm(`删除备份「${row.name}」后无法找回，确认删除？`, '删除备份', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-    })
+    await ElMessageBox.confirm(
+      t('删除备份「{name}」后无法找回，确认删除？', { name: row.name }),
+      t('删除备份'),
+      {
+        type: 'warning',
+        confirmButtonText: t('删除'),
+        cancelButtonText: t('取消'),
+      },
+    )
   } catch {
     return
   }
   await maintenanceApi.remove(row.name)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   await load()
 }
 
 async function migrateUp() {
   await maintenanceApi.migrateUp()
-  ElMessage.success('已升级到最新版本')
+  ElMessage.success(t('已升级到最新版本'))
   await load()
 }
 
 async function migrateDown() {
   try {
     await ElMessageBox.confirm(
-      '回滚会撤销最近一个版本的结构或数据变更（可能删表/删列），仅用于升级失败时应急。确定回滚？',
-      '回滚数据库版本',
-      { type: 'warning', confirmButtonText: '回滚', cancelButtonText: '取消' },
+      t('回滚会撤销最近一个版本的结构或数据变更（可能删表/删列），仅用于升级失败时应急。确定回滚？'),
+      t('回滚数据库版本'),
+      { type: 'warning', confirmButtonText: t('回滚'), cancelButtonText: t('取消') },
     )
   } catch {
     return
   }
   await maintenanceApi.migrateDown()
-  ElMessage.success('已回滚一个版本')
+  ElMessage.success(t('已回滚一个版本'))
   await load()
 }
 </script>
@@ -204,13 +222,13 @@ async function migrateDown() {
   <div class="page">
     <header class="page-head">
       <div>
-        <h1>备份与迁移</h1>
+        <h1>{{ $t('备份与迁移') }}</h1>
         <p class="page-desc">
-          数据库快照 + 本地文件资产一并归档，完整性校验与版本化结构变更。定时备份任务默认每天 02:00 执行，按 GFS 分档保留。
+          {{ $t('数据库快照 + 本地文件资产一并归档，完整性校验与版本化结构变更。定时备份任务默认每天 02:00 执行，按 GFS 分档保留。') }}
         </p>
       </div>
       <div class="head-actions">
-        <el-button :icon="Refresh" @click="load">刷新</el-button>
+        <el-button :icon="Refresh" @click="load">{{ $t('刷新') }}</el-button>
         <el-button
           v-if="auth.can('ops:backup:create')"
           type="primary"
@@ -218,75 +236,75 @@ async function migrateDown() {
           :loading="creating"
           @click="createBackup"
         >
-          立即备份
+          {{ $t('立即备份') }}
         </el-button>
       </div>
     </header>
 
     <section class="stats">
       <div class="stat">
-        <span>备份份数</span>
+        <span>{{ $t('备份份数') }}</span>
         <strong>{{ rows.length }}</strong>
-        <em>份</em>
+        <em>{{ $t('份') }}</em>
       </div>
       <div class="stat">
-        <span>最近备份</span>
-        <strong class="stat-text">{{ latest ? fmt(latest) : '暂无' }}</strong>
+        <span>{{ $t('最近备份') }}</span>
+        <strong class="stat-text">{{ latest ? fmt(latest) : $t('暂无') }}</strong>
       </div>
       <div class="stat">
-        <span>数据库版本</span>
+        <span>{{ $t('数据库版本') }}</span>
         <strong>{{ currentVersion }}<em> / {{ latestVersion }}</em></strong>
       </div>
       <div class="stat">
-        <span>待应用版本</span>
+        <span>{{ $t('待应用版本') }}</span>
         <strong :class="{ warn: pending > 0 }">{{ pending }}</strong>
-        <em>个</em>
+        <em>{{ $t('个') }}</em>
       </div>
       <div class="stat">
-        <span>文件资产</span>
+        <span>{{ $t('文件资产') }}</span>
         <strong>{{ totalFiles }}</strong>
-        <em>个（最新备份）</em>
+        <em>{{ $t('个（最新备份）') }}</em>
       </div>
     </section>
 
     <el-tabs v-model="activeTab" class="tabs">
-      <el-tab-pane label="备份文件" name="backups">
+      <el-tab-pane :label="$t('备份文件')" name="backups">
         <div class="panel">
           <el-table v-loading="loading" :data="rows" row-key="name" stripe>
-            <el-table-column label="文件名" min-width="260">
+            <el-table-column :label="$t('文件名')" min-width="260">
               <template #default="{ row }">
                 <div class="file-name">{{ row.name }}</div>
-                <div class="dim sha">{{ row.sha256 ? `sha256 ${row.sha256.slice(0, 16)}…` : '无校验信息' }}</div>
+                <div class="dim sha">{{ row.sha256 ? `sha256 ${row.sha256.slice(0, 16)}…` : $t('无校验信息') }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="驱动" width="110">
+            <el-table-column :label="$t('驱动')" width="110">
               <template #default="{ row }">
                 <el-tag size="small" effect="plain">{{ row.driver }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="大小" width="110">
+            <el-table-column :label="$t('大小')" width="110">
               <template #default="{ row }">{{ fmtSize(row.size) }}</template>
             </el-table-column>
-            <el-table-column label="文件资产" width="100">
+            <el-table-column :label="$t('文件资产')" width="100">
               <template #default="{ row }">
-                <span v-if="row.files" class="yes">{{ row.files }} 个</span>
+                <span v-if="row.files" class="yes">{{ row.files }} {{ $t('个') }}</span>
                 <span v-else class="dim">—</span>
               </template>
             </el-table-column>
-            <el-table-column label="创建时间" width="180">
+            <el-table-column :label="$t('创建时间')" width="180">
               <template #default="{ row }">{{ fmt(row.createdAt) }}</template>
             </el-table-column>
-            <el-table-column label="压缩" width="90">
+            <el-table-column :label="$t('压缩')" width="90">
               <template #default="{ row }">
-                <span :class="row.compressed ? 'yes' : 'dim'">{{ row.compressed ? 'gzip' : '原始' }}</span>
+                <span :class="row.compressed ? 'yes' : 'dim'">{{ row.compressed ? 'gzip' : $t('原始') }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="310" fixed="right">
+            <el-table-column :label="$t('操作')" width="310" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" :icon="Download" :loading="busy === row.name" @click="doDownload(row)">
-                  下载
+                  {{ $t('下载') }}
                 </el-button>
-                <el-button link type="primary" :icon="View" @click="doVerify(row)">校验</el-button>
+                <el-button link type="primary" :icon="View" @click="doVerify(row)">{{ $t('校验') }}</el-button>
                 <el-button
                   v-if="auth.can('ops:backup:restore')"
                   link
@@ -295,7 +313,7 @@ async function migrateDown() {
                   :loading="busy === row.name"
                   @click="doRestorePlan(row)"
                 >
-                  演练
+                  {{ $t('演练') }}
                 </el-button>
                 <el-button
                   v-if="auth.can('ops:backup:restore')"
@@ -304,7 +322,7 @@ async function migrateDown() {
                   :icon="RefreshLeft"
                   @click="doRestore(row)"
                 >
-                  恢复
+                  {{ $t('恢复') }}
                 </el-button>
                 <el-button
                   v-if="auth.can('ops:backup:delete')"
@@ -313,42 +331,42 @@ async function migrateDown() {
                   :icon="Delete"
                   @click="doDelete(row)"
                 >
-                  删除
+                  {{ $t('删除') }}
                 </el-button>
               </template>
             </el-table-column>
             <template #empty>
               <div class="empty">
-                <p>还没有备份文件</p>
-                <p class="dim">点击「立即备份」生成第一份，或等待定时任务执行</p>
+                <p>{{ $t('还没有备份文件') }}</p>
+                <p class="dim">{{ $t('点击「立即备份」生成第一份，或等待定时任务执行') }}</p>
               </div>
             </template>
           </el-table>
         </div>
 
         <div class="tip">
-          <div class="tip-title"><el-icon><Upload /></el-icon> 离线恢复（SQLite）</div>
-          <p>每份备份是 tar 容器，内含数据库快照与 <code>files/</code> 文件资产。SQLite 需要替换数据文件，必须在服务停止后执行，恢复前会自动把当前库另存为 <code>pre-restore-*.db</code>、把旧文件目录改名保留：</p>
-          <pre>keel -config configs/config.yaml restore &lt;备份文件名&gt;
-keel -config configs/config.yaml restore --dry-run &lt;备份文件名&gt;   # 只看计划，不改文件</pre>
-          <p class="dim">恢复后会自动逐表比对行数；MySQL / PostgreSQL 可在开启 <code>backup.allow_restore</code> 后使用页面上的「恢复」按钮在线导入。</p>
+          <div class="tip-title"><el-icon><Upload /></el-icon> {{ $t('离线恢复（SQLite）') }}</div>
+          <p v-html="$t('每份备份是 tar 容器，内含数据库快照与 <code>files/</code> 文件资产。SQLite 需要替换数据文件，必须在服务停止后执行，恢复前会自动把当前库另存为 <code>pre-restore-*.db</code>、把旧文件目录改名保留：')"></p>
+          <pre>keel -config configs/config.yaml restore &lt;{{ $t('备份文件名') }}&gt;
+keel -config configs/config.yaml restore --dry-run &lt;{{ $t('备份文件名') }}&gt;   # {{ $t('只看计划，不改文件') }}</pre>
+          <p class="dim" v-html="$t('恢复后会自动逐表比对行数；MySQL / PostgreSQL 可在开启 <code>backup.allow_restore</code> 后使用页面上的「恢复」按钮在线导入。')"></p>
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="保留策略" name="prune">
+      <el-tab-pane :label="$t('保留策略')" name="prune">
         <div class="panel prune-panel" v-loading="loading">
           <div class="prune-head">
             <div>
-              <strong>GFS 分档保留</strong>
-              <div class="dim">按小时 / 天 / 周 / 月的槽位各保留若干份，断档时不会误删窗口内唯一备份；最新一份永不删除。</div>
+              <strong>{{ $t('GFS 分档保留') }}</strong>
+              <div class="dim">{{ $t('按小时 / 天 / 周 / 月的槽位各保留若干份，断档时不会误删窗口内唯一备份；最新一份永不删除。') }}</div>
             </div>
           </div>
           <div v-if="prune" class="prune-body">
             <div class="prune-stats">
-              <div><span>当前备份</span><strong>{{ prune.keep.length + prune.remove.length }}</strong></div>
-              <div><span>将保留</span><strong class="yes">{{ prune.keep.length }}</strong></div>
-              <div><span>将清理</span><strong class="warn">{{ prune.remove.length }}</strong></div>
-              <div><span>预计释放</span><strong>{{ fmtSize(prune.removeBytes) }}</strong></div>
+              <div><span>{{ $t('当前备份') }}</span><strong>{{ prune.keep.length + prune.remove.length }}</strong></div>
+              <div><span>{{ $t('将保留') }}</span><strong class="yes">{{ prune.keep.length }}</strong></div>
+              <div><span>{{ $t('将清理') }}</span><strong class="warn">{{ prune.remove.length }}</strong></div>
+              <div><span>{{ $t('预计释放') }}</span><strong>{{ fmtSize(prune.removeBytes) }}</strong></div>
             </div>
             <div v-if="prune.slots" class="slot-line">
               <el-tag v-for="(n, k) in prune.slots" :key="k" size="small" effect="plain" class="slot-tag">
@@ -356,61 +374,61 @@ keel -config configs/config.yaml restore --dry-run &lt;备份文件名&gt;   # �
               </el-tag>
             </div>
             <div v-if="prune.remove.length" class="prune-list">
-              <div class="dim">将被清理（演练结果，需 CLI 执行）：</div>
+              <div class="dim">{{ $t('将被清理（演练结果，需 CLI 执行）：') }}</div>
               <ul>
                 <li v-for="name in prune.remove.slice(0, 10)" :key="name"><code>{{ name }}</code></li>
               </ul>
-              <div v-if="prune.remove.length > 10" class="dim">… 还有 {{ prune.remove.length - 10 }} 份</div>
+              <div v-if="prune.remove.length > 10" class="dim">{{ $t('… 还有 {count} 份', { count: prune.remove.length - 10 }) }}</div>
             </div>
           </div>
-          <div v-else class="disabled-note">未获取到保留策略演练结果</div>
+          <div v-else class="disabled-note">{{ $t('未获取到保留策略演练结果') }}</div>
         </div>
         <div class="tip">
-          <div class="tip-title">命令行演练与执行</div>
+          <div class="tip-title">{{ $t('命令行演练与执行') }}</div>
           <pre>keel -config configs/config.yaml backup-prune --dry-run
 keel -config configs/config.yaml backup-prune</pre>
-          <p class="dim">配置见 <code>backup.retain_hourly / retain_daily / retain_weekly / retain_monthly</code>；四档全为 0 时退回按 <code>retain</code> 保留最近 N 份。</p>
+          <p class="dim" v-html="$t('配置见 <code>backup.retain_hourly / retain_daily / retain_weekly / retain_monthly</code>；四档全为 0 时退回按 <code>retain</code> 保留最近 N 份。')"></p>
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="数据库迁移" name="migrations">
+      <el-tab-pane :label="$t('数据库迁移')" name="migrations">
         <div v-if="!migration?.enabled" class="disabled-note">
-          {{ migration?.message || '未启用版本化迁移' }}
+          {{ migration?.message || $t('未启用版本化迁移') }}
         </div>
         <template v-else>
           <div class="migrate-head">
             <div>
-              <strong>当前版本 {{ migration.status?.current }}</strong>
-              <span class="dim"> / 最新 {{ migration.status?.latest }}</span>
-              <div class="dim">驱动 {{ migration.status?.driver }} · 版本表 {{ migration.status?.table }}</div>
+              <strong>{{ $t('当前版本 {version}', { version: migration.status?.current }) }}</strong>
+              <span class="dim"> / {{ $t('最新 {version}', { version: migration.status?.latest }) }}</span>
+              <div class="dim">{{ $t('驱动 {driver} · 版本表 {table}', { driver: migration.status?.driver, table: migration.status?.table }) }}</div>
             </div>
             <div class="head-actions" v-if="auth.can('ops:backup:restore')">
-              <el-button :icon="Upload" :disabled="pending === 0" @click="migrateUp">升级到最新</el-button>
-              <el-button :icon="RefreshLeft" :disabled="currentVersion === 0" @click="migrateDown">回滚一步</el-button>
+              <el-button :icon="Upload" :disabled="pending === 0" @click="migrateUp">{{ $t('升级到最新') }}</el-button>
+              <el-button :icon="RefreshLeft" :disabled="currentVersion === 0" @click="migrateDown">{{ $t('回滚一步') }}</el-button>
             </div>
           </div>
           <div class="panel">
             <el-table :data="migration.status?.versions ?? []" stripe>
-              <el-table-column label="版本" width="100">
+              <el-table-column :label="$t('版本')" width="100">
                 <template #default="{ row }"><code>v{{ row.version }}</code></template>
               </el-table-column>
-              <el-table-column label="名称" min-width="200">
+              <el-table-column :label="$t('名称')" min-width="200">
                 <template #default="{ row }">{{ row.name }}</template>
               </el-table-column>
-              <el-table-column label="状态" width="130">
+              <el-table-column :label="$t('状态')" width="130">
                 <template #default="{ row }">
-                  <el-tag v-if="row.applied" type="success" size="small" effect="light">已应用</el-tag>
-                  <el-tag v-else type="info" size="small" effect="plain">待应用</el-tag>
+                  <el-tag v-if="row.applied" type="success" size="small" effect="light">{{ $t('已应用') }}</el-tag>
+                  <el-tag v-else type="info" size="small" effect="plain">{{ $t('待应用') }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="应用时间" width="200">
+              <el-table-column :label="$t('应用时间')" width="200">
                 <template #default="{ row }">{{ fmt(row.appliedAt) }}</template>
               </el-table-column>
             </el-table>
           </div>
           <div class="tip">
-            <div class="tip-title">命令行方式</div>
-            <p>生产环境建议关闭启动时自动迁移，由发布流水线显式执行：</p>
+            <div class="tip-title">{{ $t('命令行方式') }}</div>
+            <p>{{ $t('生产环境建议关闭启动时自动迁移，由发布流水线显式执行：') }}</p>
             <pre>keel -config configs/config.yaml migrate status
 keel -config configs/config.yaml migrate up</pre>
           </div>

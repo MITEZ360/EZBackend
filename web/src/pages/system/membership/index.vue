@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Delete, Plus, Refresh } from '@element-plus/icons-vue'
 import { membershipApi, type MembershipLevelPayload } from '@/api/membership'
 import type { MembershipBenefit, MembershipLevel } from '@/api/types'
+
+const { t } = useI18n()
 
 const levels = ref<MembershipLevel[]>([])
 const loading = ref(false)
@@ -43,17 +46,17 @@ const form = reactive<MembershipLevelPayload>({
   benefits: [],
 })
 
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入等级名称', trigger: 'blur' }],
+const rules = computed<FormRules>(() => ({
+  name: [{ required: true, message: t('请输入等级名称'), trigger: 'blur' }],
   code: [
-    { required: true, message: '请输入等级编码', trigger: 'blur' },
+    { required: true, message: t('请输入等级编码'), trigger: 'blur' },
     {
       pattern: /^[a-z][a-z0-9_]{1,31}$/,
-      message: '小写字母开头，仅含小写字母、数字与下划线',
+      message: t('小写字母开头，仅含小写字母、数字与下划线'),
       trigger: 'blur',
     },
   ],
-}
+}))
 
 function resetForm() {
   Object.assign(form, {
@@ -116,11 +119,11 @@ async function submit() {
   const keys = new Set<string>()
   for (const b of filled) {
     if (!b.key.trim()) {
-      ElMessage.warning('权益标识不能为空')
+      ElMessage.warning(t('权益标识不能为空'))
       return
     }
     if (keys.has(b.key.trim())) {
-      ElMessage.warning(`权益标识「${b.key}」重复`)
+      ElMessage.warning(t('权益标识「{key}」重复', { key: b.key }))
       return
     }
     keys.add(b.key.trim())
@@ -131,10 +134,10 @@ async function submit() {
     const payload: MembershipLevelPayload = { ...form, benefits: filled }
     if (isEdit.value) {
       await membershipApi.update(editingId.value, payload)
-      ElMessage.success('已保存')
+      ElMessage.success(t('已保存'))
     } else {
       await membershipApi.create(payload)
-      ElMessage.success('等级已创建')
+      ElMessage.success(t('等级已创建'))
     }
     drawer.value = false
     await load()
@@ -146,15 +149,15 @@ async function submit() {
 async function remove(lv: MembershipLevel) {
   try {
     await ElMessageBox.confirm(
-      `删除「${lv.name}」后，该等级的权益配置将不可恢复。仍有用户属于该等级时无法删除，可改为停用。确定删除吗？`,
-      '删除会员等级',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'error' },
+      t('删除「{name}」后，该等级的权益配置将不可恢复。仍有用户属于该等级时无法删除，可改为停用。确定删除吗？', { name: lv.name }),
+      t('删除会员等级'),
+      { confirmButtonText: t('删除'), cancelButtonText: t('取消'), type: 'error' },
     )
   } catch {
     return
   }
   await membershipApi.remove(lv.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   await load()
 }
 </script>
@@ -163,32 +166,32 @@ async function remove(lv: MembershipLevel) {
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">会员等级</h1>
-        <p class="page-desc">配置等级名称、标识与权益；用户没有等级即非会员</p>
+        <h1 class="page-title">{{ $t('会员等级') }}</h1>
+        <p class="page-desc">{{ $t('配置等级名称、标识与权益；用户没有等级即非会员') }}</p>
       </div>
       <div class="page-actions">
-        <el-button :icon="Refresh" @click="load">刷新</el-button>
+        <el-button :icon="Refresh" @click="load">{{ $t('刷新') }}</el-button>
         <el-button v-perm="'system:membership:create'" type="primary" :icon="Plus" @click="openCreate">
-          新增等级
+          {{ $t('新增等级') }}
         </el-button>
       </div>
     </div>
 
     <div class="summary">
       <div class="summary-item">
-        <span>等级数量</span>
+        <span>{{ $t('等级数量') }}</span>
         <strong class="num">{{ levels.length }}</strong>
       </div>
       <div class="summary-item">
-        <span>启用中</span>
+        <span>{{ $t('启用中') }}</span>
         <strong class="num">{{ activeCount }}</strong>
       </div>
       <div class="summary-item">
-        <span>有效会员</span>
+        <span>{{ $t('有效会员') }}</span>
         <strong class="num">{{ memberTotal }}</strong>
       </div>
       <p class="summary-tip">
-        等级停用或会员到期后，用户自动按非会员处理；数据保留，便于查看开通历史。
+        {{ $t('等级停用或会员到期后，用户自动按非会员处理；数据保留，便于查看开通历史。') }}
       </p>
     </div>
 
@@ -207,24 +210,24 @@ async function remove(lv: MembershipLevel) {
             <span class="lv-code">{{ lv.code }}</span>
           </div>
           <span class="status-dot" :class="lv.status === 1 ? 'is-on' : 'is-off'">
-            {{ lv.status === 1 ? '启用' : '停用' }}
+            {{ lv.status === 1 ? $t('启用') : $t('停用') }}
           </span>
         </header>
 
-        <p class="lv-desc">{{ lv.description || '暂无说明' }}</p>
+        <p class="lv-desc">{{ lv.description || $t('暂无说明') }}</p>
 
         <div class="lv-stats">
           <div>
             <strong class="num">{{ lv.userCount ?? 0 }}</strong>
-            <span>有效会员</span>
+            <span>{{ $t('有效会员') }}</span>
           </div>
           <div>
-            <strong class="num">{{ lv.defaultDays > 0 ? `${lv.defaultDays} 天` : '长期' }}</strong>
-            <span>默认时长</span>
+            <strong class="num">{{ lv.defaultDays > 0 ? $t('{days} 天', { days: lv.defaultDays }) : $t('长期') }}</strong>
+            <span>{{ $t('默认时长') }}</span>
           </div>
           <div>
             <strong class="num">{{ lv.benefits?.length ?? 0 }}</strong>
-            <span>项权益</span>
+            <span>{{ $t('项权益') }}</span>
           </div>
         </div>
 
@@ -233,9 +236,9 @@ async function remove(lv: MembershipLevel) {
             <em>{{ b.label }}</em>
             {{ benefitValue(b.value) }}
           </span>
-          <span v-if="!(lv.benefits ?? []).length" class="dim">尚未配置权益</span>
+          <span v-if="!(lv.benefits ?? []).length" class="dim">{{ $t('尚未配置权益') }}</span>
           <span v-else-if="(lv.benefits ?? []).length > 4" class="dim">
-            等 {{ lv.benefits.length }} 项
+            {{ $t('等 {count} 项', { count: lv.benefits.length }) }}
           </span>
         </div>
 
@@ -243,7 +246,7 @@ async function remove(lv: MembershipLevel) {
           <span class="lv-rank">Lv.{{ lv.rank }}</span>
           <div class="lv-actions">
             <el-button v-perm="'system:membership:update'" link type="primary" @click="openEdit(lv)">
-              编辑
+              {{ $t('编辑') }}
             </el-button>
             <el-button
               v-perm="'system:membership:delete'"
@@ -252,7 +255,7 @@ async function remove(lv: MembershipLevel) {
               :icon="Delete"
               @click="remove(lv)"
             >
-              删除
+              {{ $t('删除') }}
             </el-button>
           </div>
         </footer>
@@ -265,13 +268,13 @@ async function remove(lv: MembershipLevel) {
         @click="openCreate"
       >
         <el-icon :size="20"><Plus /></el-icon>
-        <span>新增等级</span>
+        <span>{{ $t('新增等级') }}</span>
       </button>
 
       <div v-if="!loading && !levels.length" class="empty">
-        <p>还没有配置会员等级</p>
+        <p>{{ $t('还没有配置会员等级') }}</p>
         <el-button v-perm="'system:membership:create'" type="primary" :icon="Plus" @click="openCreate">
-          创建第一个等级
+          {{ $t('创建第一个等级') }}
         </el-button>
       </div>
     </div>
@@ -279,33 +282,33 @@ async function remove(lv: MembershipLevel) {
     <!-- 编辑抽屉 -->
     <el-drawer
       v-model="drawer"
-      :title="isEdit ? '编辑会员等级' : '新增会员等级'"
+      :title="isEdit ? $t('编辑会员等级') : $t('新增会员等级')"
       size="560px"
       :close-on-click-modal="false"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="lv-form">
         <div class="form-row">
-          <el-form-item label="等级名称" prop="name">
-            <el-input v-model="form.name" maxlength="64" placeholder="如：黄金会员" />
+          <el-form-item :label="$t('等级名称')" prop="name">
+            <el-input v-model="form.name" maxlength="64" :placeholder="$t('如：黄金会员')" />
           </el-form-item>
-          <el-form-item label="等级编码" prop="code">
-            <el-input v-model="form.code" maxlength="32" placeholder="如：gold" />
+          <el-form-item :label="$t('等级编码')" prop="code">
+            <el-input v-model="form.code" maxlength="32" :placeholder="$t('如：gold')" />
           </el-form-item>
         </div>
 
         <div class="form-row">
-          <el-form-item label="等级权重">
+          <el-form-item :label="$t('等级权重')">
             <el-input-number v-model="form.rank" :min="0" :max="9999" :step="10" controls-position="right" style="width: 100%" />
-            <p class="field-tip">数值越大等级越高，仅用于排序与展示</p>
+            <p class="field-tip">{{ $t('数值越大等级越高，仅用于排序与展示') }}</p>
           </el-form-item>
-          <el-form-item label="默认时长（天）">
+          <el-form-item :label="$t('默认时长（天）')">
             <el-input-number v-model="form.defaultDays" :min="0" :max="36500" controls-position="right" style="width: 100%" />
-            <p class="field-tip">开通时默认带出的天数，0 表示长期有效</p>
+            <p class="field-tip">{{ $t('开通时默认带出的天数，0 表示长期有效') }}</p>
           </el-form-item>
         </div>
 
-        <el-form-item label="标识色">
+        <el-form-item :label="$t('标识色')">
           <div class="color-row">
             <button
               v-for="c in COLOR_PRESETS"
@@ -320,48 +323,48 @@ async function remove(lv: MembershipLevel) {
           </div>
         </el-form-item>
 
-        <el-form-item label="状态">
+        <el-form-item :label="$t('状态')">
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
-          <span class="switch-text">{{ form.status === 1 ? '启用（可开通）' : '停用（不可新开通）' }}</span>
+          <span class="switch-text">{{ form.status === 1 ? $t('启用（可开通）') : $t('停用（不可新开通）') }}</span>
         </el-form-item>
 
-        <el-form-item label="等级说明">
+        <el-form-item :label="$t('等级说明')">
           <el-input
             v-model="form.description"
             type="textarea"
             :rows="2"
             maxlength="255"
             show-word-limit
-            placeholder="一句话描述该等级适合的人群"
+            :placeholder="$t('一句话描述该等级适合的人群')"
           />
         </el-form-item>
 
         <div class="benefit-head">
           <div>
-            <label>会员权益</label>
+            <label>{{ $t('会员权益') }}</label>
             <p class="field-tip">
-              标识供业务判断（如 report.export），值为文案或开关；值为 false / 0 / off 视为未开通
+              {{ $t('标识供业务判断（如 report.export），值为文案或开关；值为 false / 0 / off 视为未开通') }}
             </p>
           </div>
-          <el-button link type="primary" :icon="Plus" @click="addBenefit">添加权益</el-button>
+          <el-button link type="primary" :icon="Plus" @click="addBenefit">{{ $t('添加权益') }}</el-button>
         </div>
 
         <div class="benefit-editor">
           <div v-for="(b, i) in form.benefits" :key="i" class="benefit-row">
-            <el-input v-model="b.key" placeholder="标识，如 report.export" />
-            <el-input v-model="b.label" placeholder="名称，如 导出报表" />
-            <el-input v-model="b.value" placeholder="值，如 true / 50 GB" />
+            <el-input v-model="b.key" :placeholder="$t('标识，如 report.export')" />
+            <el-input v-model="b.label" :placeholder="$t('名称，如 导出报表')" />
+            <el-input v-model="b.value" :placeholder="$t('值，如 true / 50 GB')" />
             <el-button link type="danger" :icon="Delete" @click="removeBenefit(i)" />
           </div>
           <p v-if="!form.benefits.length" class="dim benefit-empty">
-            暂未配置权益，点击右上角「添加权益」
+            {{ $t('暂未配置权益，点击右上角「添加权益」') }}
           </p>
         </div>
       </el-form>
 
       <template #footer>
-        <el-button @click="drawer = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">保存</el-button>
+        <el-button @click="drawer = false">{{ $t('取消') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="submit">{{ $t('保存') }}</el-button>
       </template>
     </el-drawer>
   </div>

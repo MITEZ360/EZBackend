@@ -24,6 +24,7 @@ import (
 	"github.com/keel-framework/keel/internal/model"
 	"github.com/keel-framework/keel/internal/platform/cache"
 	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/query"
 )
 
@@ -191,12 +192,12 @@ func (s *Service) requireSource(ctx context.Context, code string) (*model.NewsSo
 	err := s.db.WithContext(ctx).Where("code = ?", code).First(&src).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errs.Forbidden("数据源未配置：" + code + "，请先在后台「数据源」中创建")
+			return nil, errs.Forbidden(i18n.Tf(ctx, "数据源未配置：{0}，请先在后台「数据源」中创建", code))
 		}
 		return nil, err
 	}
 	if src.Status != model.StatusEnabled {
-		return nil, errs.Forbidden("数据源已停用：" + src.Code)
+		return nil, errs.Forbidden(i18n.Tf(ctx, "数据源已停用：{0}", src.Code))
 	}
 	return &src, nil
 }
@@ -646,7 +647,7 @@ func (s *Service) DeleteSource(ctx context.Context, id string) error {
 		return err
 	}
 	if n > 0 {
-		return errs.Conflict("该数据源下仍有 " + strconv.FormatInt(n, 10) + " 条资讯，请先停用或等待过期")
+		return errs.Conflict(i18n.Tf(ctx, "该数据源下仍有 {0} 条资讯，请先停用或等待过期", n))
 	}
 	res := s.db.WithContext(ctx).Where("id = ?", id).Delete(&model.NewsSource{})
 	if res.Error != nil {
@@ -764,7 +765,7 @@ func (s *Service) DeleteCategory(ctx context.Context, id string) error {
 		return err
 	}
 	if n > 0 {
-		return errs.Conflict("该分类下仍有 " + strconv.FormatInt(n, 10) + " 条资讯，请先停用或等待过期")
+		return errs.Conflict(i18n.Tf(ctx, "该分类下仍有 {0} 条资讯，请先停用或等待过期", n))
 	}
 	res := s.db.WithContext(ctx).Where("id = ?", id).Delete(&model.NewsCategory{})
 	if res.Error != nil {

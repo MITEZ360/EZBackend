@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Link, Refresh, Search } from '@element-plus/icons-vue'
 import { newsApi, newsCategoryApi, newsSourceApi } from '@/api/news'
 import type { NewsArticle, NewsCategory, NewsSource, NewsStats } from '@/api/types'
 import { fmtTime } from '@/utils/format'
+
+const { t } = useI18n()
 
 /** 列表里用紧凑时间，完整时间放在 tooltip 中 */
 function fmtShort(v?: string) {
@@ -107,16 +110,20 @@ async function openDetail(row: NewsArticle) {
 /* ------------------------------------------------------------ 操作 */
 async function remove(row: NewsArticle) {
   try {
-    await ElMessageBox.confirm(`删除后不可恢复。确认删除「${row.title}」？`, '删除资讯', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-    })
+    await ElMessageBox.confirm(
+      t('删除后不可恢复。确认删除「{title}」？', { title: row.title }),
+      t('删除资讯'),
+      {
+        type: 'warning',
+        confirmButtonText: t('删除'),
+        cancelButtonText: t('取消'),
+      },
+    )
   } catch {
     return
   }
   await newsApi.remove(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   if (rows.value.length === 1 && query.page > 1) query.page -= 1
   await Promise.all([load(), loadStats()])
 }
@@ -124,19 +131,23 @@ async function remove(row: NewsArticle) {
 async function cleanup() {
   try {
     await ElMessageBox.confirm(
-      `将立即删除超过 ${stats.value?.retentionDays ?? 7} 天保留期的资讯，该操作不可恢复。`,
-      '清理过期资讯',
-      { type: 'warning', confirmButtonText: '开始清理', cancelButtonText: '取消' },
+      t('将立即删除超过 {days} 天保留期的资讯，该操作不可恢复。', { days: stats.value?.retentionDays ?? 7 }),
+      t('清理过期资讯'),
+      { type: 'warning', confirmButtonText: t('开始清理'), cancelButtonText: t('取消') },
     )
   } catch {
     return
   }
   const res = await newsApi.cleanup()
-  ElMessage.success(res.deleted > 0 ? `已清理 ${res.deleted} 条` : '没有需要清理的数据')
+  ElMessage.success(
+    res.deleted > 0 ? t('已清理 {count} 条', { count: res.deleted }) : t('没有需要清理的数据'),
+  )
   await Promise.all([load(), loadStats()])
 }
 
-const retentionTip = computed(() => `保留 ${stats.value?.retentionDays ?? 7} 天，过期自动清理`)
+const retentionTip = computed(() =>
+  t('保留 {days} 天，过期自动清理', { days: stats.value?.retentionDays ?? 7 }),
+)
 
 const categoryMap = computed(() => new Map(categories.value.map((c) => [c.code, c])))
 const sourceMap = computed(() => new Map(sources.value.map((s) => [s.code, s])))
@@ -158,39 +169,39 @@ function sourceOf(code: string) {
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">资讯列表</h1>
+        <h1 class="page-title">{{ $t('资讯列表') }}</h1>
         <p class="page-desc">
-          第三方爬虫通过开放接口批量写入，这里负责检索、审阅与清理。来源与分类为白名单配置，{{ retentionTip }}。
+          {{ $t('第三方爬虫通过开放接口批量写入，这里负责检索、审阅与清理。来源与分类为白名单配置，{tip}。', { tip: retentionTip }) }}
         </p>
       </div>
       <div class="page-actions">
         <el-button v-perm="'content:news:cleanup'" :icon="Delete" @click="cleanup">
-          清理过期
+          {{ $t('清理过期') }}
         </el-button>
-        <el-button :icon="Refresh" @click="refreshAll">刷新</el-button>
+        <el-button :icon="Refresh" @click="refreshAll">{{ $t('刷新') }}</el-button>
       </div>
     </div>
 
     <div class="stat-row">
       <div class="stat-item">
-        <span>窗口内总量</span>
+        <span>{{ $t('窗口内总量') }}</span>
         <strong>{{ (stats?.total ?? 0).toLocaleString() }}</strong>
       </div>
       <div class="stat-item">
-        <span>今日入库</span>
+        <span>{{ $t('今日入库') }}</span>
         <strong>{{ (stats?.today ?? 0).toLocaleString() }}</strong>
       </div>
       <div class="stat-item">
-        <span>近 24 小时</span>
+        <span>{{ $t('近 24 小时') }}</span>
         <strong>{{ (stats?.last24h ?? 0).toLocaleString() }}</strong>
       </div>
       <div class="stat-item">
-        <span>分类数</span>
+        <span>{{ $t('分类数') }}</span>
         <strong>{{ categories.length }}</strong>
       </div>
       <div class="stat-hint">
         <el-icon><Link /></el-icon>
-        数据由爬虫经 <code>/api/open/v1/news/batch</code> 推送
+        {{ $t('数据由爬虫经') }} <code>/api/open/v1/news/batch</code>{{ $t('推送') }}
       </div>
     </div>
 
@@ -198,14 +209,14 @@ function sourceOf(code: string) {
       <div class="toolbar">
         <el-input
           v-model="query.keyword"
-          placeholder="搜索标题、摘要或作者"
+          :placeholder="$t('搜索标题、摘要或作者')"
           clearable
           style="width: 260px"
           :prefix-icon="Search"
           @keyup.enter="reload"
           @clear="reload"
         />
-        <el-select v-model="query.sourceId" placeholder="全部来源" clearable style="width: 160px" @change="reload">
+        <el-select v-model="query.sourceId" :placeholder="$t('全部来源')" clearable style="width: 160px" @change="reload">
           <el-option v-for="s in sources" :key="s.id" :label="s.name" :value="s.id">
             <span class="opt">
               <span class="opt-icon" :style="{ background: s.color || 'var(--bg-subtle)' }">
@@ -216,7 +227,7 @@ function sourceOf(code: string) {
             </span>
           </el-option>
         </el-select>
-        <el-select v-model="query.category" placeholder="全部分类" clearable style="width: 150px" @change="reload">
+        <el-select v-model="query.category" :placeholder="$t('全部分类')" clearable style="width: 150px" @change="reload">
           <el-option v-for="c in categories" :key="c.code" :label="c.name" :value="c.code">
             <span class="opt">
               <span class="opt-icon" :style="{ background: c.color || 'var(--bg-subtle)' }">
@@ -231,17 +242,17 @@ function sourceOf(code: string) {
           v-model="query.range"
           type="daterange"
           value-format="YYYY-MM-DD"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
+          :start-placeholder="$t('开始日期')"
+          :end-placeholder="$t('结束日期')"
           style="width: 240px"
           @change="reload"
         />
-        <el-button type="primary" @click="reload">查询</el-button>
-        <el-button text @click="resetQuery">重置</el-button>
+        <el-button type="primary" @click="reload">{{ $t('查询') }}</el-button>
+        <el-button text @click="resetQuery">{{ $t('重置') }}</el-button>
       </div>
 
       <el-table :data="rows" v-loading="loading" row-key="id" class="news-table">
-        <el-table-column label="标题" min-width="380">
+        <el-table-column :label="$t('标题')" min-width="380">
           <template #default="{ row }">
             <div class="title-cell" @click="openDetail(row)">
               <div class="news-title">{{ row.title }}</div>
@@ -261,7 +272,7 @@ function sourceOf(code: string) {
           </template>
         </el-table-column>
 
-        <el-table-column label="来源" width="150">
+        <el-table-column :label="$t('来源')" width="150">
           <template #default="{ row }">
             <div class="source-line">
               <span
@@ -277,7 +288,7 @@ function sourceOf(code: string) {
           </template>
         </el-table-column>
 
-        <el-table-column label="发布时间" width="118">
+        <el-table-column :label="$t('发布时间')" width="118">
           <template #default="{ row }">
             <el-tooltip :content="fmtTime(row.publishedAt)" placement="top">
               <span class="mono dim nowrap">{{ fmtShort(row.publishedAt) }}</span>
@@ -285,25 +296,25 @@ function sourceOf(code: string) {
           </template>
         </el-table-column>
 
-        <el-table-column label="字数" width="86" align="right">
+        <el-table-column :label="$t('字数')" width="86" align="right">
           <template #default="{ row }">
             <span class="mono dim">{{ row.wordCount }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column :label="$t('操作')" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDetail(row)">查看</el-button>
+            <el-button link type="primary" @click="openDetail(row)">{{ $t('查看') }}</el-button>
             <el-button v-perm="'content:news:delete'" link type="danger" @click="remove(row)">
-              删除
+              {{ $t('删除') }}
             </el-button>
           </template>
         </el-table-column>
 
         <template #empty>
           <div class="empty">
-            <p>窗口内还没有资讯</p>
-            <p class="dim">爬虫推送后会自动出现在这里，超过保留期会被自动清理</p>
+            <p>{{ $t('窗口内还没有资讯') }}</p>
+            <p class="dim">{{ $t('爬虫推送后会自动出现在这里，超过保留期会被自动清理') }}</p>
           </div>
         </template>
       </el-table>
@@ -321,7 +332,7 @@ function sourceOf(code: string) {
       </div>
     </section>
 
-    <el-drawer v-model="drawer" size="720px" :title="detail?.title || '资讯详情'" destroy-on-close>
+    <el-drawer v-model="drawer" size="720px" :title="detail?.title || $t('资讯详情')" destroy-on-close>
       <div v-loading="detailLoading" class="detail">
         <template v-if="detail">
           <div class="detail-meta">
@@ -341,10 +352,10 @@ function sourceOf(code: string) {
 
           <blockquote v-if="detail.summary" class="detail-summary">{{ detail.summary }}</blockquote>
 
-          <article class="detail-content">{{ detail.content || '（该条资讯没有正文，仅有标题与摘要）' }}</article>
+          <article class="detail-content">{{ detail.content || $t('（该条资讯没有正文，仅有标题与摘要）') }}</article>
 
           <div class="detail-foot">
-            <span class="dim mono">{{ detail.wordCount }} 字 · {{ detail.viewCount }} 次阅读</span>
+            <span class="dim mono">{{ $t('{words} 字 · {views} 次阅读', { words: detail.wordCount, views: detail.viewCount }) }}</span>
             <el-link
               v-if="detail.url"
               type="primary"
@@ -352,7 +363,7 @@ function sourceOf(code: string) {
               target="_blank"
               rel="noopener noreferrer"
             >
-              查看原文
+              {{ $t('查看原文') }}
             </el-link>
           </div>
         </template>

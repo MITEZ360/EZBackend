@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { newsCategoryApi } from '@/api/news'
 import type { NewsCategory } from '@/api/types'
 import IconField from '@/components/IconField.vue'
 
+const { t } = useI18n()
 const rows = ref<NewsCategory[]>([])
 const loading = ref(false)
 
@@ -37,17 +39,17 @@ const form = ref({
   remark: '',
 })
 
-const rules: FormRules = {
+const rules = computed<FormRules>(() => ({
   code: [
-    { required: true, message: '请输入编码', trigger: 'blur' },
+    { required: true, message: t('请输入编码'), trigger: 'blur' },
     {
       pattern: /^[a-z][a-z0-9_-]{1,31}$/,
-      message: '小写字母开头，可含小写字母、数字、下划线、连字符',
+      message: t('小写字母开头，可含小写字母、数字、下划线、连字符'),
       trigger: 'blur',
     },
   ],
-  name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
-}
+  name: [{ required: true, message: t('请输入名称'), trigger: 'blur' }],
+}))
 
 function openCreate() {
   editingId.value = ''
@@ -80,10 +82,10 @@ async function submit() {
   try {
     if (isEdit.value) {
       await newsCategoryApi.update(editingId.value, { ...form.value })
-      ElMessage.success('已保存')
+      ElMessage.success(t('已保存'))
     } else {
       await newsCategoryApi.create({ ...form.value })
-      ElMessage.success('已创建')
+      ElMessage.success(t('已创建'))
     }
     drawer.value = false
     await load()
@@ -104,21 +106,21 @@ async function toggle(row: NewsCategory) {
     status: next,
   })
   row.status = next
-  ElMessage.success(next === 1 ? '已启用' : '已停用')
+  ElMessage.success(next === 1 ? t('已启用') : t('已停用'))
 }
 
 async function remove(row: NewsCategory) {
   try {
     await ElMessageBox.confirm(
-      `删除后爬虫不能再推送该分类。若仍有资讯引用会拒绝删除，可先停用。确认删除「${row.name}」？`,
-      '删除分类',
-      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+      t('删除后爬虫不能再推送该分类。若仍有资讯引用会拒绝删除，可先停用。确认删除「{name}」？', { name: row.name }),
+      t('删除分类'),
+      { type: 'warning', confirmButtonText: t('删除'), cancelButtonText: t('取消') },
     )
   } catch {
     return
   }
   await newsCategoryApi.remove(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   await load()
 }
 </script>
@@ -127,23 +129,24 @@ async function remove(row: NewsCategory) {
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">资讯分类</h1>
+        <h1 class="page-title">{{ $t('资讯分类') }}</h1>
         <p class="page-desc">
-          分类是爬虫推送的白名单：未配置或已停用的分类会被逐条拒收。这里的名称、图标与颜色会随
-          <code>/api/open/v1/news/meta</code> 下发，客户端直接用于渲染筛选与标签。
+          {{ $t('分类是爬虫推送的白名单：未配置或已停用的分类会被逐条拒收。这里的名称、图标与颜色会随') }}
+          <code>/api/open/v1/news/meta</code>
+          {{ $t('下发，客户端直接用于渲染筛选与标签。') }}
         </p>
       </div>
       <div class="page-actions">
-        <el-button :icon="Refresh" @click="load">刷新</el-button>
+        <el-button :icon="Refresh" @click="load">{{ $t('刷新') }}</el-button>
         <el-button v-perm="'content:news:category'" type="primary" :icon="Plus" @click="openCreate">
-          新增分类
+          {{ $t('新增分类') }}
         </el-button>
       </div>
     </div>
 
     <section class="card">
       <el-table :data="rows" v-loading="loading" row-key="id">
-        <el-table-column label="分类" min-width="220">
+        <el-table-column :label="$t('分类')" min-width="220">
           <template #default="{ row }">
             <div class="cat-cell">
               <div class="cat-icon" :style="{ background: row.color || 'var(--bg-subtle)' }">
@@ -158,21 +161,21 @@ async function remove(row: NewsCategory) {
           </template>
         </el-table-column>
 
-        <el-table-column label="编码" width="160">
+        <el-table-column :label="$t('编码')" width="160">
           <template #default="{ row }">
             <span class="mono code">{{ row.code }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="资讯数" width="110" align="right">
+        <el-table-column :label="$t('资讯数')" width="110" align="right">
           <template #default="{ row }">
             <span class="mono">{{ row.articleCount.toLocaleString() }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="sort" label="排序" width="80" align="center" />
+        <el-table-column prop="sort" :label="$t('排序')" width="80" align="center" />
 
-        <el-table-column label="状态" width="86">
+        <el-table-column :label="$t('状态')" width="86">
           <template #default="{ row }">
             <el-switch
               v-perm="'content:news:category'"
@@ -184,59 +187,59 @@ async function remove(row: NewsCategory) {
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column :label="$t('操作')" width="130" fixed="right">
           <template #default="{ row }">
             <el-button v-perm="'content:news:category'" link type="primary" @click="openEdit(row)">
-              编辑
+              {{ $t('编辑') }}
             </el-button>
             <el-button v-perm="'content:news:delete'" link type="danger" @click="remove(row)">
-              删除
+              {{ $t('删除') }}
             </el-button>
           </template>
         </el-table-column>
 
         <template #empty>
           <div class="empty">
-            <p>还没有分类</p>
-            <p class="dim">没有分类时，爬虫推送的所有资讯都会被拒收</p>
+            <p>{{ $t('还没有分类') }}</p>
+            <p class="dim">{{ $t('没有分类时，爬虫推送的所有资讯都会被拒收') }}</p>
           </div>
         </template>
       </el-table>
     </section>
 
-    <el-drawer v-model="drawer" :title="isEdit ? '编辑分类' : '新增分类'" size="500px" destroy-on-close>
+    <el-drawer v-model="drawer" :title="isEdit ? $t('编辑分类') : $t('新增分类')" size="500px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="76px" label-position="left">
-        <el-form-item label="编码" prop="code">
-          <el-input v-model="form.code" :disabled="isEdit" placeholder="如：tech" maxlength="32" />
-          <p class="field-tip">爬虫推送时按此编码匹配，创建后不可修改</p>
+        <el-form-item :label="$t('编码')" prop="code">
+          <el-input v-model="form.code" :disabled="isEdit" :placeholder="$t('如：tech')" maxlength="32" />
+          <p class="field-tip">{{ $t('爬虫推送时按此编码匹配，创建后不可修改') }}</p>
         </el-form-item>
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="如：科技" maxlength="64" />
+        <el-form-item :label="$t('名称')" prop="name">
+          <el-input v-model="form.name" :placeholder="$t('如：科技')" maxlength="64" />
         </el-form-item>
-        <el-form-item label="图标">
+        <el-form-item :label="$t('图标')">
           <IconField
             v-model:icon="form.icon"
             v-model:color="form.color"
             :fallback="form.name"
           />
-          <p class="field-tip">建议方形 PNG / SVG，透明底，≤ 512KB</p>
+          <p class="field-tip">{{ $t('建议方形 PNG / SVG，透明底，≤ 512KB') }}</p>
         </el-form-item>
-        <el-form-item label="排序">
+        <el-form-item :label="$t('排序')">
           <el-input-number v-model="form.sort" :min="0" :max="9999" controls-position="right" />
-          <span class="dim switch-tip">数字越小越靠前，客户端按此顺序展示</span>
+          <span class="dim switch-tip">{{ $t('数字越小越靠前，客户端按此顺序展示') }}</span>
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item :label="$t('状态')">
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
-          <span class="dim switch-tip">停用后拒绝该分类的写入</span>
+          <span class="dim switch-tip">{{ $t('停用后拒绝该分类的写入') }}</span>
         </el-form-item>
-        <el-form-item label="备注">
+        <el-form-item :label="$t('备注')">
           <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="255" show-word-limit />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="drawer = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">保存</el-button>
+        <el-button @click="drawer = false">{{ $t('取消') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="submit">{{ $t('保存') }}</el-button>
       </template>
     </el-drawer>
   </div>

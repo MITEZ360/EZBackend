@@ -16,6 +16,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/cache"
 	"github.com/keel-framework/keel/internal/platform/idgen"
 	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/query"
 	"github.com/keel-framework/keel/pkg/utils"
 )
@@ -235,7 +236,7 @@ func (s *Service) Create(ctx context.Context, in *Input) (*model.Job, error) {
 		return nil, err
 	}
 	if _, ok := s.handlers[in.Handler]; !ok {
-		return nil, errs.BadRequest("执行器不存在：" + in.Handler)
+		return nil, errs.BadRequest(i18n.Tf(ctx, "执行器不存在：{0}", in.Handler))
 	}
 	if in.Params != "" && !json.Valid([]byte(in.Params)) {
 		return nil, errs.BadRequest("参数必须是合法 JSON")
@@ -256,7 +257,7 @@ func (s *Service) Update(ctx context.Context, id string, in *Input) error {
 		return err
 	}
 	if _, ok := s.handlers[in.Handler]; !ok {
-		return errs.BadRequest("执行器不存在：" + in.Handler)
+		return errs.BadRequest(i18n.Tf(ctx, "执行器不存在：{0}", in.Handler))
 	}
 	var j model.Job
 	if err := s.db.WithContext(ctx).First(&j, "id = ?", id).Error; err != nil {

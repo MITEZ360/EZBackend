@@ -9,6 +9,7 @@ func (d Deps) authRoutes(g *gin.RouterGroup) {
 	g.POST("/auth/logout", d.Auth.Logout)
 	g.GET("/auth/profile", d.Auth.Profile)
 	g.PUT("/auth/profile", d.Auth.UpdateProfile)
+	g.PUT("/auth/preferences", d.Auth.UpdatePreferences)
 	g.PUT("/auth/password", d.Auth.ChangePassword)
 	g.POST("/auth/totp/setup", d.Auth.SetupTOTP)
 	g.POST("/auth/totp/enable", d.Auth.EnableTOTP)

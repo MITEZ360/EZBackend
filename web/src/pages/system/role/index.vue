@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { menuApi, roleApi, type RolePayload } from '@/api/system'
@@ -8,16 +9,17 @@ import { fmtTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const { t } = useI18n()
 
 /** 数据范围：与后端 model.DataScope* 常量一一对应 */
-const DATA_SCOPES = [
-  { value: 1, label: '全部数据', desc: '不限部门，可查看全部数据' },
-  { value: 2, label: '本部门', desc: '仅本部门内的数据' },
-  { value: 3, label: '本部门及以下', desc: '含全部下级部门' },
-  { value: 4, label: '仅本人', desc: '仅本人创建的数据' },
-]
+const DATA_SCOPES = computed(() => [
+  { value: 1, label: t('全部数据'), desc: t('不限部门，可查看全部数据') },
+  { value: 2, label: t('本部门'), desc: t('仅本部门内的数据') },
+  { value: 3, label: t('本部门及以下'), desc: t('含全部下级部门') },
+  { value: 4, label: t('仅本人'), desc: t('仅本人创建的数据') },
+])
 
-const scopeMap = new Map(DATA_SCOPES.map((s) => [s.value, s]))
+const scopeMap = computed(() => new Map(DATA_SCOPES.value.map((s) => [s.value, s])))
 
 const rows = ref<RoleRow[]>([])
 const total = ref(0)
@@ -72,13 +74,13 @@ const form = reactive<RolePayload>({
   status: 1,
 })
 
-const rules: FormRules = {
+const rules = computed<FormRules>(() => ({
   code: [
-    { required: true, message: '请输入角色编码', trigger: 'blur' },
-    { pattern: /^[a-z][a-z0-9_]{1,31}$/, message: '小写字母开头，仅含小写字母、数字、下划线', trigger: 'blur' },
+    { required: true, message: t('请输入角色编码'), trigger: 'blur' },
+    { pattern: /^[a-z][a-z0-9_]{1,31}$/, message: t('小写字母开头，仅含小写字母、数字、下划线'), trigger: 'blur' },
   ],
-  name: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
-}
+  name: [{ required: true, message: t('请输入角色名称'), trigger: 'blur' }],
+}))
 
 function resetForm() {
   Object.assign(form, {
@@ -119,10 +121,10 @@ async function submitForm() {
   try {
     if (isEdit.value) {
       await roleApi.update(editingId.value, { ...form })
-      ElMessage.success('已保存')
+      ElMessage.success(t('已保存'))
     } else {
       await roleApi.create({ ...form })
-      ElMessage.success('角色已创建')
+      ElMessage.success(t('角色已创建'))
     }
     formVisible.value = false
     load()
@@ -185,7 +187,7 @@ async function savePerm() {
   permSaving.value = true
   try {
     await roleApi.setMenus(permRole.value.id, [...checked, ...half])
-    ElMessage.success('权限已更新，相关用户下次请求即生效')
+    ElMessage.success(t('权限已更新，相关用户下次请求即生效'))
     permVisible.value = false
     load()
   } finally {
@@ -210,21 +212,21 @@ function checkAll(on: boolean) {
 async function removeRole(row: RoleRow) {
   try {
     await ElMessageBox.confirm(
-      `删除后该角色下的授权关系将一并清除。确定删除「${row.name}」吗？`,
-      '删除角色',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'error' },
+      t('删除后该角色下的授权关系将一并清除。确定删除「{name}」吗？', { name: row.name }),
+      t('删除角色'),
+      { confirmButtonText: t('删除'), cancelButtonText: t('取消'), type: 'error' },
     )
   } catch {
     return
   }
   await roleApi.remove(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   if (rows.value.length === 1 && query.page > 1) query.page -= 1
   load()
 }
 
 function scopeLabel(v: number) {
-  return scopeMap.get(v)?.label ?? '-'
+  return scopeMap.value.get(v)?.label ?? '-'
 }
 
 function scopeTone(v: number) {
@@ -238,12 +240,12 @@ onMounted(load)
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">角色管理</h1>
-        <p class="page-desc">定义角色、数据可见范围与菜单权限</p>
+        <h1 class="page-title">{{ $t('角色管理') }}</h1>
+        <p class="page-desc">{{ $t('定义角色、数据可见范围与菜单权限') }}</p>
       </div>
       <div class="page-actions">
         <el-button v-perm="'system:role:create'" type="primary" :icon="Plus" @click="openCreate">
-          新增角色
+          {{ $t('新增角色') }}
         </el-button>
       </div>
     </div>
@@ -253,7 +255,7 @@ onMounted(load)
         <div class="toolbar-left">
           <el-input
             v-model="query.keyword"
-            placeholder="搜索角色名称 / 编码"
+            :placeholder="$t('搜索角色名称 / 编码')"
             :prefix-icon="Search"
             clearable
             style="width: 236px"
@@ -262,24 +264,24 @@ onMounted(load)
           />
           <el-select
             v-model="query.status"
-            placeholder="全部状态"
+            :placeholder="$t('全部状态')"
             clearable
             style="width: 118px"
             @change="reload"
           >
-            <el-option label="启用" :value="1" />
-            <el-option label="停用" :value="0" />
+            <el-option :label="$t('启用')" :value="1" />
+            <el-option :label="$t('停用')" :value="0" />
           </el-select>
-          <el-button @click="reload">查询</el-button>
-          <el-button text @click="resetQuery">重置</el-button>
+          <el-button @click="reload">{{ $t('查询') }}</el-button>
+          <el-button text @click="resetQuery">{{ $t('重置') }}</el-button>
         </div>
         <div class="toolbar-right">
-          <el-button :icon="Refresh" circle title="刷新" @click="load" />
+          <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
       <el-table v-loading="loading" :data="rows" row-key="id">
-        <el-table-column label="角色" min-width="176">
+        <el-table-column :label="$t('角色')" min-width="176">
           <template #default="{ row }">
             <div class="role-cell">
               <div class="role-shield" :class="{ 'is-super': row.code === 'super' }">
@@ -296,7 +298,7 @@ onMounted(load)
               <div class="role-lines">
                 <span class="r-name">
                   {{ row.name }}
-                  <em v-if="row.code === 'super'" class="badge">内置</em>
+                  <em v-if="row.code === 'super'" class="badge">{{ $t('内置') }}</em>
                 </span>
                 <span class="r-code mono">{{ row.code }}</span>
               </div>
@@ -304,13 +306,13 @@ onMounted(load)
           </template>
         </el-table-column>
 
-        <el-table-column label="描述" min-width="150">
+        <el-table-column :label="$t('描述')" min-width="150">
           <template #default="{ row }">
             <span :class="row.description ? 'muted' : 'dim'">{{ row.description || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="数据范围" width="118">
+        <el-table-column :label="$t('数据范围')" width="118">
           <template #default="{ row }">
             <span class="scope-tag" :class="scopeTone(row.dataScope)">
               {{ scopeLabel(row.dataScope) }}
@@ -318,21 +320,21 @@ onMounted(load)
           </template>
         </el-table-column>
 
-        <el-table-column label="成员" width="72" align="right">
+        <el-table-column :label="$t('成员')" width="72" align="right">
           <template #default="{ row }">
             <span class="num member">{{ row.userCount ?? 0 }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="82">
+        <el-table-column :label="$t('状态')" width="82">
           <template #default="{ row }">
             <span class="status-dot" :class="row.status === 1 ? 'is-on' : 'is-off'">
-              {{ row.status === 1 ? '启用' : '停用' }}
+              {{ row.status === 1 ? $t('启用') : $t('停用') }}
             </span>
           </template>
         </el-table-column>
 
-        <el-table-column label="创建时间" width="124">
+        <el-table-column :label="$t('创建时间')" width="124">
           <template #default="{ row }">
             <span class="num muted fs-12">{{ fmtTime(row.createdAt, false) }}</span>
           </template>
@@ -341,10 +343,10 @@ onMounted(load)
         <el-table-column label="" width="156" align="right" fixed="right">
           <template #default="{ row }">
             <el-button v-perm="'system:role:assign'" link type="primary" @click="openPerm(row)">
-              权限
+              {{ $t('权限') }}
             </el-button>
             <el-button v-perm="'system:role:update'" link type="primary" @click="openEdit(row)">
-              编辑
+              {{ $t('编辑') }}
             </el-button>
             <el-button
               v-perm="'system:role:delete'"
@@ -353,14 +355,14 @@ onMounted(load)
               :disabled="row.code === 'super'"
               @click="removeRole(row)"
             >
-              删除
+              {{ $t('删除') }}
             </el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <div class="pager">
-        <span class="total">共 {{ total }} 个角色</span>
+        <span class="total">{{ $t('共 {count} 个角色', { count: total }) }}</span>
         <el-pagination
           v-model:current-page="query.page"
           v-model:page-size="query.page_size"
@@ -376,7 +378,7 @@ onMounted(load)
     <!-- 角色表单 -->
     <el-dialog
       v-model="formVisible"
-      :title="isEdit ? '编辑角色' : '新增角色'"
+      :title="isEdit ? $t('编辑角色') : $t('新增角色')"
       width="560px"
       append-to-body
       :close-on-click-modal="false"
@@ -384,15 +386,15 @@ onMounted(load)
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <div class="form-grid">
-          <el-form-item label="角色编码" prop="code">
-            <el-input v-model="form.code" placeholder="如 auditor" :disabled="isEdit && form.code === 'super'" />
+          <el-form-item :label="$t('角色编码')" prop="code">
+            <el-input v-model="form.code" :placeholder="$t('如 auditor')" :disabled="isEdit && form.code === 'super'" />
           </el-form-item>
-          <el-form-item label="角色名称" prop="name">
-            <el-input v-model="form.name" placeholder="如 审计员" />
+          <el-form-item :label="$t('角色名称')" prop="name">
+            <el-input v-model="form.name" :placeholder="$t('如 审计员')" />
           </el-form-item>
         </div>
 
-        <el-form-item label="数据范围">
+        <el-form-item :label="$t('数据范围')">
           <div class="scope-group">
             <label
               v-for="s in DATA_SCOPES"
@@ -408,22 +410,22 @@ onMounted(load)
         </el-form-item>
 
         <div class="form-grid">
-          <el-form-item label="排序">
+          <el-form-item :label="$t('排序')">
             <el-input-number v-model="form.sort" :min="0" :max="9999" controls-position="right" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="状态">
-            <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
+          <el-form-item :label="$t('状态')">
+            <el-switch v-model="form.status" :active-value="1" :inactive-value="0" :active-text="$t('启用')" :inactive-text="$t('停用')" />
           </el-form-item>
         </div>
 
-        <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="2" maxlength="255" show-word-limit placeholder="选填，说明该角色的职责" />
+        <el-form-item :label="$t('描述')">
+          <el-input v-model="form.description" type="textarea" :rows="2" maxlength="255" show-word-limit :placeholder="$t('选填，说明该角色的职责')" />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+        <el-button @click="formVisible = false">{{ $t('取消') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitForm">{{ $t('保存') }}</el-button>
       </template>
     </el-dialog>
 
@@ -431,17 +433,17 @@ onMounted(load)
     <el-drawer v-model="permVisible" :size="480" append-to-body>
       <template #header>
         <div class="perm-head">
-          <h3>分配权限</h3>
+          <h3>{{ $t('分配权限') }}</h3>
           <p v-if="permRole">{{ permRole.name }} · <span class="mono">{{ permRole.code }}</span></p>
         </div>
       </template>
 
       <div v-loading="permLoading" class="perm-body">
         <div class="perm-tools">
-          <el-input v-model="treeKeyword" placeholder="筛选菜单" size="small" clearable style="width: 168px" />
-          <el-button size="small" text @click="checkAll(true)">全选</el-button>
-          <el-button size="small" text @click="checkAll(false)">清空</el-button>
-          <el-button size="small" text @click="toggleExpand">{{ expandAll ? '折叠' : '展开' }}</el-button>
+          <el-input v-model="treeKeyword" :placeholder="$t('筛选菜单')" size="small" clearable style="width: 168px" />
+          <el-button size="small" text @click="checkAll(true)">{{ $t('全选') }}</el-button>
+          <el-button size="small" text @click="checkAll(false)">{{ $t('清空') }}</el-button>
+          <el-button size="small" text @click="toggleExpand">{{ expandAll ? $t('折叠') : $t('展开') }}</el-button>
         </div>
 
         <el-tree
@@ -458,28 +460,28 @@ onMounted(load)
           <template #default="{ data }">
             <span class="tree-node">
               <span class="tn-name">{{ data.name }}</span>
-              <span v-if="data.type === 'button'" class="tn-kind is-btn">按钮</span>
-              <span v-else-if="data.type === 'dir'" class="tn-kind is-dir">目录</span>
+              <span v-if="data.type === 'button'" class="tn-kind is-btn">{{ $t('按钮') }}</span>
+              <span v-else-if="data.type === 'dir'" class="tn-kind is-dir">{{ $t('目录') }}</span>
               <span v-if="data.perm" class="tn-perm mono">{{ data.perm }}</span>
             </span>
           </template>
         </el-tree>
 
         <p class="perm-tip">
-          勾选页面即授予访问权限，勾选按钮即授予对应操作权限；取消勾选后用户下次请求即失效。
+          {{ $t('勾选页面即授予访问权限，勾选按钮即授予对应操作权限；取消勾选后用户下次请求即失效。') }}
         </p>
       </div>
 
       <template #footer>
         <div class="perm-foot">
-          <el-button @click="permVisible = false">取消</el-button>
+          <el-button @click="permVisible = false">{{ $t('取消') }}</el-button>
           <el-button
             type="primary"
             :loading="permSaving"
             :disabled="!auth.can('system:role:assign')"
             @click="savePerm"
           >
-            保存权限
+            {{ $t('保存权限') }}
           </el-button>
         </div>
       </template>

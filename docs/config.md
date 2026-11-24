@@ -51,7 +51,15 @@ KEEL_RUNTIME_STATELESS=strict go run ./cmd/keel -config configs/config.service.y
 | `app.name` | `Keel 企业服务端框架` | 服务名，写入日志与网关调用方标识 |
 | `app.env` | `dev` | `dev` / `test` / `prod`；`prod` 会启用额外的安全校验 |
 | `app.version` | `1.0.0` | 版本号，健康检查返回 |
-| `app.timezone` | `Asia/Shanghai` | 时区 |
+| `app.timezone` | `Asia/Shanghai` | IANA 时区名。启动时设为进程 `time.Local`，统一影响 GORM 时间戳、cron 调度、备份文件名、会员到期解析等；非法值启动失败 |
+
+## i18n（语言协商）
+
+| 键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `i18n.default_locale` | `zh-CN` | 客户端未声明语言时的兜底；目前支持 `zh-CN` / `en` |
+
+请求按 `X-Locale` > `Accept-Language` > 默认语言协商。错误文案、字段级校验提示均按此翻译；未收录译文的文案自动降级为中文原文，逐步补齐语言包即可覆盖更多接口。用户可在个人中心保存自己的语言与时区偏好（`PUT /api/v1/auth/preferences`），登录后会覆盖本地选择。
 
 ## 2. server
 

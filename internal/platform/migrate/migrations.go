@@ -123,5 +123,41 @@ func (r *Runner) definitions() []definition {
 					"sys_user_oauth_binding (user_id, provider, subject)").Error
 			},
 		},
+		{
+			Version: 5,
+			Name:    "add_user_locale_timezone",
+			// 用户级展示偏好：老用户回填为系统默认，新用户由 DDL 默认值补齐。
+			// 两列都允许空字符串表示"跟随系统"，因此回填用默认值而非强制覆盖。
+			Up: func(ctx context.Context, db *gorm.DB) error {
+				tx := db.WithContext(ctx)
+				m := tx.Migrator()
+				if !m.HasTable(&model.User{}) {
+					return nil
+				}
+				if err := tx.AutoMigrate(&model.User{}); err != nil {
+					return err
+				}
+				if err := tx.Model(&model.User{}).
+					Where("locale IS NULL OR locale = ''").
+					Update("locale", "zh-CN").Error; err != nil {
+					return err
+				}
+				return tx.Model(&model.User{}).
+					Where("timezone IS NULL OR timezone = ''").
+					Update("timezone", "Asia/Shanghai").Error
+			},
+			Down: func(ctx context.Context, db *gorm.DB) error {
+				tx := db.WithContext(ctx)
+				m := tx.Migrator()
+				for _, col := range []string{"Locale", "Timezone"} {
+					if m.HasColumn(&model.User{}, col) {
+						if err := m.DropColumn(&model.User{}, col); err != nil {
+							return err
+						}
+					}
+				}
+				return nil
+			},
+		},
 	}
 }

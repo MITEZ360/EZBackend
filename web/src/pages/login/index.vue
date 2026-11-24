@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { ArrowLeft, Key, Lock, Refresh, User } from '@element-plus/icons-vue'
@@ -10,6 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const isDev = import.meta.env.DEV
 const auth = useAuthStore()
 
@@ -31,11 +33,11 @@ const recoveryMode = ref(false)
 const recoveryCode = ref('')
 const verifying = ref(false)
 
-const rules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-  captchaCode: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
-}
+const rules = computed<FormRules>(() => ({
+  username: [{ required: true, message: t('请输入用户名'), trigger: 'blur' }],
+  password: [{ required: true, message: t('请输入密码'), trigger: 'blur' }],
+  captchaCode: [{ required: true, message: t('请输入验证码'), trigger: 'blur' }],
+}))
 
 const redirect = computed(() => {
   const r = route.query.redirect
@@ -66,7 +68,7 @@ function credentials(extra: { totpCode?: string; recoveryCode?: string }) {
 }
 
 function finish() {
-  ElMessage.success(`欢迎回来，${auth.displayName}`)
+  ElMessage.success(t('欢迎回来，{name}', { name: auth.displayName }))
   router.replace(redirect.value)
 }
 
@@ -91,11 +93,11 @@ function handleFailure(err: unknown) {
     // 验证码被消费或过期，回到第一步重新取一张
     if (step.value === 'totp' && captcha.enabled && err.code === 40000) {
       backToCredential()
-      errorMsg.value = '验证已超时，请重新登录'
+      errorMsg.value = t('验证已超时，请重新登录')
     }
     return
   }
-  errorMsg.value = '登录失败，请稍后重试'
+  errorMsg.value = t('登录失败，请稍后重试')
 }
 
 async function submit() {
@@ -118,11 +120,11 @@ async function submit() {
 async function verify() {
   const value = (recoveryMode.value ? recoveryCode.value : totpCode.value).trim()
   if (!value) {
-    errorMsg.value = recoveryMode.value ? '请输入恢复码' : '请输入 6 位动态验证码'
+    errorMsg.value = recoveryMode.value ? t('请输入恢复码') : t('请输入 6 位动态验证码')
     return
   }
   if (!recoveryMode.value && !/^\d{6}$/.test(value)) {
-    errorMsg.value = '动态验证码为 6 位数字'
+    errorMsg.value = t('动态验证码为 6 位数字')
     return
   }
 
@@ -174,7 +176,7 @@ async function goOAuth(p: OAuthProvider) {
     const res = await oauthApi.authorize(p.name)
     window.location.href = res.url
   } catch {
-    errorMsg.value = `${p.label} 暂时不可用，请稍后重试`
+    errorMsg.value = t('{name} 暂时不可用，请稍后重试', { name: p.label })
     oauthLoading.value = ''
   }
 }
@@ -198,32 +200,31 @@ onMounted(() => {
         </div>
 
         <div class="brand-copy">
-          <h1>把基础设施<br />做成可以长期依赖的东西</h1>
+          <h1>{{ $t('把基础设施') }}<br />{{ $t('做成可以长期依赖的东西') }}</h1>
           <p>
-            权限、审计、任务、文件与可观测能力开箱可用，
-            单二进制交付，也能按需拆成微服务。
+            {{ $t('权限、审计、任务、文件与可观测能力开箱可用，单二进制交付，也能按需拆成微服务。') }}
           </p>
 
           <ul class="points">
             <li>
               <span class="idx">01</span>
               <div>
-                <strong>RBAC 与数据权限</strong>
-                <em>用户、角色、菜单三级模型，支持按部门范围过滤数据</em>
+                <strong>{{ $t('RBAC 与数据权限') }}</strong>
+                <em>{{ $t('用户、角色、菜单三级模型，支持按部门范围过滤数据') }}</em>
               </div>
             </li>
             <li>
               <span class="idx">02</span>
               <div>
-                <strong>全链路可观测</strong>
-                <em>结构化日志、Prometheus 指标与慢请求追踪</em>
+                <strong>{{ $t('全链路可观测') }}</strong>
+                <em>{{ $t('结构化日志、Prometheus 指标与慢请求追踪') }}</em>
               </div>
             </li>
             <li>
               <span class="idx">03</span>
               <div>
-                <strong>单体 / 微服务同一套代码</strong>
-                <em>切换配置即可在单进程与网关模式之间迁移</em>
+                <strong>{{ $t('单体 / 微服务同一套代码') }}</strong>
+                <em>{{ $t('切换配置即可在单进程与网关模式之间迁移') }}</em>
               </div>
             </li>
           </ul>
@@ -240,12 +241,12 @@ onMounted(() => {
     <section class="form-side">
       <div class="form-inner">
         <header class="form-head">
-          <h2>{{ step === 'credential' ? '欢迎回来' : '两步验证' }}</h2>
+          <h2>{{ step === 'credential' ? $t('欢迎回来') : $t('两步验证') }}</h2>
           <p>
             {{
               step === 'credential'
-                ? '登录以继续管理你的服务'
-                : '该账号已开启两步验证，请完成安全校验'
+                ? $t('登录以继续管理你的服务')
+                : $t('该账号已开启两步验证，请完成安全校验')
             }}
           </p>
         </header>
@@ -259,20 +260,20 @@ onMounted(() => {
           size="large"
           @submit.prevent="submit"
         >
-          <el-form-item label="账号" prop="username">
+          <el-form-item :label="t('账号')" prop="username">
             <el-input
               v-model="form.username"
-              placeholder="请输入用户名"
+              :placeholder="t('请输入用户名')"
               autocomplete="username"
               :prefix-icon="User"
             />
           </el-form-item>
 
-          <el-form-item label="密码" prop="password">
+          <el-form-item :label="t('密码')" prop="password">
             <el-input
               v-model="form.password"
               type="password"
-              placeholder="请输入密码"
+              :placeholder="t('请输入密码')"
               autocomplete="current-password"
               show-password
               :prefix-icon="Lock"
@@ -280,16 +281,16 @@ onMounted(() => {
             />
           </el-form-item>
 
-          <el-form-item v-if="captcha.enabled" label="验证码" prop="captchaCode">
+          <el-form-item v-if="captcha.enabled" :label="t('验证码')" prop="captchaCode">
             <div class="captcha-row">
               <el-input
                 v-model="form.captchaCode"
-                placeholder="请输入验证码"
+                :placeholder="t('请输入验证码')"
                 maxlength="6"
                 @keyup.enter="submit"
               />
-              <button type="button" class="captcha-img" title="点击刷新" @click="loadCaptcha">
-                <img v-if="captcha.image" :src="captcha.image" alt="验证码" />
+              <button type="button" class="captcha-img" :title="t('点击刷新')" @click="loadCaptcha">
+                <img v-if="captcha.image" :src="captcha.image" :alt="$t('验证码')" />
                 <el-icon v-else><Refresh /></el-icon>
               </button>
             </div>
@@ -298,7 +299,7 @@ onMounted(() => {
           <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
           <el-button type="primary" class="submit" :loading="loading" @click="submit">
-            {{ loading ? '登录中…' : '登 录' }}
+            {{ loading ? t('登录中…') : t('登 录') }}
           </el-button>
         </el-form>
 
@@ -306,18 +307,17 @@ onMounted(() => {
         <div v-else class="totp-panel">
           <button type="button" class="back" @click="backToCredential">
             <el-icon :size="13"><ArrowLeft /></el-icon>
-            返回重新登录
+            {{ t('返回重新登录') }}
           </button>
 
           <div class="totp-hint">
             <div class="totp-icon"><el-icon :size="18"><Key /></el-icon></div>
             <div class="totp-copy">
-              <strong>{{ recoveryMode ? '输入恢复码' : '输入 6 位动态码' }}</strong>
+              <strong>{{ recoveryMode ? $t('输入恢复码') : $t('输入 6 位动态码') }}</strong>
               <p v-if="!recoveryMode">
-                打开 Google Authenticator、Microsoft Authenticator、Duo、Bitwarden
-                等认证器查看当前验证码。
+                {{ $t('打开 Google Authenticator、Microsoft Authenticator、Duo、Bitwarden 等认证器查看当前验证码。') }}
               </p>
-              <p v-else>恢复码为 10 位，格式如 7K3M9-QP2XR，每个只能使用一次。</p>
+              <p v-else>{{ $t('恢复码为 10 位，格式如 7K3M9-QP2XR，每个只能使用一次。') }}</p>
             </div>
           </div>
 
@@ -342,16 +342,16 @@ onMounted(() => {
           <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
           <el-button type="primary" class="submit" :loading="verifying" @click="verify">
-            {{ verifying ? '验证中…' : '验证并登录' }}
+            {{ verifying ? t('验证中…') : t('验证并登录') }}
           </el-button>
 
           <button type="button" class="switch-mode" @click="toggleRecovery">
-            {{ recoveryMode ? '使用动态验证码' : '无法使用认证器？改用恢复码' }}
+            {{ recoveryMode ? $t('使用动态验证码') : $t('无法使用认证器？改用恢复码') }}
           </button>
         </div>
 
         <div v-if="step === 'credential' && providers.length" class="oauth">
-          <div class="oauth-divider"><span>或使用第三方账号</span></div>
+          <div class="oauth-divider"><span>{{ t('或使用第三方账号') }}</span></div>
           <div class="oauth-list">
             <button
               v-for="p in providers"
@@ -363,14 +363,14 @@ onMounted(() => {
             >
               <img v-if="p.icon" :src="p.icon" alt="" class="oauth-icon" />
               <span v-else class="oauth-fallback">{{ (p.label || p.name).slice(0, 1).toUpperCase() }}</span>
-              <span>{{ oauthLoading === p.name ? '跳转中…' : p.label }}</span>
+              <span>{{ oauthLoading === p.name ? $t('跳转中…') : p.label }}</span>
             </button>
           </div>
         </div>
 
         <!-- 默认凭据只在开发环境提示，生产环境展示等于公开超管账号密码 -->
         <div v-if="step === 'credential' && isDev" class="hint">
-          默认账号 <code>admin</code> / <code>Admin@123456</code>，登录后请尽快修改密码
+          {{ $t('默认账号') }} <code>admin</code> / <code>Admin@123456</code>{{ $t('，登录后请尽快修改密码') }}
         </div>
       </div>
     </section>

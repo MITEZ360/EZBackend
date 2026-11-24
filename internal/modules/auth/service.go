@@ -22,6 +22,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/crypto"
 	"github.com/keel-framework/keel/internal/platform/idgen"
 	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/utils"
 )
 
@@ -84,6 +85,8 @@ type UserInfo struct {
 	DeptID      string `json:"deptId,omitempty"`
 	DeptName    string `json:"deptName,omitempty"`
 	IsSuper     bool   `json:"isSuper"`
+	Locale      string `json:"locale,omitempty"`
+	Timezone    string `json:"timezone,omitempty"`
 	TOTPEnabled bool   `json:"totpEnabled"`
 	// RecoveryCodesLeft 剩余可用恢复码数量，仅在个人中心返回
 	RecoveryCodesLeft int      `json:"recoveryCodesLeft,omitempty"`
@@ -125,7 +128,7 @@ func (s *Service) Login(ctx context.Context, in *LoginInput, meta ClientMeta) (*
 	}
 	if locked, ttl := s.isLocked(ctx, in.Username); locked {
 		return nil, nil, errs.New(http.StatusLocked, errs.CodeAccountLocked,
-			fmt.Sprintf("账号已锁定，请 %d 分钟后再试", int(ttl.Minutes())+1))
+			i18n.Tf(ctx, "账号已锁定，请 {0} 分钟后再试", int(ttl.Minutes())+1))
 	}
 
 	var user model.User
@@ -256,6 +259,7 @@ func (s *Service) buildUserInfo(ctx context.Context, user *model.User) (*UserInf
 		ID: user.ID, Username: user.Username, Nickname: user.Nickname, RealName: user.RealName,
 		Avatar: user.Avatar, Email: user.Email, Phone: user.Phone, DeptID: user.DeptID,
 		IsSuper: user.IsSuper, TOTPEnabled: user.TOTPEnabled,
+		Locale: user.Locale, Timezone: user.Timezone,
 		Roles: rp.roles,
 	}
 	if user.LastLoginAt != nil {
@@ -400,6 +404,30 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, in *UpdatePr
 	}).Error
 }
 
+// UpdatePreferencesInput 展示偏好入参，与资料更新分离，支持只改其一。
+type UpdatePreferencesInput struct {
+	Locale   string `json:"locale" binding:"omitempty,oneof=zh-CN en" label:"语言"`
+	Timezone string `json:"timezone" binding:"omitempty,max=64" label:"时区"`
+}
+
+// UpdatePreferences 保存语言与时区偏好；空字符串表示清空并回退系统默认。
+func (s *Service) UpdatePreferences(ctx context.Context, userID string, in *UpdatePreferencesInput) error {
+	updates := map[string]any{}
+	if in.Locale != "" {
+		updates["locale"] = in.Locale
+	}
+	if in.Timezone != "" {
+		if _, err := time.LoadLocation(in.Timezone); err != nil {
+			return errs.BadRequest("时区无效")
+		}
+		updates["timezone"] = in.Timezone
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return s.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
+}
+
 // ChangePasswordInput 修改密码入参。
 type ChangePasswordInput struct {
 	OldPassword string `json:"oldPassword" binding:"required" label:"原密码"`
@@ -418,7 +446,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID, sessionID string, 
 	if in.OldPassword == in.NewPassword {
 		return errs.BadRequest("新密码不能与原密码相同")
 	}
-	if err := s.checkPasswordPolicy(in.NewPassword); err != nil {
+	if err := s.checkPasswordPolicy(ctx, in.NewPassword); err != nil {
 		return err
 	}
 	hash, err := authn.HashPassword(in.NewPassword)
@@ -435,7 +463,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID, sessionID string, 
 	return nil
 }
 
-func (s *Service) checkPasswordPolicy(pw string) error {
+func (s *Service) checkPasswordPolicy(ctx context.Context, pw string) error {
 	minLen := s.cfg.Security.PasswordMinLen
 	if minLen < 8 {
 		minLen = 8
@@ -455,7 +483,7 @@ func (s *Service) checkPasswordPolicy(pw string) error {
 		}
 	}
 	if len([]rune(pw)) < minLen {
-		return errs.BadRequest(fmt.Sprintf("密码长度至少 %d 位", minLen))
+		return errs.BadRequest(i18n.Tf(ctx, "密码长度至少 {0} 位", minLen))
 	}
 	kinds := 0
 	for _, b := range []bool{upper, lower, digit, special} {

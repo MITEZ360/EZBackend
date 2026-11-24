@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { Translation, useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { menuApi, type MenuPayload } from '@/api/system'
@@ -8,15 +9,16 @@ import { menuIcons, resolveIcon } from '@/utils/icons'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const { t } = useI18n()
 
 const tree = ref<MenuNode[]>([])
 const loading = ref(false)
 
-const TYPE_META: Record<string, { label: string; tone: string }> = {
-  dir: { label: '目录', tone: 'is-dir' },
-  menu: { label: '菜单', tone: 'is-page' },
-  button: { label: '按钮', tone: 'is-btn' },
-}
+const TYPE_META = computed<Record<string, { label: string; tone: string }>>(() => ({
+  dir: { label: t('目录'), tone: 'is-dir' },
+  menu: { label: t('菜单'), tone: 'is-page' },
+  button: { label: t('按钮'), tone: 'is-btn' },
+}))
 
 const iconNames = Object.keys(menuIcons)
 
@@ -84,12 +86,12 @@ const form = reactive<MenuPayload>({
   status: 1,
 })
 
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
+const rules = computed<FormRules>(() => ({
+  name: [{ required: true, message: t('请输入名称'), trigger: 'blur' }],
   path: [
     {
       validator: (_r, v: string, cb) => {
-        if (form.type !== 'button' && !String(v ?? '').trim()) cb(new Error('目录与菜单必须填写路由路径'))
+        if (form.type !== 'button' && !String(v ?? '').trim()) cb(new Error(t('目录与菜单必须填写路由路径')))
         else cb()
       },
       trigger: 'blur',
@@ -98,13 +100,13 @@ const rules: FormRules = {
   perm: [
     {
       validator: (_r, v: string, cb) => {
-        if (form.type === 'button' && !String(v ?? '').trim()) cb(new Error('按钮必须填写权限标识'))
+        if (form.type === 'button' && !String(v ?? '').trim()) cb(new Error(t('按钮必须填写权限标识')))
         else cb()
       },
       trigger: 'blur',
     },
   ],
-}
+}))
 
 function resetForm() {
   Object.assign(form, {
@@ -170,10 +172,10 @@ async function submitForm() {
   try {
     if (isEdit.value) {
       await menuApi.update(editingId.value, payload)
-      ElMessage.success('已保存')
+      ElMessage.success(t('已保存'))
     } else {
       await menuApi.create(payload)
-      ElMessage.success('菜单已创建')
+      ElMessage.success(t('菜单已创建'))
     }
     formVisible.value = false
     await load()
@@ -188,20 +190,20 @@ async function removeMenu(node: MenuNode) {
   try {
     await ElMessageBox.confirm(
       node.children?.length
-        ? `「${node.name}」下还有 ${node.children.length} 个子项，需先删除子项。`
-        : `删除「${node.name}」后，已分配该菜单的角色将失去对应权限。确定删除吗？`,
-      '删除菜单',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'error' },
+        ? t('「{name}」下还有 {count} 个子项，需先删除子项。', { name: node.name, count: node.children.length })
+        : t('删除「{name}」后，已分配该菜单的角色将失去对应权限。确定删除吗？', { name: node.name }),
+      t('删除菜单'),
+      { confirmButtonText: t('删除'), cancelButtonText: t('取消'), type: 'error' },
     )
   } catch {
     return
   }
   if (node.children?.length) {
-    ElMessage.warning('请先删除子菜单')
+    ElMessage.warning(t('请先删除子菜单'))
     return
   }
   await menuApi.remove(node.id)
-  ElMessage.success('已删除')
+  ElMessage.success(t('已删除'))
   await load()
   auth.loadProfile().catch(() => undefined)
 }
@@ -213,14 +215,14 @@ onMounted(load)
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">菜单管理</h1>
+        <h1 class="page-title">{{ $t('菜单管理') }}</h1>
         <p class="page-desc">
-          维护导航结构、页面路由与按钮级权限点；变更后相关角色需重新授权
+          {{ $t('维护导航结构、页面路由与按钮级权限点；变更后相关角色需重新授权') }}
         </p>
       </div>
       <div class="page-actions">
         <el-button v-perm="'system:menu:create'" type="primary" :icon="Plus" @click="openCreate()">
-          新增菜单
+          {{ $t('新增菜单') }}
         </el-button>
       </div>
     </div>
@@ -229,12 +231,14 @@ onMounted(load)
       <div class="toolbar">
         <div class="toolbar-left">
           <span class="hint">
-            共 <b class="num">{{ flatList.length }}</b> 个菜单项，其中按钮权限点
-            <b class="num">{{ buttonCount }}</b> 个
+            <Translation keypath="共 {total} 个菜单项，其中按钮权限点 {buttons} 个">
+              <template #total><b class="num">{{ flatList.length }}</b></template>
+              <template #buttons><b class="num">{{ buttonCount }}</b></template>
+            </Translation>
           </span>
         </div>
         <div class="toolbar-right">
-          <el-button :icon="Refresh" circle title="刷新" @click="load" />
+          <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
@@ -246,7 +250,7 @@ onMounted(load)
         :tree-props="{ children: 'children' }"
         :indent="18"
       >
-        <el-table-column label="名称" min-width="230">
+        <el-table-column :label="$t('名称')" min-width="230">
           <template #default="{ row }">
             <div class="menu-cell">
               <el-icon class="menu-icon" :size="14">
@@ -260,39 +264,39 @@ onMounted(load)
           </template>
         </el-table-column>
 
-        <el-table-column label="路由路径" min-width="170">
+        <el-table-column :label="$t('路由路径')" min-width="170">
           <template #default="{ row }">
             <span v-if="row.path" class="mono path">{{ row.path }}</span>
             <span v-else class="dim">—</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="权限标识" min-width="190">
+        <el-table-column :label="$t('权限标识')" min-width="190">
           <template #default="{ row }">
             <code v-if="row.perm" class="perm">{{ row.perm }}</code>
             <span v-else class="dim">—</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="排序" width="72" align="right">
+        <el-table-column :label="$t('排序')" width="72" align="right">
           <template #default="{ row }">
             <span class="num dim">{{ row.sort }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="可见" width="76" align="center">
+        <el-table-column :label="$t('可见')" width="76" align="center">
           <template #default="{ row }">
             <span v-if="row.type === 'button'" class="dim">—</span>
             <span v-else class="status-dot" :class="row.visible ? 'is-on' : 'is-off'">
-              {{ row.visible ? '显示' : '隐藏' }}
+              {{ row.visible ? $t('显示') : $t('隐藏') }}
             </span>
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="80" align="center">
+        <el-table-column :label="$t('状态')" width="80" align="center">
           <template #default="{ row }">
             <span class="status-dot" :class="row.status === 0 ? 'is-off' : 'is-on'">
-              {{ row.status === 0 ? '停用' : '正常' }}
+              {{ row.status === 0 ? $t('停用') : $t('正常') }}
             </span>
           </template>
         </el-table-column>
@@ -306,13 +310,13 @@ onMounted(load)
               type="primary"
               @click="openCreate(row)"
             >
-              新增子项
+              {{ $t('新增子项') }}
             </el-button>
             <el-button v-perm="'system:menu:update'" link type="primary" @click="openEdit(row)">
-              编辑
+              {{ $t('编辑') }}
             </el-button>
             <el-button v-perm="'system:menu:delete'" link type="danger" @click="removeMenu(row)">
-              删除
+              {{ $t('删除') }}
             </el-button>
           </template>
         </el-table-column>
@@ -321,7 +325,7 @@ onMounted(load)
 
     <el-dialog
       v-model="formVisible"
-      :title="isEdit ? '编辑菜单' : '新增菜单'"
+      :title="isEdit ? $t('编辑菜单') : $t('新增菜单')"
       width="620px"
       append-to-body
       :close-on-click-modal="false"
@@ -329,9 +333,9 @@ onMounted(load)
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <div class="form-grid">
-          <el-form-item label="上级菜单">
-            <el-select v-model="form.parentId" placeholder="选择上级" filterable style="width: 100%">
-              <el-option label="顶级菜单" value="0" />
+          <el-form-item :label="$t('上级菜单')">
+            <el-select v-model="form.parentId" :placeholder="$t('选择上级')" filterable style="width: 100%">
+              <el-option :label="$t('顶级菜单')" value="0" />
               <el-option
                 v-for="o in parentOptions"
                 :key="o.id"
@@ -341,30 +345,30 @@ onMounted(load)
             </el-select>
           </el-form-item>
 
-          <el-form-item label="类型">
+          <el-form-item :label="$t('类型')">
             <el-radio-group v-model="form.type">
-              <el-radio-button value="dir">目录</el-radio-button>
-              <el-radio-button value="menu">菜单</el-radio-button>
-              <el-radio-button value="button">按钮</el-radio-button>
+              <el-radio-button value="dir">{{ $t('目录') }}</el-radio-button>
+              <el-radio-button value="menu">{{ $t('菜单') }}</el-radio-button>
+              <el-radio-button value="button">{{ $t('按钮') }}</el-radio-button>
             </el-radio-group>
           </el-form-item>
         </div>
 
         <div class="form-grid">
-          <el-form-item label="名称" prop="name">
-            <el-input v-model="form.name" placeholder="展示在侧边栏或权限树中" />
+          <el-form-item :label="$t('名称')" prop="name">
+            <el-input v-model="form.name" :placeholder="$t('展示在侧边栏或权限树中')" />
           </el-form-item>
-          <el-form-item label="排序">
+          <el-form-item :label="$t('排序')">
             <el-input-number v-model="form.sort" :min="0" :max="9999" controls-position="right" style="width: 100%" />
           </el-form-item>
         </div>
 
         <div v-if="form.type !== 'button'" class="form-grid">
-          <el-form-item label="路由路径" prop="path">
-            <el-input v-model="form.path" placeholder="如 /system/role" />
+          <el-form-item :label="$t('路由路径')" prop="path">
+            <el-input v-model="form.path" :placeholder="$t('如 /system/role')" />
           </el-form-item>
-          <el-form-item label="图标">
-            <el-select v-model="form.icon" placeholder="选择图标" clearable filterable style="width: 100%">
+          <el-form-item :label="$t('图标')">
+            <el-select v-model="form.icon" :placeholder="$t('选择图标')" clearable filterable style="width: 100%">
               <el-option v-for="name in iconNames" :key="name" :label="name" :value="name">
                 <span class="icon-option">
                   <el-icon :size="14"><component :is="resolveIcon(name)" /></el-icon>
@@ -375,32 +379,32 @@ onMounted(load)
           </el-form-item>
         </div>
 
-        <el-form-item v-if="form.type === 'menu'" label="组件路径">
-          <el-input v-model="form.component" placeholder="预留字段，静态路由模式下可留空" />
+        <el-form-item v-if="form.type === 'menu'" :label="$t('组件路径')">
+          <el-input v-model="form.component" :placeholder="$t('预留字段，静态路由模式下可留空')" />
         </el-form-item>
 
-        <el-form-item label="权限标识" prop="perm">
-          <el-input v-model="form.perm" placeholder="如 system:role:list，留空表示不做权限校验" class="mono-input" />
+        <el-form-item :label="$t('权限标识')" prop="perm">
+          <el-input v-model="form.perm" :placeholder="$t('如 system:role:list，留空表示不做权限校验')" class="mono-input" />
         </el-form-item>
 
         <div v-if="form.type !== 'button'" class="form-grid">
-          <el-form-item label="是否可见">
-            <el-switch v-model="form.visible" active-text="显示" inactive-text="隐藏" />
+          <el-form-item :label="$t('是否可见')">
+            <el-switch v-model="form.visible" :active-text="$t('显示')" :inactive-text="$t('隐藏')" />
           </el-form-item>
-          <el-form-item v-if="form.type === 'menu'" label="页面缓存">
-            <el-switch v-model="form.keepAlive" active-text="缓存" inactive-text="不缓存" />
+          <el-form-item v-if="form.type === 'menu'" :label="$t('页面缓存')">
+            <el-switch v-model="form.keepAlive" :active-text="$t('缓存')" :inactive-text="$t('不缓存')" />
           </el-form-item>
         </div>
 
-        <el-form-item label="状态">
-          <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
-          <span class="switch-hint">停用后该菜单及其权限点对全部角色失效</span>
+        <el-form-item :label="$t('状态')">
+          <el-switch v-model="form.status" :active-value="1" :inactive-value="0" :active-text="$t('启用')" :inactive-text="$t('停用')" />
+          <span class="switch-hint">{{ $t('停用后该菜单及其权限点对全部角色失效') }}</span>
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+        <el-button @click="formVisible = false">{{ $t('取消') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitForm">{{ $t('保存') }}</el-button>
       </template>
     </el-dialog>
   </div>

@@ -6,7 +6,13 @@ app:
   name: Keel 企业管理平台
   env: dev                 # dev / test / prod
   version: 1.0.0
+  # IANA 时区名，影响 GORM 时间戳、定时任务、备份文件名等所有时间语义
   timezone: Asia/Shanghai
+
+# 语言协商：客户端可用 X-Locale 或 Accept-Language 指定，未指定时用 default_locale
+# 支持 zh-CN / en；未收录译文的文案自动降级为中文原文
+i18n:
+  default_locale: zh-CN
 
 server:
   host: 0.0.0.0

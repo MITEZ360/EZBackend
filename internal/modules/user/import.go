@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"regexp"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/keel-framework/keel/internal/model"
 	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/i18n"
 )
 
 const (
@@ -129,7 +129,7 @@ func (s *Service) Import(ctx context.Context, r io.Reader, size int64) (*ImportR
 		rowNo++
 		cols, err := rows.Columns()
 		if err != nil {
-			return nil, errs.BadRequest(fmt.Sprintf("第 %d 行读取失败", rowNo))
+			return nil, errs.BadRequest(i18n.Tf(ctx, "第 {0} 行读取失败", rowNo))
 		}
 		if !headerChecked {
 			headerChecked = true
@@ -142,7 +142,7 @@ func (s *Service) Import(ctx context.Context, r io.Reader, size int64) (*ImportR
 			continue
 		}
 		if res.Total >= importMaxRows {
-			return nil, errs.BadRequest(fmt.Sprintf("单次最多导入 %d 行，请拆分后重试", importMaxRows))
+			return nil, errs.BadRequest(i18n.Tf(ctx, "单次最多导入 {0} 行，请拆分后重试", importMaxRows))
 		}
 		res.Total++
 
@@ -190,7 +190,7 @@ func (s *Service) importOne(ctx context.Context, cols []string) string {
 	if in.Password == "" {
 		return "初始密码不能为空"
 	}
-	if err := checkStrength(in.Password, s.cfg.Security.PasswordMinLen, s.cfg.Security.PasswordStrength); err != nil {
+	if err := checkStrength(ctx, in.Password, s.cfg.Security.PasswordMinLen, s.cfg.Security.PasswordStrength); err != nil {
 		return err.Error()
 	}
 
@@ -229,11 +229,11 @@ func (s *Service) resolveDept(ctx context.Context, name string) (string, error) 
 	}
 	switch len(list) {
 	case 0:
-		return "", errs.BadRequest("部门不存在：" + name)
+		return "", errs.BadRequest(i18n.Tf(ctx, "部门不存在：{0}", name))
 	case 1:
 		return list[0].ID, nil
 	default:
-		return "", errs.BadRequest("存在多个同名部门，无法确定：" + name)
+		return "", errs.BadRequest(i18n.Tf(ctx, "存在多个同名部门，无法确定：{0}", name))
 	}
 }
 
@@ -254,7 +254,7 @@ func (s *Service) resolveRoles(ctx context.Context, raw string) ([]string, error
 		var r model.Role
 		err := s.db.WithContext(ctx).Where("name = ?", name).First(&r).Error
 		if err != nil {
-			return nil, errs.BadRequest("角色不存在：" + name)
+			return nil, errs.BadRequest(i18n.Tf(ctx, "角色不存在：{0}", name))
 		}
 		ids = append(ids, r.ID)
 	}

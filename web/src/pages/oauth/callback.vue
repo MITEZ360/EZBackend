@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { tokenStore } from '@/api/client'
@@ -7,14 +8,15 @@ import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
-const message = ref('正在完成第三方登录…')
+const { t } = useI18n()
+const message = ref(t('正在完成第三方登录…'))
 const failed = ref(false)
 
 onMounted(async () => {
   const query = new URLSearchParams(window.location.search)
   // 已登录状态下发起的账号绑定，回调不带令牌
   if (query.has('oauth_bound')) {
-    ElMessage.success('已绑定第三方账号')
+    ElMessage.success(t('已绑定第三方账号'))
     router.replace('/profile')
     return
   }
@@ -25,7 +27,7 @@ onMounted(async () => {
   const refresh = hash.get('refresh_token') ?? undefined
   if (!access) {
     failed.value = true
-    message.value = '未收到登录令牌，请重新登录'
+    message.value = t('未收到登录令牌，请重新登录')
     window.setTimeout(() => router.replace('/login'), 1600)
     return
   }
@@ -33,12 +35,12 @@ onMounted(async () => {
   tokenStore.save(access, refresh)
   try {
     await auth.loadProfile()
-    ElMessage.success('登录成功')
+    ElMessage.success(t('登录成功'))
     router.replace('/dashboard')
   } catch {
     tokenStore.clear()
     failed.value = true
-    message.value = '登录信息加载失败，请重新登录'
+    message.value = t('登录信息加载失败，请重新登录')
     window.setTimeout(() => router.replace('/login'), 1600)
   }
 })
@@ -50,10 +52,10 @@ onMounted(async () => {
       <div class="logo">K</div>
       <div v-if="!failed" class="spinner" />
       <div v-else class="failed">!</div>
-      <h2>{{ failed ? '登录未完成' : '正在登录' }}</h2>
+      <h2>{{ failed ? $t('登录未完成') : $t('正在登录') }}</h2>
       <p>{{ message }}</p>
       <button v-if="failed" type="button" class="back" @click="router.replace('/login')">
-        返回登录
+        {{ $t('返回登录') }}
       </button>
     </div>
   </div>

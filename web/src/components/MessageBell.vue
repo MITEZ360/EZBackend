@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
@@ -10,6 +11,7 @@ import { fromNow } from '@/utils/format'
 
 const router = useRouter()
 const store = useMessageStore()
+const { t } = useI18n()
 const visible = ref(false)
 const acting = ref(false)
 
@@ -38,7 +40,7 @@ async function markAll() {
   try {
     const res = await messageApi.markAllRead()
     await store.refresh()
-    ElMessage.success(res.updated > 0 ? `已标记 ${res.updated} 条为已读` : '没有未读消息')
+    ElMessage.success(res.updated > 0 ? t('已标记 {count} 条为已读', { count: res.updated }) : t('没有未读消息'))
   } finally {
     acting.value = false
   }
@@ -58,7 +60,7 @@ onBeforeUnmount(() => store.stop())
     @show="onShow"
   >
     <template #reference>
-      <button class="bell" :class="{ active: store.unread > 0 }" title="消息中心" aria-label="消息中心">
+      <button class="bell" :class="{ active: store.unread > 0 }" :title="t('消息中心')" :aria-label="t('消息中心')">
         <el-icon :size="17"><Bell /></el-icon>
         <span v-if="store.unread > 0" class="bell-dot">{{ unreadText }}</span>
       </button>
@@ -66,9 +68,9 @@ onBeforeUnmount(() => store.stop())
 
     <div class="mp">
       <div class="mp-head">
-        <span class="mp-title">消息</span>
+        <span class="mp-title">{{ t('消息') }}</span>
         <button v-if="store.unread > 0" class="mp-link" :disabled="acting" @click="markAll">
-          全部已读
+          {{ t('全部已读') }}
         </button>
       </div>
 
@@ -93,11 +95,11 @@ onBeforeUnmount(() => store.stop())
 
       <div v-else class="mp-empty">
         <el-icon :size="20"><Bell /></el-icon>
-        <p>暂无消息</p>
+        <p>{{ t('暂无消息') }}</p>
       </div>
 
       <div class="mp-foot">
-        <router-link to="/system/message" @click="visible = false">查看全部消息</router-link>
+        <router-link to="/system/message" @click="visible = false">{{ t('查看全部消息') }}</router-link>
       </div>
     </div>
   </el-popover>

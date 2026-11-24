@@ -169,10 +169,10 @@ function shortDate(d: string) {
     >
       <div class="tip-date">{{ hoverPoint.date }}</div>
       <div class="tip-row">
-        <i class="k k-login" />登录<b class="num">{{ hoverPoint.logins }}</b>
+        <i class="k k-login" />{{ $t('登录次数') }}<b class="num">{{ hoverPoint.logins }}</b>
       </div>
       <div class="tip-row">
-        <i class="k k-ops" />操作<b class="num">{{ hoverPoint.ops }}</b>
+        <i class="k k-ops" />{{ $t('操作次数') }}<b class="num">{{ hoverPoint.ops }}</b>
       </div>
     </div>
   </div>

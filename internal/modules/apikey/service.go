@@ -22,6 +22,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/authn"
 	"github.com/keel-framework/keel/internal/platform/cache"
 	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/query"
 )
 
@@ -104,11 +105,11 @@ func (s *Service) Create(ctx context.Context, in *Input, actor *authn.Identity) 
 	if kind == "" {
 		kind = model.APIKeyService
 	}
-	scopes, err := s.normalizeScopes(in.Scopes, actor)
+	scopes, err := s.normalizeScopes(ctx, in.Scopes, actor)
 	if err != nil {
 		return nil, err
 	}
-	ips, err := normalizeIPs(in.IPAllow)
+	ips, err := normalizeIPs(ctx, in.IPAllow)
 	if err != nil {
 		return nil, err
 	}
@@ -146,11 +147,11 @@ func (s *Service) Update(ctx context.Context, id string, in *Input, actor *authn
 	if err != nil {
 		return nil, err
 	}
-	scopes, err := s.normalizeScopes(in.Scopes, actor)
+	scopes, err := s.normalizeScopes(ctx, in.Scopes, actor)
 	if err != nil {
 		return nil, err
 	}
-	ips, err := normalizeIPs(in.IPAllow)
+	ips, err := normalizeIPs(ctx, in.IPAllow)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +310,7 @@ func (s *Service) Usage(ctx context.Context, ids []string) map[string]int64 {
 
 // ---- 内部 ----
 
-func (s *Service) normalizeScopes(in []string, actor *authn.Identity) ([]string, error) {
+func (s *Service) normalizeScopes(ctx context.Context, in []string, actor *authn.Identity) ([]string, error) {
 	seen := make(map[string]struct{}, len(in))
 	out := make([]string, 0, len(in))
 	for _, raw := range in {
@@ -318,7 +319,7 @@ func (s *Service) normalizeScopes(in []string, actor *authn.Identity) ([]string,
 			continue
 		}
 		if sc != "*" && !validScope(sc) {
-			return nil, errs.Validation("权限范围格式不正确：" + sc)
+			return nil, errs.Validation(i18n.Tf(ctx, "权限范围格式不正确：{0}", sc))
 		}
 		if _, dup := seen[sc]; dup {
 			continue
@@ -326,7 +327,7 @@ func (s *Service) normalizeScopes(in []string, actor *authn.Identity) ([]string,
 		// 越权保护：持有凭证管理权限的人不能凭空造出比自己更大的凭证。
 		if actor != nil && !actor.Super {
 			if sc == "*" || !actor.Has(sc) {
-				return nil, errs.Forbidden("不能授予自己不具备的权限：" + sc)
+				return nil, errs.Forbidden(i18n.Tf(ctx, "不能授予自己不具备的权限：{0}", sc))
 			}
 		}
 		seen[sc] = struct{}{}
@@ -336,7 +337,7 @@ func (s *Service) normalizeScopes(in []string, actor *authn.Identity) ([]string,
 		return nil, errs.BadRequest("至少需要一个权限范围")
 	}
 	if len(out) > maxScopes {
-		return nil, errs.BadRequest("权限范围最多 " + strconv.Itoa(maxScopes) + " 个")
+		return nil, errs.BadRequest(i18n.Tf(ctx, "权限范围最多 {0} 个", maxScopes))
 	}
 	return out, nil
 }
@@ -363,7 +364,7 @@ func validScope(sc string) bool {
 	return true
 }
 
-func normalizeIPs(in []string) ([]string, error) {
+func normalizeIPs(ctx context.Context, in []string) ([]string, error) {
 	out := make([]string, 0, len(in))
 	for _, raw := range in {
 		rule := strings.TrimSpace(raw)
@@ -372,7 +373,7 @@ func normalizeIPs(in []string) ([]string, error) {
 		}
 		if _, err := netip.ParsePrefix(rule); err != nil {
 			if _, err := netip.ParseAddr(rule); err != nil {
-				return nil, errs.Validation("IP 或网段格式不正确：" + rule)
+				return nil, errs.Validation(i18n.Tf(ctx, "IP 或网段格式不正确：{0}", rule))
 			}
 		}
 		out = append(out, rule)

@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Refresh, Search } from '@element-plus/icons-vue'
 import { logApi } from '@/api/ops'
 import type { OperationLogRow } from '@/api/types'
 import { fmtTime, fromNow } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const rows = ref<OperationLogRow[]>([])
 const total = ref(0)
@@ -21,10 +24,21 @@ const query = reactive({
   range: [] as string[],
 })
 
-const MODULES = [
-  '用户管理', '角色管理', '菜单管理', '部门管理', '字典管理',
-  '参数配置', '通知公告', '定时任务', '文件管理', '登录日志', '操作日志', '在线用户',
-]
+// value 保持后端约定的中文模块名，label 仅用于展示
+const MODULES = computed(() => [
+  { label: t('用户管理'), value: '用户管理' },
+  { label: t('角色管理'), value: '角色管理' },
+  { label: t('菜单管理'), value: '菜单管理' },
+  { label: t('部门管理'), value: '部门管理' },
+  { label: t('字典管理'), value: '字典管理' },
+  { label: t('参数配置'), value: '参数配置' },
+  { label: t('通知公告'), value: '通知公告' },
+  { label: t('定时任务'), value: '定时任务' },
+  { label: t('文件管理'), value: '文件管理' },
+  { label: t('登录日志'), value: '登录日志' },
+  { label: t('操作日志'), value: '操作日志' },
+  { label: t('在线用户'), value: '在线用户' },
+])
 
 async function load() {
   loading.value = true
@@ -69,14 +83,18 @@ function resetQuery() {
 async function clearLogs() {
   let days = 30
   try {
-    const res = await ElMessageBox.prompt('将删除该天数之前的操作记录，此操作不可恢复。请输入保留天数：', '清理操作日志', {
-      confirmButtonText: '确认清理',
-      cancelButtonText: '取消',
-      inputValue: '90',
-      inputPattern: /^\d{1,4}$/,
-      inputErrorMessage: '请输入 1-9999 的整数',
-      type: 'warning',
-    })
+    const res = await ElMessageBox.prompt(
+      t('将删除该天数之前的操作记录，此操作不可恢复。请输入保留天数：'),
+      t('清理操作日志'),
+      {
+        confirmButtonText: t('确认清理'),
+        cancelButtonText: t('取消'),
+        inputValue: '90',
+        inputPattern: /^\d{1,4}$/,
+        inputErrorMessage: t('请输入 1-9999 的整数'),
+        type: 'warning',
+      },
+    )
     days = Number(res.value)
   } catch {
     return
@@ -84,7 +102,7 @@ async function clearLogs() {
   clearing.value = true
   try {
     const res = await logApi.clearOperations(days)
-    ElMessage.success(`已清理 ${res.deleted} 条操作日志`)
+    ElMessage.success(t('已清理 {count} 条操作日志', { count: res.deleted }))
     reload()
   } finally {
     clearing.value = false
@@ -136,11 +154,11 @@ onMounted(load)
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">操作日志</h1>
-        <p class="page-desc">记录写操作的行为、耗时与请求响应，敏感字段已在落库前脱敏</p>
+        <h1 class="page-title">{{ $t('操作日志') }}</h1>
+        <p class="page-desc">{{ $t('记录写操作的行为、耗时与请求响应，敏感字段已在落库前脱敏') }}</p>
       </div>
       <div class="page-actions">
-        <el-button :icon="Delete" :loading="clearing" @click="clearLogs">清理历史</el-button>
+        <el-button :icon="Delete" :loading="clearing" @click="clearLogs">{{ $t('清理历史') }}</el-button>
       </div>
     </div>
 
@@ -149,43 +167,43 @@ onMounted(load)
         <div class="toolbar-left">
           <el-input
             v-model="query.keyword"
-            placeholder="搜索账号 / 路径 / 动作"
+            :placeholder="$t('搜索账号 / 路径 / 动作')"
             :prefix-icon="Search"
             clearable
             style="width: 236px"
             @keyup.enter="reload"
             @clear="reload"
           />
-          <el-select v-model="query.module" placeholder="全部模块" clearable filterable style="width: 130px" @change="reload">
-            <el-option v-for="m in MODULES" :key="m" :label="m" :value="m" />
+          <el-select v-model="query.module" :placeholder="$t('全部模块')" clearable filterable style="width: 130px" @change="reload">
+            <el-option v-for="m in MODULES" :key="m.value" :label="m.label" :value="m.value" />
           </el-select>
-          <el-select v-model="query.status" placeholder="全部结果" clearable style="width: 118px" @change="reload">
-            <el-option label="成功" value="success" />
-            <el-option label="失败" value="fail" />
+          <el-select v-model="query.status" :placeholder="$t('全部结果')" clearable style="width: 118px" @change="reload">
+            <el-option :label="$t('成功')" value="success" />
+            <el-option :label="$t('失败')" value="fail" />
           </el-select>
           <el-date-picker
             v-model="query.range"
             type="daterange"
             value-format="YYYY-MM-DD"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
+            :range-separator="$t('至')"
+            :start-placeholder="$t('开始日期')"
+            :end-placeholder="$t('结束日期')"
             style="width: 240px"
             @change="reload"
           />
-          <el-button @click="reload">查询</el-button>
-          <el-button text @click="resetQuery">重置</el-button>
+          <el-button @click="reload">{{ $t('查询') }}</el-button>
+          <el-button text @click="resetQuery">{{ $t('重置') }}</el-button>
         </div>
         <div class="toolbar-right">
-          <el-button :icon="Refresh" circle title="刷新" @click="load" />
+          <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
       <el-table v-loading="loading" :data="rows" row-key="id">
-        <el-table-column label="操作内容" min-width="185">
+        <el-table-column :label="$t('操作内容')" min-width="185">
           <template #default="{ row }">
             <div class="act-cell">
-              <span class="module">{{ row.module || '未归类' }}</span>
+              <span class="module">{{ row.module || $t('未归类') }}</span>
               <span class="action">{{ row.action || '—' }}</span>
             </div>
             <div class="actor">
@@ -195,7 +213,7 @@ onMounted(load)
           </template>
         </el-table-column>
 
-        <el-table-column label="请求" min-width="230">
+        <el-table-column :label="$t('请求')" min-width="230">
           <template #default="{ row }">
             <div class="req-line">
               <span class="method" :class="methodTone(row.method)">{{ row.method }}</span>
@@ -204,7 +222,7 @@ onMounted(load)
           </template>
         </el-table-column>
 
-        <el-table-column label="结果" width="78" align="center">
+        <el-table-column :label="$t('结果')" width="78" align="center">
           <template #default="{ row }">
             <span class="status-dot" :class="row.status < 400 ? 'is-on' : 'is-off'">
               {{ row.status }}
@@ -212,13 +230,13 @@ onMounted(load)
           </template>
         </el-table-column>
 
-        <el-table-column label="耗时" width="80" align="right">
+        <el-table-column :label="$t('耗时')" width="80" align="right">
           <template #default="{ row }">
             <span class="num cost" :class="{ slow: row.costMs > 500 }">{{ row.costMs }} ms</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="时间" width="116">
+        <el-table-column :label="$t('时间')" width="116">
           <template #default="{ row }">
             <div class="cell-time" :title="fmtTime(row.createdAt)">{{ fromNow(row.createdAt) }}</div>
             <div class="cell-sub num">{{ shortTime(row.createdAt) }}</div>
@@ -227,13 +245,13 @@ onMounted(load)
 
         <el-table-column label="" width="70" align="right" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+            <el-button link type="primary" @click="openDetail(row)">{{ $t('详情') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <div class="pager">
-        <span class="total">共 {{ total }} 条记录</span>
+        <span class="total">{{ $t('共 {count} 条记录', { count: total }) }}</span>
         <el-pagination
           v-model:current-page="query.page"
           v-model:page-size="query.page_size"
@@ -251,7 +269,7 @@ onMounted(load)
     <el-drawer v-model="detailVisible" :size="640" append-to-body>
       <template #header>
         <div class="d-head">
-          <h3>{{ detail?.action || '操作详情' }}</h3>
+          <h3>{{ detail?.action || $t('操作详情') }}</h3>
           <p>
             <span class="method" :class="methodTone(detail?.method ?? '')">{{ detail?.method }}</span>
             <code class="mono">{{ detail?.path }}</code>
@@ -261,12 +279,12 @@ onMounted(load)
 
       <div v-loading="detailLoading" v-if="detail" class="d-body">
         <dl class="meta-grid">
-          <div><dt>操作人</dt><dd>{{ detail.username || '—' }}</dd></div>
-          <div><dt>所属模块</dt><dd>{{ detail.module || '—' }}</dd></div>
-          <div><dt>来源 IP</dt><dd class="num">{{ detail.ip || '—' }}</dd></div>
-          <div><dt>响应状态</dt><dd>{{ detail.status }}</dd></div>
-          <div><dt>耗时</dt><dd class="num">{{ detail.costMs }} ms</dd></div>
-          <div><dt>发生时间</dt><dd class="num">{{ fmtTime(detail.createdAt) }}</dd></div>
+          <div><dt>{{ $t('操作人') }}</dt><dd>{{ detail.username || '—' }}</dd></div>
+          <div><dt>{{ $t('所属模块') }}</dt><dd>{{ detail.module || '—' }}</dd></div>
+          <div><dt>{{ $t('来源 IP') }}</dt><dd class="num">{{ detail.ip || '—' }}</dd></div>
+          <div><dt>{{ $t('响应状态') }}</dt><dd>{{ detail.status }}</dd></div>
+          <div><dt>{{ $t('耗时') }}</dt><dd class="num">{{ detail.costMs }} ms</dd></div>
+          <div><dt>{{ $t('发生时间') }}</dt><dd class="num">{{ fmtTime(detail.createdAt) }}</dd></div>
           <div class="span-2">
             <dt>Trace ID</dt>
             <dd class="mono">{{ detail.traceId || '—' }}</dd>
@@ -274,21 +292,21 @@ onMounted(load)
         </dl>
 
         <div v-if="detail.error" class="block">
-          <div class="block-head">错误信息</div>
+          <div class="block-head">{{ $t('错误信息') }}</div>
           <pre class="code-block is-error">{{ detail.error }}</pre>
         </div>
 
         <div class="block">
           <div class="block-head">
-            请求参数
-            <span class="bh-hint">敏感字段已脱敏，超长内容已截断</span>
+            {{ $t('请求参数') }}
+            <span class="bh-hint">{{ $t('敏感字段已脱敏，超长内容已截断') }}</span>
           </div>
-          <pre class="code-block">{{ pretty(detail.request) || '（无请求体）' }}</pre>
+          <pre class="code-block">{{ pretty(detail.request) || $t('（无请求体）') }}</pre>
         </div>
 
         <div class="block">
-          <div class="block-head">响应内容</div>
-          <pre class="code-block">{{ pretty(detail.response) || '（无响应体）' }}</pre>
+          <div class="block-head">{{ $t('响应内容') }}</div>
+          <pre class="code-block">{{ pretty(detail.response) || $t('（无响应体）') }}</pre>
         </div>
       </div>
     </el-drawer>

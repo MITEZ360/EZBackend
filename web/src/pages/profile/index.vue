@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { CopyDocument, Download, Key } from '@element-plus/icons-vue'
 import OtpInput from '@/components/OtpInput.vue'
@@ -8,8 +9,38 @@ import { membershipApi } from '@/api/membership'
 import type { MembershipSnapshot } from '@/api/types'
 import { fmtDate, fmtTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
+import { SUPPORTED_LOCALES, normalizeLocale } from '@/i18n'
 
 const auth = useAuthStore()
+const { t } = useI18n()
+
+/* ------------------------------------------------------------ 展示偏好 */
+const TIMEZONES = [
+  { value: 'Asia/Shanghai', label: 'Beijing (UTC+8)' },
+  { value: 'Asia/Tokyo', label: 'Tokyo (UTC+9)' },
+  { value: 'Europe/London', label: 'London' },
+  { value: 'America/New_York', label: 'New York' },
+  { value: 'UTC', label: 'UTC' },
+]
+const prefs = reactive({ locale: 'zh-CN', timezone: 'Asia/Shanghai' })
+const prefsSaving = ref(false)
+function initPrefs() {
+  prefs.locale = normalizeLocale(auth.user?.locale)
+  const tz = auth.user?.timezone
+  prefs.timezone = tz && TIMEZONES.some((z) => z.value === tz) ? tz : 'Asia/Shanghai'
+}
+async function savePrefs() {
+  if (prefsSaving.value) return
+  prefsSaving.value = true
+  try {
+    await auth.savePreferences({ locale: prefs.locale, timezone: prefs.timezone })
+    ElMessage.success(t('偏好已保存'))
+  } catch {
+    ElMessage.error(t('保存偏好失败'))
+  } finally {
+    prefsSaving.value = false
+  }
+}
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 
@@ -30,26 +61,31 @@ async function startBind(p: OAuthProvider) {
     const res = await oauthApi.bind(p.name)
     window.location.href = res.url
   } catch {
-    ElMessage.error('发起绑定失败，请稍后重试')
+    ElMessage.error(t('发起绑定失败，请稍后重试'))
   }
 }
 
 async function unbind(provider: string, who: string) {
   try {
-    await ElMessageBox.confirm(`解绑后不能再使用 ${who} 登录，确认解绑？`, '解绑第三方账号', {
-      type: 'warning',
-      confirmButtonText: '解绑',
-      cancelButtonText: '取消',
-    })
+    await ElMessageBox.confirm(
+      t('解绑后不能再使用 {who} 登录，确认解绑？', { who }),
+      t('解绑第三方账号'),
+      {
+        type: 'warning',
+        confirmButtonText: t('解绑'),
+        cancelButtonText: t('取消'),
+      },
+    )
   } catch {
     return
   }
   await oauthApi.unbind(provider)
   bindings.value = bindings.value.filter((x) => x.provider !== provider)
-  ElMessage.success('已解绑')
+  ElMessage.success(t('已解绑'))
 }
 
 onMounted(async () => {
+  initPrefs()
   try {
     membership.value = await membershipApi.me()
   } catch {
@@ -74,33 +110,33 @@ function benefitValue(v: string) {
 
 function memberStatusText() {
   const m = membership.value
-  if (!m) return '加载中'
-  if (m.state === 'expired') return m.expireAt ? `${fmtDate(m.expireAt)} 已过期` : '已过期'
-  if (m.state === 'disabled') return '等级已停用'
+  if (!m) return t('加载中')
+  if (m.state === 'expired') return m.expireAt ? t('{date} 已过期', { date: fmtDate(m.expireAt) }) : t('已过期')
+  if (m.state === 'disabled') return t('等级已停用')
   if (m.state === 'active') {
-    return m.daysLeft === -1 ? '长期有效' : `剩余 ${m.daysLeft} 天`
+    return m.daysLeft === -1 ? t('长期有效') : t('剩余 {n} 天', { n: m.daysLeft })
   }
-  return '未开通'
+  return t('未开通')
 }
 
 const pwd = reactive({ oldPassword: '', newPassword: '', confirm: '' })
 
-const rules: FormRules = {
-  oldPassword: [{ required: true, message: '请输入当前密码', trigger: 'blur' }],
+const rules = computed<FormRules>(() => ({
+  oldPassword: [{ required: true, message: t('请输入当前密码'), trigger: 'blur' }],
   newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 8, max: 64, message: '密码长度 8-64 位', trigger: 'blur' },
-    { pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, message: '需包含大小写字母与数字', trigger: 'blur' },
+    { required: true, message: t('请输入新密码'), trigger: 'blur' },
+    { min: 8, max: 64, message: t('密码长度 8-64 位'), trigger: 'blur' },
+    { pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, message: t('需包含大小写字母与数字'), trigger: 'blur' },
   ],
   confirm: [
-    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    { required: true, message: t('请再次输入新密码'), trigger: 'blur' },
     {
       validator: (_r, value, cb) =>
-        value === pwd.newPassword ? cb() : cb(new Error('两次输入的密码不一致')),
+        value === pwd.newPassword ? cb() : cb(new Error(t('两次输入的密码不一致'))),
       trigger: 'blur',
     },
   ],
-}
+}))
 
 /* ------------------------------------------------------------ 两步验证 */
 type DialogMode = 'setup' | 'disable' | 'regen'
@@ -162,15 +198,15 @@ function openRegenerate() {
 async function copySecret() {
   try {
     await navigator.clipboard.writeText(setup.secret)
-    ElMessage.success('密钥已复制')
+    ElMessage.success(t('密钥已复制'))
   } catch {
-    ElMessage.warning('复制失败，请手动选择文本复制')
+    ElMessage.warning(t('复制失败，请手动选择文本复制'))
   }
 }
 
 async function submitOtp() {
   if (!/^\d{6}$/.test(otp.value)) {
-    ElMessage.warning('请输入 6 位动态验证码')
+    ElMessage.warning(t('请输入 6 位动态验证码'))
     return
   }
   dialog.loading = true
@@ -180,13 +216,13 @@ async function submitOtp() {
       recoveryCodes.value = res.recoveryCodes
       dialog.step = 3
       await auth.loadProfile()
-      ElMessage.success('两步验证已开启')
+      ElMessage.success(t('两步验证已开启'))
     } else {
       const res = await totpApi.regenerate(otp.value)
       recoveryCodes.value = res.recoveryCodes
       dialog.step = 3
       await auth.loadProfile()
-      ElMessage.success('恢复码已重新生成，旧码已失效')
+      ElMessage.success(t('恢复码已重新生成，旧码已失效'))
     }
   } catch {
     otp.value = ''
@@ -198,7 +234,7 @@ async function submitOtp() {
 async function submitDisable() {
   const code = disableCode.value.trim()
   if (!code) {
-    ElMessage.warning('请输入动态验证码或恢复码')
+    ElMessage.warning(t('请输入动态验证码或恢复码'))
     return
   }
   dialog.loading = true
@@ -206,7 +242,7 @@ async function submitDisable() {
     await totpApi.disable(code)
     dialog.visible = false
     await auth.loadProfile()
-    ElMessage.success('两步验证已关闭')
+    ElMessage.success(t('两步验证已关闭'))
   } finally {
     dialog.loading = false
   }
@@ -216,21 +252,21 @@ async function copyRecoveryCodes() {
   const text = recoveryCodes.value.join('\n')
   try {
     await navigator.clipboard.writeText(text)
-    ElMessage.success('恢复码已复制')
+    ElMessage.success(t('恢复码已复制'))
   } catch {
-    ElMessage.warning('复制失败，请手动选择文本复制')
+    ElMessage.warning(t('复制失败，请手动选择文本复制'))
   }
 }
 
 function downloadRecoveryCodes() {
   const content = [
-    'Keel 两步验证恢复码',
-    `账号：${auth.user?.username ?? ''}`,
-    `生成时间：${new Date().toLocaleString()}`,
+    t('Keel 两步验证恢复码'),
+    t('账号：{name}', { name: auth.user?.username ?? '' }),
+    t('生成时间：{time}', { time: new Date().toLocaleString() }),
     '',
     ...recoveryCodes.value,
     '',
-    '每个恢复码只能使用一次，请离线保存。',
+    t('每个恢复码只能使用一次，请离线保存。'),
   ].join('\n')
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -247,7 +283,7 @@ async function changePassword() {
   submitting.value = true
   try {
     await authApi.changePassword({ oldPassword: pwd.oldPassword, newPassword: pwd.newPassword })
-    ElMessage.success('密码已更新，下次登录请使用新密码')
+    ElMessage.success(t('密码已更新，下次登录请使用新密码'))
     pwd.oldPassword = ''
     pwd.newPassword = ''
     pwd.confirm = ''
@@ -262,8 +298,8 @@ async function changePassword() {
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">个人中心</h1>
-        <p class="page-desc">查看账号信息与安全设置</p>
+        <h1 class="page-title">{{ $t('个人中心') }}</h1>
+        <p class="page-desc">{{ $t('查看账号信息与安全设置') }}</p>
       </div>
     </div>
 
@@ -279,35 +315,35 @@ async function changePassword() {
 
         <dl class="kv">
           <div>
-            <dt>角色</dt>
+            <dt>{{ $t('角色') }}</dt>
             <dd>
               <el-tag v-for="r in auth.user?.roles ?? []" :key="r" type="primary" size="small">
-                {{ r }}
+                {{ $t(r) }}
               </el-tag>
-              <span v-if="!(auth.user?.roles ?? []).length" class="dim">未分配</span>
+              <span v-if="!(auth.user?.roles ?? []).length" class="dim">{{ $t('未分配') }}</span>
             </dd>
           </div>
           <div>
-            <dt>部门</dt>
+            <dt>{{ $t('部门') }}</dt>
             <dd>{{ auth.user?.deptName || '-' }}</dd>
           </div>
           <div>
-            <dt>邮箱</dt>
+            <dt>{{ $t('邮箱') }}</dt>
             <dd>{{ auth.user?.email || '-' }}</dd>
           </div>
           <div>
-            <dt>手机号</dt>
+            <dt>{{ $t('手机号') }}</dt>
             <dd class="num">{{ auth.user?.phone || '-' }}</dd>
           </div>
           <div>
-            <dt>最近登录</dt>
+            <dt>{{ $t('最近登录') }}</dt>
             <dd>{{ auth.user?.lastLoginAt ? fmtTime(auth.user.lastLoginAt) : '-' }}</dd>
           </div>
           <div>
-            <dt>双因素认证</dt>
+            <dt>{{ $t('双因素认证') }}</dt>
             <dd>
               <span class="status-dot" :class="auth.user?.totpEnabled ? 'is-on' : 'is-off'">
-                {{ auth.user?.totpEnabled ? '已开启' : '未开启' }}
+                {{ auth.user?.totpEnabled ? $t('已开启') : $t('未开启') }}
               </span>
             </dd>
           </div>
@@ -320,7 +356,7 @@ async function changePassword() {
           :style="{ '--lv-color': membership?.level?.color || 'var(--brand-500)' }"
         >
           <div class="card-head">
-            <h3>会员权益</h3>
+            <h3>{{ $t('会员权益') }}</h3>
             <span
               v-if="membership"
               class="member-state"
@@ -338,9 +374,9 @@ async function changePassword() {
               <div class="member-hero-lines">
                 <strong>{{ membership.level.name }}</strong>
                 <p>
-                  <template v-if="membership.daysLeft === -1">长期有效，无需续期</template>
+                  <template v-if="membership.daysLeft === -1">{{ $t('长期有效，无需续期') }}</template>
                   <template v-else>
-                    {{ membership.expireAt ? `${fmtDate(membership.expireAt)} 到期` : '' }}
+                    {{ membership.expireAt ? $t('{date} 到期', { date: fmtDate(membership.expireAt) }) : '' }}
                   </template>
                 </p>
               </div>
@@ -349,8 +385,8 @@ async function changePassword() {
             <div v-else class="member-hero is-empty">
               <div class="member-mark">—</div>
               <div class="member-hero-lines">
-                <strong>非会员</strong>
-                <p>联系管理员开通会员后即可享受对应权益</p>
+                <strong>{{ $t('非会员') }}</strong>
+                <p>{{ $t('联系管理员开通会员后即可享受对应权益') }}</p>
               </div>
             </div>
 
@@ -362,7 +398,7 @@ async function changePassword() {
             </div>
 
             <div v-if="membership && !membership.member && catalog.length" class="catalog">
-              <p class="catalog-title">可开通等级</p>
+              <p class="catalog-title">{{ $t('可开通等级') }}</p>
               <div
                 v-for="lv in catalog"
                 :key="lv.id"
@@ -371,7 +407,7 @@ async function changePassword() {
               >
                 <span class="catalog-dot" />
                 <span class="catalog-name">{{ lv.name }}</span>
-                <span class="catalog-meta">{{ lv.benefits?.length ?? 0 }} 项权益</span>
+                <span class="catalog-meta">{{ $t('{n} 项权益', { n: lv.benefits?.length ?? 0 }) }}</span>
               </div>
             </div>
           </div>
@@ -379,32 +415,31 @@ async function changePassword() {
 
         <section class="card totp-card">
           <div class="card-head">
-            <h3>两步验证</h3>
+            <h3>{{ $t('两步验证') }}</h3>
             <span class="status-dot" :class="auth.user?.totpEnabled ? 'is-on' : 'is-off'">
-              {{ auth.user?.totpEnabled ? '已开启' : '未开启' }}
+              {{ auth.user?.totpEnabled ? $t('已开启') : $t('未开启') }}
             </span>
           </div>
           <div class="card-body">
             <p class="totp-desc">
-              开启后登录需要额外输入认证器中的 6 位动态码。支持 Google
-              Authenticator、Microsoft Authenticator、Duo Mobile、Bitwarden、1Password、Authy。
+              {{ $t('开启后登录需要额外输入认证器中的 6 位动态码。支持 Google Authenticator、Microsoft Authenticator、Duo Mobile、Bitwarden、1Password、Authy。') }}
             </p>
 
             <div v-if="auth.user?.totpEnabled" class="totp-meta">
-              <span>恢复码剩余</span>
+              <span>{{ $t('恢复码剩余') }}</span>
               <strong class="num">{{ auth.user?.recoveryCodesLeft ?? 0 }} / 10</strong>
               <span v-if="(auth.user?.recoveryCodesLeft ?? 0) <= 2" class="totp-warn">
-                建议重新生成
+                {{ $t('建议重新生成') }}
               </span>
             </div>
 
             <div class="totp-actions">
               <template v-if="auth.user?.totpEnabled">
-                <el-button @click="openRegenerate">重新生成恢复码</el-button>
-                <el-button type="danger" plain @click="openDisable">关闭两步验证</el-button>
+                <el-button @click="openRegenerate">{{ $t('重新生成恢复码') }}</el-button>
+                <el-button type="danger" plain @click="openDisable">{{ $t('关闭两步验证') }}</el-button>
               </template>
               <el-button v-else type="primary" :icon="Key" @click="openSetup">
-                开启两步验证
+                {{ $t('开启两步验证') }}
               </el-button>
             </div>
           </div>
@@ -412,8 +447,8 @@ async function changePassword() {
 
         <section v-if="oauthProviders.length" class="card oauth-card">
           <div class="card-head">
-            <h3>第三方账号</h3>
-            <span class="dim">绑定后可直接使用该渠道登录</span>
+            <h3>{{ $t('第三方账号') }}</h3>
+            <span class="dim">{{ $t('绑定后可直接使用该渠道登录') }}</span>
           </div>
           <div class="card-body">
             <div v-for="p in oauthProviders" :key="p.name" class="oauth-row">
@@ -423,7 +458,7 @@ async function changePassword() {
                 <div>
                   <div class="oauth-label">{{ p.label }}</div>
                   <div class="dim">
-                    {{ boundOf(p.name) ? (boundOf(p.name)?.username || boundOf(p.name)?.email || '已绑定') : '未绑定' }}
+                    {{ boundOf(p.name) ? (boundOf(p.name)?.username || boundOf(p.name)?.email || $t('已绑定')) : $t('未绑定') }}
                   </div>
                 </div>
               </div>
@@ -434,31 +469,51 @@ async function changePassword() {
                 type="danger"
                 @click="unbind(p.name, boundOf(p.name)?.username || p.label)"
               >
-                解绑
+                {{ $t('解绑') }}
               </el-button>
-              <el-button v-else size="small" type="primary" plain @click="startBind(p)">绑定</el-button>
+              <el-button v-else size="small" type="primary" plain @click="startBind(p)">{{ $t('绑定') }}</el-button>
             </div>
           </div>
         </section>
 
         <section class="card">
-          <div class="card-head"><h3>修改密码</h3></div>
+          <div class="card-head"><h3>{{ $t('展示偏好') }}</h3></div>
+          <div class="card-body">
+            <el-form label-position="top">
+              <el-form-item :label="$t('语言')">
+                <el-select v-model="prefs.locale" style="width: 100%">
+                  <el-option v-for="opt in SUPPORTED_LOCALES" :key="opt.value" :label="opt.label" :value="opt.value" />
+                </el-select>
+              </el-form-item>
+              <el-form-item :label="$t('时区')">
+                <el-select v-model="prefs.timezone" style="width: 100%">
+                  <el-option v-for="z in TIMEZONES" :key="z.value" :label="z.label" :value="z.value" />
+                </el-select>
+              </el-form-item>
+              <el-button type="primary" :loading="prefsSaving" @click="savePrefs">{{ $t('保存偏好') }}</el-button>
+            </el-form>
+            <p class="tip">{{ $t('语言与时区影响界面文案与时间展示；浏览器本地选择会即时生效。') }}</p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h3>{{ $t('修改密码') }}</h3></div>
         <div class="card-body">
           <el-form ref="formRef" :model="pwd" :rules="rules" label-position="top">
-            <el-form-item label="当前密码" prop="oldPassword">
+            <el-form-item :label="$t('当前密码')" prop="oldPassword">
               <el-input v-model="pwd.oldPassword" type="password" show-password />
             </el-form-item>
-            <el-form-item label="新密码" prop="newPassword">
-              <el-input v-model="pwd.newPassword" type="password" show-password placeholder="8-64 位，含大小写与数字" />
+            <el-form-item :label="$t('新密码')" prop="newPassword">
+              <el-input v-model="pwd.newPassword" type="password" show-password :placeholder="$t('8-64 位，含大小写与数字')" />
             </el-form-item>
-            <el-form-item label="确认新密码" prop="confirm">
+            <el-form-item :label="$t('确认新密码')" prop="confirm">
               <el-input v-model="pwd.confirm" type="password" show-password />
             </el-form-item>
             <el-button type="primary" :loading="submitting" @click="changePassword">
-              更新密码
+              {{ $t('更新密码') }}
             </el-button>
           </el-form>
-          <p class="tip">修改密码后，其他设备上的登录状态不会被强制下线。</p>
+          <p class="tip">{{ $t('修改密码后，其他设备上的登录状态不会被强制下线。') }}</p>
         </div>
       </section>
       </div>
@@ -468,10 +523,10 @@ async function changePassword() {
     v-model="dialog.visible"
     :title="
       dialog.mode === 'setup'
-        ? '绑定认证器'
+        ? $t('绑定认证器')
         : dialog.mode === 'regen'
-          ? '重新生成恢复码'
-          : '关闭两步验证'
+          ? $t('重新生成恢复码')
+          : $t('关闭两步验证')
     "
     width="520px"
     :close-on-click-modal="false"
@@ -480,29 +535,28 @@ async function changePassword() {
     <div v-loading="dialog.loading" class="dlg">
       <!-- 第一步：扫码 -->
       <template v-if="dialog.mode === 'setup' && dialog.step === 1">
-        <p class="dlg-tip">用认证器扫描下方二维码，或手动录入密钥。</p>
+        <p class="dlg-tip">{{ $t('用认证器扫描下方二维码，或手动录入密钥。') }}</p>
         <div class="qr-wrap">
-          <img v-if="setup.qrCode" :src="setup.qrCode" alt="两步验证二维码" />
+          <img v-if="setup.qrCode" :src="setup.qrCode" :alt="$t('两步验证二维码')" />
         </div>
         <div class="secret-row">
           <code>{{ secretGroups }}</code>
           <el-button link type="primary" :icon="CopyDocument" @click="copySecret">
-            复制
+            {{ $t('复制') }}
           </el-button>
         </div>
         <p class="dlg-sub">
-          支持 Google Authenticator、Microsoft Authenticator、Duo Mobile、Bitwarden、
-          1Password、Authy 等，在应用内选择「添加账号 → 扫描二维码」即可。
+          {{ $t('支持 Google Authenticator、Microsoft Authenticator、Duo Mobile、Bitwarden、1Password、Authy 等，在应用内选择「添加账号 → 扫描二维码」即可。') }}
         </p>
         <div class="dlg-actions">
-          <el-button @click="dialog.visible = false">取消</el-button>
-          <el-button type="primary" @click="dialog.step = 2">下一步</el-button>
+          <el-button @click="dialog.visible = false">{{ $t('取消') }}</el-button>
+          <el-button type="primary" @click="dialog.step = 2">{{ $t('下一步') }}</el-button>
         </div>
       </template>
 
       <!-- 第二步：确认动态码 -->
       <template v-else-if="dialog.step === 2">
-        <p class="dlg-tip">输入认证器中当前显示的 6 位动态码，确认设备已正确绑定。</p>
+        <p class="dlg-tip">{{ $t('输入认证器中当前显示的 6 位动态码，确认设备已正确绑定。') }}</p>
         <OtpInput
           v-model="otp"
           class="otp-center"
@@ -510,12 +564,12 @@ async function changePassword() {
           :disabled="dialog.loading"
           @complete="submitOtp"
         />
-        <p class="dlg-sub">若反复提示验证码错误，请检查手机系统时间是否已开启自动同步。</p>
+        <p class="dlg-sub">{{ $t('若反复提示验证码错误，请检查手机系统时间是否已开启自动同步。') }}</p>
         <div class="dlg-actions">
-          <el-button v-if="dialog.mode === 'setup'" @click="dialog.step = 1">上一步</el-button>
-          <el-button @click="dialog.visible = false">取消</el-button>
+          <el-button v-if="dialog.mode === 'setup'" @click="dialog.step = 1">{{ $t('上一步') }}</el-button>
+          <el-button @click="dialog.visible = false">{{ $t('取消') }}</el-button>
           <el-button type="primary" :loading="dialog.loading" @click="submitOtp">
-            确认
+            {{ $t('确认') }}
           </el-button>
         </div>
       </template>
@@ -523,36 +577,36 @@ async function changePassword() {
       <!-- 第三步：恢复码 -->
       <template v-else-if="dialog.step === 3">
         <p class="dlg-tip">
-          请立即保存以下恢复码。手机丢失时可代替动态码登录，每个恢复码只能使用一次。
+          {{ $t('请立即保存以下恢复码。手机丢失时可代替动态码登录，每个恢复码只能使用一次。') }}
         </p>
         <div class="codes">
           <code v-for="c in recoveryCodes" :key="c">{{ c }}</code>
         </div>
         <div class="code-actions">
-          <el-button :icon="CopyDocument" @click="copyRecoveryCodes">复制全部</el-button>
-          <el-button :icon="Download" @click="downloadRecoveryCodes">下载 txt</el-button>
+          <el-button :icon="CopyDocument" @click="copyRecoveryCodes">{{ $t('复制全部') }}</el-button>
+          <el-button :icon="Download" @click="downloadRecoveryCodes">{{ $t('下载 txt') }}</el-button>
         </div>
-        <p class="dlg-warn">关闭窗口后将无法再次查看，只能重新生成。</p>
+        <p class="dlg-warn">{{ $t('关闭窗口后将无法再次查看，只能重新生成。') }}</p>
         <div class="dlg-actions">
-          <el-button type="primary" @click="dialog.visible = false">我已保存</el-button>
+          <el-button type="primary" @click="dialog.visible = false">{{ $t('我已保存') }}</el-button>
         </div>
       </template>
 
       <!-- 关闭 -->
       <template v-else>
-        <p class="dlg-tip">关闭后登录将不再校验动态码，账号安全性会下降。</p>
+        <p class="dlg-tip">{{ $t('关闭后登录将不再校验动态码，账号安全性会下降。') }}</p>
         <el-input
           v-model="disableCode"
           size="large"
           maxlength="32"
-          placeholder="6 位动态码，或 10 位恢复码"
+          :placeholder="$t('6 位动态码，或 10 位恢复码')"
           @keyup.enter="submitDisable"
         />
-        <p class="dlg-sub">设备丢失时可用恢复码关闭；两者都没有时，请联系管理员重置。</p>
+        <p class="dlg-sub">{{ $t('设备丢失时可用恢复码关闭；两者都没有时，请联系管理员重置。') }}</p>
         <div class="dlg-actions">
-          <el-button @click="dialog.visible = false">取消</el-button>
+          <el-button @click="dialog.visible = false">{{ $t('取消') }}</el-button>
           <el-button type="danger" :loading="dialog.loading" @click="submitDisable">
-            确认关闭
+            {{ $t('确认关闭') }}
           </el-button>
         </div>
       </template>

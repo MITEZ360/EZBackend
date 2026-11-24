@@ -5,17 +5,20 @@ import "time"
 // User 系统用户。
 type User struct {
 	Base
-	Username    string     `gorm:"size:64;uniqueIndex;not null" json:"username"`
-	Password    string     `gorm:"size:128;not null" json:"-"`
-	Nickname    string     `gorm:"size:64" json:"nickname"`
-	RealName    string     `gorm:"size:64" json:"realName,omitempty"`
-	Email       string     `gorm:"size:128;index" json:"email,omitempty"`
-	Phone       string     `gorm:"size:32;index" json:"phone,omitempty"`
-	Avatar      string     `gorm:"size:255" json:"avatar,omitempty"`
-	Gender      int8       `gorm:"default:0" json:"gender"`
-	DeptID      string     `gorm:"size:32;index" json:"deptId,omitempty"`
-	Status      int8       `gorm:"index" json:"status"`
-	IsSuper     bool       `gorm:"default:false" json:"isSuper"`
+	Username string `gorm:"size:64;uniqueIndex;not null" json:"username"`
+	Password string `gorm:"size:128;not null" json:"-"`
+	Nickname string `gorm:"size:64" json:"nickname"`
+	RealName string `gorm:"size:64" json:"realName,omitempty"`
+	Email    string `gorm:"size:128;index" json:"email,omitempty"`
+	Phone    string `gorm:"size:32;index" json:"phone,omitempty"`
+	Avatar   string `gorm:"size:255" json:"avatar,omitempty"`
+	Gender   int8   `gorm:"default:0" json:"gender"`
+	DeptID   string `gorm:"size:32;index" json:"deptId,omitempty"`
+	Status   int8   `gorm:"index" json:"status"`
+	IsSuper  bool   `gorm:"default:false" json:"isSuper"`
+	// Locale/Timezone 是用户级展示偏好；空值表示跟随系统默认。
+	Locale      string     `gorm:"size:16;default:'zh-CN'" json:"locale,omitempty"`
+	Timezone    string     `gorm:"size:64;default:'Asia/Shanghai'" json:"timezone,omitempty"`
 	Remark      string     `gorm:"size:255" json:"remark,omitempty"`
 	LastLoginAt *time.Time `json:"lastLoginAt,omitempty"`
 	LastLoginIP string     `gorm:"size:64" json:"lastLoginIp,omitempty"`

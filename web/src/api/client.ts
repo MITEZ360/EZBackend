@@ -4,6 +4,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios'
 import { ElMessage } from 'element-plus'
+import { translate } from '@/i18n'
 
 /** 后端统一响应体 */
 export interface Envelope<T = unknown> {
@@ -64,6 +65,12 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn
 }
 
+/** 当前界面语言由 i18n 模块注入，避免 api/client 与 i18n 循环依赖 */
+let localeProvider: (() => string) | null = null
+export function setLocaleProvider(fn: () => string) {
+  localeProvider = fn
+}
+
 const http = axios.create({
   baseURL: '/api/v1',
   timeout: 20000,
@@ -76,6 +83,10 @@ http.interceptors.request.use((cfg: RetriableConfig) => {
     cfg.headers.Authorization = `Bearer ${token}`
     cfg._token = token
   }
+  // 后端据此做错误文案协商；X-Locale 优先于 Accept-Language。
+  const locale = localeProvider?.() ?? 'zh-CN'
+  cfg.headers['X-Locale'] = locale
+  cfg.headers['Accept-Language'] = locale
   return cfg
 })
 
@@ -132,11 +143,17 @@ http.interceptors.response.use(
       }
       tokenStore.clear()
       onUnauthorized?.()
-      return Promise.reject(new ApiError('登录已过期，请重新登录', 40100, 401))
+      return Promise.reject(new ApiError(translate('登录已过期，请重新登录'), 40100, 401))
     }
 
+    // 后端已按协商语言返回文案；这里只兜底网络/HTTP 层面的本地文案。
+    const fallback = status
+      ? translate('请求失败（{status}）', { status })
+      : translate('网络异常，请检查服务是否可用')
+    // 服务端目录未覆盖的少量文案再由前端目录兜底；已翻译的英文原样透传。
+    const message = body?.message ? translate(body.message) : fallback
     const err = new ApiError(
-      body?.message || (status ? `请求失败（${status}）` : '网络异常，请检查服务是否可用'),
+      message,
       body?.code ?? status * 100,
       status,
       body?.data,

@@ -15,13 +15,13 @@ const children = computed(() => (props.item.children ?? []).filter((c) => c.type
   <el-sub-menu v-if="children.length" :index="item.path || item.id">
     <template #title>
       <el-icon><component :is="icon" /></el-icon>
-      <span>{{ item.name }}</span>
+      <span>{{ $t(item.name) }}</span>
     </template>
     <SideMenuItem v-for="child in children" :key="child.id" :item="child" />
   </el-sub-menu>
 
   <el-menu-item v-else :index="item.path || item.id">
     <el-icon><component :is="icon" /></el-icon>
-    <template #title>{{ item.name }}</template>
+    <template #title>{{ $t(item.name) }}</template>
   </el-menu-item>
 </template>

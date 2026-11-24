@@ -62,4 +62,5 @@ export const logApi = {
 export const monitorApi = {
   system: () => api.get<SystemInfo>('/monitor/system'),
   routes: () => api.get<RouteInfo[]>('/monitor/routes'),
+  restart: () => api.post<void>('/monitor/restart'),
 }

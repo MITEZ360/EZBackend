@@ -5,6 +5,7 @@ import (
 
 	"github.com/keel-framework/keel/internal/middleware"
 	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/response"
 )
 
@@ -25,7 +26,7 @@ func (s *Service) RequireBenefit(key string) gin.HandlerFunc {
 			return
 		}
 		if !ok {
-			response.Fail(c, errs.Forbidden("该操作需要会员权益："+key))
+			response.Fail(c, errs.Forbidden(i18n.Tf(c.Request.Context(), "该操作需要会员权益：{0}", key)))
 			c.Abort()
 			return
 		}

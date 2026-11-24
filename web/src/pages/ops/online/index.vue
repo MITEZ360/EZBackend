@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { logApi } from '@/api/ops'
@@ -7,6 +8,7 @@ import type { OnlineSessionRow } from '@/api/types'
 import { fmtDuration, fmtTime, fromNow } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 
 const rows = ref<OnlineSessionRow[]>([])
@@ -39,16 +41,18 @@ async function kick(row: OnlineSessionRow) {
   try {
     await ElMessageBox.confirm(
       self
-        ? '这是你自己当前的会话，强制下线后需要重新登录。确定继续吗？'
-        : `强制下线后「${row.nickname || row.username}」需要重新登录。确定继续吗？`,
-      '强制下线',
-      { confirmButtonText: '下线', cancelButtonText: '取消', type: 'warning' },
+        ? t('这是你自己当前的会话，强制下线后需要重新登录。确定继续吗？')
+        : t('强制下线后「{name}」需要重新登录。确定继续吗？', {
+            name: row.nickname || row.username,
+          }),
+      t('强制下线'),
+      { confirmButtonText: t('下线'), cancelButtonText: t('取消'), type: 'warning' },
     )
   } catch {
     return
   }
   await logApi.kick(row.id)
-  ElMessage.success('已强制下线')
+  ElMessage.success(t('已强制下线'))
   load()
 }
 
@@ -64,13 +68,13 @@ onMounted(load)
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="page-title">在线用户</h1>
-        <p class="page-desc">当前持有有效会话的登录用户，可强制下线以回收访问权限</p>
+        <h1 class="page-title">{{ $t('在线用户') }}</h1>
+        <p class="page-desc">{{ $t('当前持有有效会话的登录用户，可强制下线以回收访问权限') }}</p>
       </div>
       <div class="page-actions">
         <span class="live-badge">
           <span class="live-dot" />
-          <b class="num">{{ total }}</b> 人在线
+          <b class="num">{{ total }}</b> {{ $t('人在线') }}
         </span>
       </div>
     </div>
@@ -80,29 +84,29 @@ onMounted(load)
         <div class="toolbar-left">
           <el-input
             v-model="query.keyword"
-            placeholder="搜索昵称 / 账号 / IP"
+            :placeholder="$t('搜索昵称 / 账号 / IP')"
             :prefix-icon="Search"
             clearable
             style="width: 250px"
             @keyup.enter="reload"
             @clear="reload"
           />
-          <el-button @click="reload">查询</el-button>
+          <el-button @click="reload">{{ $t('查询') }}</el-button>
         </div>
         <div class="toolbar-right">
-          <el-button :icon="Refresh" circle title="刷新" @click="load" />
+          <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
       <el-table v-loading="loading" :data="rows" row-key="id">
-        <el-table-column label="用户" min-width="200">
+        <el-table-column :label="$t('用户')" min-width="200">
           <template #default="{ row }">
             <div class="user-cell">
               <span class="avatar-dot">{{ (row.nickname || row.username || '?').slice(0, 1) }}</span>
               <div class="u-lines">
                 <span class="u-name">
                   {{ row.nickname || row.username }}
-                  <em v-if="row.id === auth.user?.sessionId" class="badge">当前会话</em>
+                  <em v-if="row.id === auth.user?.sessionId" class="badge">{{ $t('当前会话') }}</em>
                 </span>
                 <span class="u-sub">@{{ row.username }}</span>
               </div>
@@ -116,21 +120,21 @@ onMounted(load)
           </template>
         </el-table-column>
 
-        <el-table-column label="终端" min-width="180">
+        <el-table-column :label="$t('终端')" min-width="180">
           <template #default="{ row }">
             <div class="term">{{ row.browser || '—' }}</div>
             <div class="term dim">{{ row.os || '—' }}</div>
           </template>
         </el-table-column>
 
-        <el-table-column label="登录时间" width="160">
+        <el-table-column :label="$t('登录时间')" width="160">
           <template #default="{ row }">
-            <div class="cell-time" :title="fmtTime(row.loginAt)">已在线 {{ lasting(row.loginAt) }}</div>
+            <div class="cell-time" :title="fmtTime(row.loginAt)">{{ $t('已在线 {duration}', { duration: lasting(row.loginAt) }) }}</div>
             <div class="cell-sub num">{{ fmtTime(row.loginAt, false) }}</div>
           </template>
         </el-table-column>
 
-        <el-table-column label="最后活跃" width="130">
+        <el-table-column :label="$t('最后活跃')" width="130">
           <template #default="{ row }">
             <span class="muted fs-12" :title="fmtTime(row.lastSeenAt)">{{ fromNow(row.lastSeenAt) }}</span>
           </template>
@@ -139,18 +143,18 @@ onMounted(load)
         <el-table-column label="" width="110" align="right" fixed="right">
           <template #default="{ row }">
             <el-button v-perm="'ops:online:list'" link type="danger" @click="kick(row)">
-              强制下线
+              {{ $t('强制下线') }}
             </el-button>
           </template>
         </el-table-column>
 
         <template #empty>
-          <div class="table-empty">当前没有在线会话</div>
+          <div class="table-empty">{{ $t('当前没有在线会话') }}</div>
         </template>
       </el-table>
 
       <div v-if="total > query.page_size" class="pager">
-        <span class="total">共 {{ total }} 个会话</span>
+        <span class="total">{{ $t('共 {count} 个会话', { count: total }) }}</span>
         <el-pagination
           v-model:current-page="query.page"
           :page-size="query.page_size"

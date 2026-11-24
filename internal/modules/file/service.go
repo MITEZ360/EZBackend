@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -22,6 +21,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/idgen"
 	"github.com/keel-framework/keel/internal/platform/storage"
 	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/query"
 	"github.com/keel-framework/keel/pkg/utils"
 )
@@ -60,7 +60,7 @@ func (s *Service) Upload(ctx context.Context, fh *multipart.FileHeader, uploader
 		maxSize = 20 << 20
 	}
 	if fh.Size > maxSize {
-		return nil, errs.BadRequest(fmt.Sprintf("文件大小超过限制（最大 %s）", utils.FormatBytes(maxSize)))
+		return nil, errs.BadRequest(i18n.Tf(ctx, "文件大小超过限制（最大 {0}）", utils.FormatBytes(maxSize)))
 	}
 	ext := strings.ToLower(filepath.Ext(fh.Filename))
 	allow := s.cfg.Storage.AllowExt
@@ -75,7 +75,7 @@ func (s *Service) Upload(ctx context.Context, fh *multipart.FileHeader, uploader
 		}
 	}
 	if !ok {
-		return nil, errs.BadRequest("不支持的文件类型: " + ext)
+		return nil, errs.BadRequest(i18n.Tf(ctx, "不支持的文件类型: {0}", ext))
 	}
 
 	src, err := fh.Open()

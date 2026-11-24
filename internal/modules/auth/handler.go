@@ -223,6 +223,36 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	response.OK(c, gin.H{"message": "资料已更新"})
 }
 
+// UpdatePreferences 保存语言与时区偏好。
+// KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
+// @Summary UpdatePreferences
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} false "请求参数"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 429 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/auth/preferences [put]
+// KE:SWAGGER-END
+func (h *Handler) UpdatePreferences(c *gin.Context) {
+	var in UpdatePreferencesInput
+	if !httpx.BindJSON(c, &in) {
+		return
+	}
+	if err := h.svc.UpdatePreferences(c.Request.Context(), middleware.UserID(c), &in); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"message": "偏好已更新"})
+}
+
 // ChangePassword 修改密码。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary ChangePassword

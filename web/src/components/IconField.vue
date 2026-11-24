@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, type UploadRequestOptions } from 'element-plus'
 import { Delete, Upload } from '@element-plus/icons-vue'
 import { fileApi } from '@/api/ops'
@@ -22,6 +23,8 @@ const emit = defineEmits<{
   'update:color': [value: string]
 }>()
 
+const { t } = useI18n()
+
 // 与会员等级共用一套色板，避免模块间出现两套冲突的预设色
 const PRESETS = ['#8A94A6', '#C08A2E', '#6D5BD0', '#2E90FA', '#12B76A', '#E0556B']
 const uploading = ref(false)
@@ -31,11 +34,11 @@ const initial = computed(() => (props.fallback || '?').trim().slice(0, 1).toUppe
 async function doUpload(options: UploadRequestOptions) {
   const file = options.file
   if (!file.type.startsWith('image/')) {
-    ElMessage.error('请选择图片文件')
+    ElMessage.error(t('请选择图片文件'))
     return
   }
   if (file.size > 512 * 1024) {
-    ElMessage.error('图标建议不超过 512KB')
+    ElMessage.error(t('图标建议不超过 512KB'))
     return
   }
   uploading.value = true
@@ -44,7 +47,7 @@ async function doUpload(options: UploadRequestOptions) {
     form.append('file', file)
     const res = await fileApi.upload(form)
     emit('update:icon', res.url)
-    ElMessage.success('图标已上传')
+    ElMessage.success(t('图标已上传'))
   } finally {
     uploading.value = false
   }
@@ -65,16 +68,16 @@ function clear() {
     <div class="ops">
       <div class="row">
         <el-upload :show-file-list="false" accept="image/*" :http-request="doUpload">
-          <el-button size="small" :icon="Upload" :loading="uploading">上传图标</el-button>
+          <el-button size="small" :icon="Upload" :loading="uploading">{{ $t('上传图标') }}</el-button>
         </el-upload>
         <el-button v-if="icon" size="small" link type="danger" :icon="Delete" @click="clear">
-          移除
+          {{ $t('移除') }}
         </el-button>
       </div>
       <el-input
         :model-value="icon"
         size="small"
-        placeholder="也可直接填写图片地址"
+        :placeholder="$t('也可直接填写图片地址')"
         maxlength="512"
         @update:model-value="emit('update:icon', $event)"
       />

@@ -73,6 +73,17 @@
     "type Options struct",
     "type Stats struct"
   ],
+  "pkg/i18n/i18n.go": [
+    "func FromAcceptLanguage(header string) string",
+    "func FromContext(ctx context.Context) string",
+    "func Locale(c *gin.Context) string",
+    "func Middleware(defaultLocale string) gin.HandlerFunc",
+    "func Normalize(tag string) string",
+    "func T(c *gin.Context, msg string) string",
+    "func Tf(ctx context.Context, template string, args ...any) string",
+    "func Translate(locale, msg string) string",
+    "func WithLocale(ctx context.Context, locale string) context.Context"
+  ],
   "pkg/query/query.go": [
     "func (p *Params) Filter(db *gorm.DB, allowed map[string]string) *gorm.DB",
     "func (p *Params) Offset() int { return (p.Page - 1) * p.PageSize }",

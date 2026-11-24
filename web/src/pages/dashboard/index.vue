@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Connection, DataLine, Refresh, Timer, User } from '@element-plus/icons-vue'
 import TrendChart from '@/components/TrendChart.vue'
 import { dashboardApi, type Overview } from '@/api/dashboard'
 import { fmtTime, fromNow } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const data = ref<Overview | null>(null)
 const loading = ref(false)
@@ -23,30 +25,35 @@ const statCards = computed(() => {
   const s = data.value?.stats
   return [
     {
-      label: '用户总数',
+      label: t('用户总数'),
       value: s?.userCount ?? 0,
-      foot: `活跃 ${s?.activeUsers ?? 0} 人`,
+      foot: t('活跃 {count} 人', { count: s?.activeUsers ?? 0 }),
       icon: User,
       tone: 'indigo',
     },
     {
-      label: '今日登录',
+      label: t('今日登录'),
       value: s?.todayLogins ?? 0,
-      foot: s?.loginFailures ? `失败 ${s.loginFailures} 次` : '无失败记录',
+      foot: s?.loginFailures
+        ? t('失败 {count} 次', { count: s.loginFailures })
+        : t('无失败记录'),
       icon: Timer,
       tone: 'emerald',
     },
     {
-      label: '在线用户',
+      label: t('在线用户'),
       value: s?.onlineCount ?? 0,
-      foot: `会话实时统计`,
+      foot: t('会话实时统计'),
       icon: Connection,
       tone: 'amber',
     },
     {
-      label: '今日操作',
+      label: t('今日操作'),
       value: s?.todayOps ?? 0,
-      foot: `文件 ${s?.fileCount ?? 0} 个 · 部门 ${s?.deptCount ?? 0} 个`,
+      foot: t('文件 {fileCount} 个 · 部门 {deptCount} 个', {
+        fileCount: s?.fileCount ?? 0,
+        deptCount: s?.deptCount ?? 0,
+      }),
       icon: DataLine,
       tone: 'violet',
     },
@@ -55,17 +62,22 @@ const statCards = computed(() => {
 
 const greeting = computed(() => {
   const h = new Date().getHours()
-  if (h < 6) return '夜深了'
-  if (h < 12) return '上午好'
-  if (h < 14) return '中午好'
-  if (h < 18) return '下午好'
-  return '晚上好'
+  if (h < 6) return t('夜深了')
+  if (h < 12) return t('上午好')
+  if (h < 14) return t('中午好')
+  if (h < 18) return t('下午好')
+  return t('晚上好')
 })
 
 const today = computed(() => {
   const d = new Date()
-  const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
-  return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 星期${week}`
+  const week = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][d.getDay()]
+  return t('{year} 年 {month} 月 {day} 日 · {week}', {
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+    week: t(week),
+  })
 })
 
 const deptTotal = computed(() =>
@@ -79,11 +91,11 @@ onMounted(load)
   <div class="page" v-loading="loading">
     <div class="welcome">
       <div>
-        <h1 class="page-title">{{ greeting }}，{{ auth.displayName }}</h1>
-        <p class="page-desc">{{ today }} · 所有服务运行正常</p>
+        <h1 class="page-title">{{ $t('{greeting}，{name}', { greeting, name: auth.displayName }) }}</h1>
+        <p class="page-desc">{{ today }} · {{ $t('所有服务运行正常') }}</p>
       </div>
       <div class="page-actions">
-        <el-button :icon="Refresh" @click="load">刷新数据</el-button>
+        <el-button :icon="Refresh" @click="load">{{ $t('刷新数据') }}</el-button>
       </div>
     </div>
 
@@ -106,12 +118,12 @@ onMounted(load)
       <section class="card chart-card">
         <div class="card-head">
           <div>
-            <h3>近 7 日活跃趋势</h3>
-            <p class="sub">登录与写操作按天统计</p>
+            <h3>{{ $t('近 7 日活跃趋势') }}</h3>
+            <p class="sub">{{ $t('登录与写操作按天统计') }}</p>
           </div>
           <div class="legend">
-            <span><i class="k k-login" />登录</span>
-            <span><i class="k k-ops" />操作</span>
+            <span><i class="k k-login" />{{ $t('登录') }}</span>
+            <span><i class="k k-ops" />{{ $t('操作') }}</span>
           </div>
         </div>
         <div class="card-body">
@@ -121,8 +133,8 @@ onMounted(load)
 
       <section class="card">
         <div class="card-head">
-          <h3>部门人员分布</h3>
-          <span class="sub">共 {{ deptTotal }} 人</span>
+          <h3>{{ $t('部门人员分布') }}</h3>
+          <span class="sub">{{ $t('共 {count} 人', { count: deptTotal }) }}</span>
         </div>
         <div class="card-body dept-list">
           <div v-for="d in data?.userDeptDist ?? []" :key="d.name" class="dept-row">
@@ -135,9 +147,9 @@ onMounted(load)
             </div>
           </div>
           <div v-if="(data?.userDeptDist ?? []).length" class="dept-total">
-            共 {{ deptTotal }} 人，分布在 {{ (data?.userDeptDist ?? []).length }} 个部门
+            {{ $t('共 {count} 人，分布在 {deptCount} 个部门', { count: deptTotal, deptCount: (data?.userDeptDist ?? []).length }) }}
           </div>
-          <el-empty v-else description="暂无部门数据" :image-size="60" />
+          <el-empty v-else :description="$t('暂无部门数据')" :image-size="60" />
         </div>
       </section>
     </div>
@@ -146,7 +158,7 @@ onMounted(load)
     <div class="grid-sub">
       <section class="card">
         <div class="card-head">
-          <h3>最近登录</h3>
+          <h3>{{ $t('最近登录') }}</h3>
         </div>
         <ul class="login-list">
           <li v-for="r in (data?.recent ?? []).slice(0, 6)" :key="r.id">
@@ -157,18 +169,18 @@ onMounted(load)
             </div>
             <div class="login-right">
               <span class="tag-ok" :class="{ fail: r.status !== 1 }">
-                {{ r.status === 1 ? '成功' : '失败' }}
+                {{ r.status === 1 ? $t('成功') : $t('失败') }}
               </span>
               <time :title="fmtTime(r.createdAt)">{{ fromNow(r.createdAt) }}</time>
             </div>
           </li>
-          <li v-if="!(data?.recent ?? []).length" class="empty">暂无记录</li>
+          <li v-if="!(data?.recent ?? []).length" class="empty">{{ $t('暂无记录') }}</li>
         </ul>
       </section>
 
       <section class="card">
         <div class="card-head">
-          <h3>通知公告</h3>
+          <h3>{{ $t('通知公告') }}</h3>
         </div>
         <ul class="notice-list">
           <li v-for="n in (data?.notices ?? []).slice(0, 4)" :key="n.id">
@@ -179,7 +191,7 @@ onMounted(load)
               <time>{{ fromNow(n.publishAt || n.createdAt) }}</time>
             </div>
           </li>
-          <li v-if="!(data?.notices ?? []).length" class="empty">暂无公告</li>
+          <li v-if="!(data?.notices ?? []).length" class="empty">{{ $t('暂无公告') }}</li>
         </ul>
       </section>
     </div>

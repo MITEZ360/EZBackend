@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 
 	"github.com/keel-framework/keel/internal/model"
 	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/query"
 	"github.com/keel-framework/keel/pkg/utils"
 )
@@ -56,7 +56,7 @@ type LevelInput struct {
 	Benefits    []model.Benefit `json:"benefits" label:"权益"`
 }
 
-func (in *LevelInput) normalize() error {
+func (in *LevelInput) normalize(ctx context.Context) error {
 	in.Code = strings.TrimSpace(in.Code)
 	in.Name = strings.TrimSpace(in.Name)
 	in.Description = strings.TrimSpace(in.Description)
@@ -77,10 +77,10 @@ func (in *LevelInput) normalize() error {
 			continue // 前端表格里的空行直接忽略
 		}
 		if !benefitPattern.MatchString(b.Key) {
-			return errs.BadRequest("权益标识「" + b.Key + "」不合法，需为小写字母开头的字母、数字、下划线或点")
+			return errs.BadRequest(i18n.Tf(ctx, "权益标识「{0}」不合法，需为小写字母开头的字母、数字、下划线或点", b.Key))
 		}
 		if seen[b.Key] {
-			return errs.BadRequest("权益标识「" + b.Key + "」重复")
+			return errs.BadRequest(i18n.Tf(ctx, "权益标识「{0}」重复", b.Key))
 		}
 		if b.Label == "" {
 			b.Label = b.Key
@@ -155,7 +155,7 @@ func (s *Service) Catalog(ctx context.Context) ([]*model.MembershipLevel, error)
 
 // Create 新增等级。
 func (s *Service) Create(ctx context.Context, in *LevelInput) (*model.MembershipLevel, error) {
-	if err := in.normalize(); err != nil {
+	if err := in.normalize(ctx); err != nil {
 		return nil, err
 	}
 	var n int64
@@ -164,7 +164,7 @@ func (s *Service) Create(ctx context.Context, in *LevelInput) (*model.Membership
 		return nil, err
 	}
 	if n > 0 {
-		return nil, errs.Conflict("等级编码「" + in.Code + "」已被使用")
+		return nil, errs.Conflict(i18n.Tf(ctx, "等级编码「{0}」已被使用", in.Code))
 	}
 	lv := &model.MembershipLevel{
 		Code: in.Code, Name: in.Name, Rank: in.Rank,
@@ -177,7 +177,7 @@ func (s *Service) Create(ctx context.Context, in *LevelInput) (*model.Membership
 	}
 	if err := s.db.WithContext(ctx).Select("*").Create(lv).Error; err != nil {
 		if isUniqueViolation(err) {
-			return nil, errs.Conflict("等级编码「" + in.Code + "」已被使用")
+			return nil, errs.Conflict(i18n.Tf(ctx, "等级编码「{0}」已被使用", in.Code))
 		}
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func (s *Service) Create(ctx context.Context, in *LevelInput) (*model.Membership
 
 // Update 更新等级。
 func (s *Service) Update(ctx context.Context, id string, in *LevelInput) error {
-	if err := in.normalize(); err != nil {
+	if err := in.normalize(ctx); err != nil {
 		return err
 	}
 	var lv model.MembershipLevel
@@ -200,7 +200,7 @@ func (s *Service) Update(ctx context.Context, id string, in *LevelInput) error {
 			return err
 		}
 		if n > 0 {
-			return errs.Conflict("等级编码「" + in.Code + "」已被使用")
+			return errs.Conflict(i18n.Tf(ctx, "等级编码「{0}」已被使用", in.Code))
 		}
 	}
 	benefits := in.Benefits
@@ -221,7 +221,7 @@ func (s *Service) Update(ctx context.Context, id string, in *LevelInput) error {
 			"color": in.Color, "benefits": string(encoded),
 		}).Error
 	if err != nil && isUniqueViolation(err) {
-		return errs.Conflict("等级编码「" + in.Code + "」已被使用")
+		return errs.Conflict(i18n.Tf(ctx, "等级编码「{0}」已被使用", in.Code))
 	}
 	return err
 }
@@ -238,7 +238,7 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		return err
 	}
 	if n > 0 {
-		return errs.Conflict("仍有 " + strconv.FormatInt(n, 10) + " 个用户属于该等级，请先调整他们的等级或将等级停用")
+		return errs.Conflict(i18n.Tf(ctx, "仍有 {0} 个用户属于该等级，请先调整他们的等级或将等级停用", n))
 	}
 	return s.db.WithContext(ctx).Delete(&model.MembershipLevel{}, "id = ?", id).Error
 }
@@ -253,19 +253,20 @@ type GrantInput struct {
 
 // Grant 给用户开通或续费会员，返回最新会员状态。
 func (s *Service) Grant(ctx context.Context, userID string, in *GrantInput) (*model.MembershipSnapshot, error) {
+	db := s.db.WithContext(ctx)
 	if strings.TrimSpace(userID) == "" {
 		return nil, errs.BadRequest("请选择用户")
 	}
 	var u model.User
-	if err := s.db.WithContext(ctx).First(&u, "id = ?", userID).Error; err != nil {
+	if err := db.First(&u, "id = ?", userID).Error; err != nil {
 		return nil, errs.NotFound("用户不存在")
 	}
 	var lv model.MembershipLevel
-	if err := s.db.WithContext(ctx).First(&lv, "id = ?", in.LevelID).Error; err != nil {
+	if err := db.First(&lv, "id = ?", in.LevelID).Error; err != nil {
 		return nil, errs.NotFound("会员等级不存在")
 	}
 	if !lv.Active() {
-		return nil, errs.BadRequest("等级「" + lv.Name + "」已停用，不能开通")
+		return nil, errs.BadRequest(i18n.Tf(ctx, "等级「{0}」已停用，不能开通", lv.Name))
 	}
 
 	now := time.Now()
@@ -284,7 +285,7 @@ func (s *Service) Grant(ctx context.Context, userID string, in *GrantInput) (*mo
 		expire = &extended
 	}
 
-	err = s.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).
+	err = db.Model(&model.User{}).Where("id = ?", userID).
 		Updates(map[string]any{
 			"membership_level_id":  lv.ID,
 			"membership_start_at":  startAt,
