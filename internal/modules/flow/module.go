@@ -26,20 +26,23 @@ func init() {
 			&model.FlowRecord{}, &model.FlowDelegate{},
 		},
 		Menus: []modulekit.Menu{
-			modulekit.DirSystem,
-			{ID: "m_flow_design", Parent: "m_system", Name: "流程设计", Type: model.MenuPage,
-				Path: "/workflow/design", Icon: "cluster", Perm: "flow:def:list", Sort: 30},
+			// 流程中心是模块私有目录：路径前缀与页面一致，模块被裁掉后
+			// 目录与四个页面一起消失，不会在系统管理里留下孤立条目。
+			{ID: "m_workflow", Name: "流程中心", Type: model.MenuDir, Path: "/workflow", Icon: "flow", Sort: 15},
+			{ID: "m_flow_design", Parent: "m_workflow", Name: "流程设计", Type: model.MenuPage,
+				Path: "/workflow/design", Icon: "flow", Perm: "flow:def:list", Sort: 1},
 			{ID: "m_flow_def_create", Parent: "m_flow_design", Name: "新建流程", Type: model.MenuButton, Perm: "flow:def:create"},
 			{ID: "m_flow_def_edit", Parent: "m_flow_design", Name: "编辑流程", Type: model.MenuButton, Perm: "flow:def:update"},
-			{ID: "m_flow_instances", Parent: "m_system", Name: "我发起的", Type: model.MenuPage,
-				Path: "/workflow/instances", Icon: "file-text", Perm: "flow:instance:list", Sort: 31},
-			{ID: "m_flow_todo", Parent: "m_system", Name: "待办审批", Type: model.MenuPage,
-				Path: "/workflow/tasks", Icon: "bell", Perm: "flow:task:list", Sort: 32},
-			{ID: "m_flow_delegates", Parent: "m_system", Name: "审批委托", Type: model.MenuPage,
-				Path: "/workflow/delegates", Icon: "route", Perm: "flow:delegate:list", Sort: 33},
+			{ID: "m_flow_instances", Parent: "m_workflow", Name: "我发起的", Type: model.MenuPage,
+				Path: "/workflow/instances", Icon: "file-text", Perm: "flow:instance:list", Sort: 2},
+			{ID: "m_flow_todo", Parent: "m_workflow", Name: "待办审批", Type: model.MenuPage,
+				Path: "/workflow/tasks", Icon: "bell", Perm: "flow:task:list", Sort: 3},
+			{ID: "m_flow_delegates", Parent: "m_workflow", Name: "审批委托", Type: model.MenuPage,
+				Path: "/workflow/delegates", Icon: "route", Perm: "flow:delegate:list", Sort: 4},
 		},
 		Jobs: []modulekit.Job{
-			{Name: "流程超时扫描", Cron: "0 */5 * * * *", Handler: "flow.timeout", Params: "{}",
+			// 调度器走 cron.ParseStandard，只认 5 段（分 时 日 月 周）。
+			{Name: "流程超时扫描", Cron: "*/5 * * * *", Handler: "flow.timeout", Params: "{}",
 				Remark: "每 5 分钟扫描超时待办，按节点配置提醒或自动处理"},
 		},
 		Setup: setup,

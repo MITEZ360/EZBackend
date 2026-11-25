@@ -14,16 +14,21 @@ import re
 
 ROOT = os.getcwd()
 ROUTER = os.path.join(ROOT, "internal", "router")
+MODULES = os.path.join(ROOT, "internal", "modules")
 PREFIX = "github.com/MITEZ360/tenon/"
 
 TAGS = {
-    "auth": "认证",
+    "auth": "认证", "cnauth": "认证",
     "user": "用户与权限", "role": "用户与权限", "menu": "用户与权限",
     "dept": "用户与权限", "membership": "用户与权限", "apikey": "用户与权限",
+    "recharge": "用户与权限",
     "news": "内容",
-    "system": "配置", "message": "配置", "dashboard": "运维",
-    "audit": "运维", "job": "运维", "file": "运维",
-    "monitor": "运维", "maintenance": "运维",
+    "flow": "流程",
+    "system": "配置", "dict": "配置", "notice": "配置", "message": "配置",
+    "configcenter": "配置",
+    "dashboard": "运维", "audit": "运维", "job": "运维", "file": "运维",
+    "monitor": "运维", "maintenance": "运维", "cacheadmin": "运维",
+    "routemanage": "运维", "cluster": "运维",
 }
 
 ROUTE_RE = re.compile(
@@ -119,12 +124,88 @@ def annotation(route):
     return out
 
 
+MODULE_ROUTE_RE = re.compile(
+    r'^\s*(\w+)\.(GET|POST|PUT|DELETE|PATCH)\(\s*"([^"]+)"\s*,\s*(.*)\)\s*$'
+)
+CTOR_RE = re.compile(r"^(\w+)\s*:=\s*New(\w*Handler)\(")
+SETUP_RE = re.compile(r"^func\s+setup\w*\(")
+HANDLER_TAIL_RE = re.compile(r"\b(\w+)\.(\w+)\s*\)*\s*$")
+
+
+def collect_module_routes():
+    """模块自带路由：internal/modules/<name>/module.go 的 c.Authed/Public/Open 分组。
+
+    模块化之后业务路由不再集中写在 internal/router，文档生成得跟着模块目录走，
+    否则新模块的接口在 swagger 里永远缺席。同一个 setup 里的 h 可能是
+    ConfigHandler 也可能是 NoticeHandler，所以按 NewXxxHandler 的局部变量记类型，
+    而不是一律当成 Handler。
+    """
+    routes = []
+    for fp in sorted(glob.glob(os.path.join(MODULES, "*", "module.go"))):
+        mod = os.path.basename(os.path.dirname(fp))
+        directory = "internal/modules/" + mod
+        group, typ_of = None, {}
+        for line in open(fp, encoding="utf-8").read().splitlines():
+            s = line.strip()
+            if SETUP_RE.match(s):
+                group, typ_of = None, {}
+                continue
+            m = CTOR_RE.match(s)
+            if m:
+                typ_of[m.group(1)] = m.group(2)
+                continue
+            if group is None:
+                m = re.match(r"c\.(Authed|Public|Open)\(", s)
+                if m:
+                    group = m.group(1).lower()
+                    continue
+            elif s.startswith("})"):
+                group = None
+                continue
+            if group is None:
+                continue
+            m = MODULE_ROUTE_RE.match(line)
+            if not m:
+                continue
+            var, method, path, rest = m.group(1), m.group(2), m.group(3), m.group(4)
+            hits = HANDLER_TAIL_RE.findall(rest)
+            if not hits:
+                continue
+            recv, handler = hits[-1]
+            # 开放接口走 /api/open/v1 与 API 密钥认证，标签单独归类，
+            # 否则密钥签发与密钥调用会混进同一个模块分组。
+            open_group = group == "open"
+            routes.append({
+                "method": method,
+                "path": ("/api/open/v1" if open_group else "/api/v1") + path,
+                "typ": typ_of.get(recv, "Handler"),
+                "handler": handler, "dir": directory,
+                "tag": "开放接口" if open_group else TAGS.get(mod, "业务"),
+                "security": {"authed": "BearerAuth", "public": "", "open": "ApiKeyAuth"}[group],
+            })
+    return routes
+
+
 def find_function(directory, typ, handler):
     pat = re.compile(r"^func \([^)]*\*" + re.escape(typ) + r"\)\s+" + re.escape(handler) + r"\(", re.M)
     for fp in sorted(glob.glob(os.path.join(ROOT, directory, "*.go"))):
         if pat.search(open(fp, encoding="utf-8").read()):
             return fp
     return None
+def find_function_any(directory, handler):
+    """按 handler 名在模块目录里找实现，只认接收者类型以 Handler 结尾的方法。
+
+    路由注册里只有 h.XXX，类型要自己认：ConfigHandler / DictHandler /
+    OpenHandler 这些都在同一目录。同名方法命中多个类型时不猜，留给人工。
+    """
+    pat = re.compile(r"^func \([^)]*\*(\w*Handler)\)\s+" + re.escape(handler) + r"\(", re.M)
+    found = set()
+    for fp in sorted(glob.glob(os.path.join(ROOT, directory, "*.go"))):
+        for m in pat.finditer(open(fp, encoding="utf-8").read()):
+            found.add((fp, m.group(1)))
+    if len(found) == 1:
+        return found.pop()
+    return None, None
 
 
 def strip_generated(lines):
@@ -144,7 +225,7 @@ def strip_generated(lines):
 
 def main():
     fields, router_text = load_deps()
-    routes = collect_routes(fields, router_text)
+    routes = collect_routes(fields, router_text) + collect_module_routes()
     cache = {}
     stats = {"ok": 0, "missing": 0, "duplicate": 0}
     missing = []
@@ -156,14 +237,17 @@ def main():
             stats["duplicate"] += 1
             continue
         seen.add(key)
-        fp = find_function(r["dir"], r["typ"], r["handler"])
+        typ = r["typ"]
+        fp = find_function(r["dir"], typ, r["handler"])
+        if not fp:
+            fp, typ = find_function_any(r["dir"], r["handler"])
         if not fp:
             stats["missing"] += 1
             missing.append((r["dir"], r["typ"], r["handler"]))
             continue
         lines = cache.setdefault(fp, strip_generated(open(fp, encoding="utf-8").read().splitlines()))
         idx = None
-        pat = re.compile(r"^func \([^)]*\*" + re.escape(r["typ"]) + r"\)\s+" + re.escape(r["handler"]) + r"\(")
+        pat = re.compile(r"^func \([^)]*\*" + re.escape(typ) + r"\)\s+" + re.escape(r["handler"]) + r"\(")
         for i, line in enumerate(lines):
             if pat.match(line):
                 idx = i

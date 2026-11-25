@@ -17,7 +17,7 @@ import {
   type FlowDef,
   type FlowDefPayload,
   type FlowNode,
-} from '@/api/flow'
+} from '../../api'
 import type { ListQuery, PageResult } from '@/api/types'
 import { fmtTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'

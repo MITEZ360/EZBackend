@@ -2,7 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
-import { flowApi, type FlowTask, type TaskDetail } from '@/api/flow'
+import { flowApi, type FlowTask, type TaskDetail } from '../api'
 import type { ListQuery, PageResult } from '@/api/types'
 import { fmtTime } from '@/utils/format'
 

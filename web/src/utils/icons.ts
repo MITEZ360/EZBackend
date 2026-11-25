@@ -19,6 +19,7 @@ import {
   Operation,
   Reading,
   Setting,
+  Share,
   Trophy,
   TrendCharts,
   User,
@@ -53,6 +54,7 @@ export const menuIcons: Record<string, Component> = {
   route: Guide,
   cache: Coin,
   cluster: Connection,
+  flow: Share,
   alert: Warning,
 }
 

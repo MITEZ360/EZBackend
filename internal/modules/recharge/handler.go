@@ -28,7 +28,7 @@ func NewHandler(svc *Service, trustProxy bool) *Handler {
 // Available 返回可用支付渠道。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary Available
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]interface{}
@@ -49,7 +49,7 @@ func (h *Handler) Available(c *gin.Context) {
 // Create 创建充值订单。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary Create
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"
@@ -81,7 +81,7 @@ func (h *Handler) Create(c *gin.Context) {
 // Query 查询订单。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary Query
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Param orderNo path string true "orderNo"
@@ -108,7 +108,7 @@ func (h *Handler) Query(c *gin.Context) {
 // List 我的订单。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary List
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]interface{}
@@ -135,7 +135,7 @@ func (h *Handler) List(c *gin.Context) {
 // Close 关闭待支付订单。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary Close
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Param orderNo path string true "orderNo"
@@ -162,7 +162,7 @@ func (h *Handler) Close(c *gin.Context) {
 // AdminList 管理端全量订单。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary AdminList
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]interface{}
@@ -228,7 +228,7 @@ func (h *Handler) notify(payType string) gin.HandlerFunc {
 // WechatNotify 微信支付回调。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary WechatNotify
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"
@@ -247,7 +247,7 @@ func (h *Handler) WechatNotify(c *gin.Context) { h.notify(model.PayWechat)(c) }
 // AlipayNotify 支付宝回调。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary AlipayNotify
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"
@@ -266,7 +266,7 @@ func (h *Handler) AlipayNotify(c *gin.Context) { h.notify(model.PayAlipay)(c) }
 // PaymentConfig 读取管理端支付配置，敏感字段以 ****** 占位。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary PaymentConfig
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]interface{}
@@ -292,7 +292,7 @@ func (h *Handler) PaymentConfig(c *gin.Context) {
 // SavePaymentConfig 保存管理端支付配置，保存后下一次下单/回调立即生效。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary SavePaymentConfig
-// @Tags 运维
+// @Tags 用户与权限
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"

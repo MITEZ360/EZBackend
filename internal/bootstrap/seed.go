@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -57,19 +58,23 @@ func jobSeedsOf(reg *ModuleRegistry) []modulekit.Job {
 }
 
 // syncBuiltinMenus 幂等补齐缺失的内置菜单，并给内置角色授权。
-// 只新增、不修改已有节点，管理员对名称、排序、图标的调整不会被打回。
+//
+// 对已存在的内置菜单只同步结构性字段（父节点、路由、权限点、类型），
+// 不同步名称、图标、排序、可见性：前者变了说明模块调整了菜单归属或接口，
+// 不跟随就会出现"菜单还挂在旧目录下、点进去路径对不上"；后者是运营字段，
+// 管理员的调整不该被启动流程打回。
 func syncBuiltinMenus(db *gorm.DB, log *zap.Logger, reg *ModuleRegistry) error {
 	seeds := modulekit.Menus(reg.asSet())
-	created := 0
+	created, moved := 0, 0
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var walk func(nodes []modulekit.MenuNode, parent string) error
 		walk = func(nodes []modulekit.MenuNode, parent string) error {
 			for i, it := range nodes {
-				var exists int64
-				if err := tx.Model(&model.Menu{}).Where("id = ?", it.ID).Count(&exists).Error; err != nil {
-					return err
-				}
-				if exists == 0 {
+				var cur model.Menu
+				err := tx.Select("id", "parent_id", "path", "perm", "type").
+					Where("id = ?", it.ID).First(&cur).Error
+				switch {
+				case errors.Is(err, gorm.ErrRecordNotFound):
 					m := model.Menu{
 						Name: it.Name, Type: it.Type, Path: it.Path, Icon: it.Icon, Perm: it.Perm,
 						Sort: it.Sort, Visible: true, Status: model.StatusEnabled,
@@ -103,6 +108,30 @@ func syncBuiltinMenus(db *gorm.DB, log *zap.Logger, reg *ModuleRegistry) error {
 						}
 					}
 					created++
+				case err != nil:
+					return err
+				default:
+					// 只在字段真的变了时写库，避免每次启动刷新 updated_at。
+					want := map[string]any{}
+					if cur.ParentID != parent {
+						want["parent_id"] = parent
+					}
+					if cur.Path != it.Path {
+						want["path"] = it.Path
+					}
+					if cur.Perm != it.Perm {
+						want["perm"] = it.Perm
+					}
+					if it.Type != "" && cur.Type != it.Type {
+						want["type"] = it.Type
+					}
+					if len(want) == 0 {
+						break
+					}
+					if err := tx.Model(&model.Menu{}).Where("id = ?", it.ID).Updates(want).Error; err != nil {
+						return fmt.Errorf("同步内置菜单失败: %w", err)
+					}
+					moved++
 				}
 				if err := walk(it.Children, it.ID); err != nil {
 					return err
@@ -117,6 +146,9 @@ func syncBuiltinMenus(db *gorm.DB, log *zap.Logger, reg *ModuleRegistry) error {
 	}
 	if created > 0 {
 		log.Info("已补齐新增的内置菜单", zap.Int("count", created))
+	}
+	if moved > 0 {
+		log.Info("已同步内置菜单的结构变化", zap.Int("count", moved))
 	}
 	return nil
 }

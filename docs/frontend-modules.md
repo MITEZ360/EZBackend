@@ -92,7 +92,7 @@ make dist MODULES="user news"
 | --- | --- | --- |
 | 模块自己的页面 | `modules/<name>/pages/` | 自包含，删模块即删页面 |
 | 模块自己的路由 | `modules/<name>/index.ts` | 同上 |
-| 只在模块内使用的接口封装 | `modules/<name>/api.ts` | 同上 |
+| 只在模块内使用的接口封装 | `modules/<name>/api.ts` | 同上（`flow` 已按此迁入，页面用 `../api` 引用） |
 | 模块特有的英文词条 | `modules/<name>/i18n.ts` | 同上 |
 | 跨模块共享的接口封装 | `web/src/api/*.ts` | 见下方"已知边界" |
 | 通用组件（表格、上传、表单） | `web/src/components/` | 与业务无关 |
@@ -141,7 +141,21 @@ rm -rf internal/modules/<name> web/src/modules/<name>
 **孤儿 chunk**。删除模块后，如果 `web/dist` 没有重新构建，旧的
 `assets/*.js` 仍可能残留。`vite build` 默认 `emptyOutDir`，正常构建不会有。
 
-## 8. 改完必须跑的校验
+## 8. 接口文档也要跟着模块走
+
+`scripts/gen_swagger_annotations.py` 不只扫 `internal/router`，还会扫
+`internal/modules/*/module.go` 里的 `c.Authed` / `c.Public` / `c.Open` 分组，
+把注解写到对应的 handler 函数上方：
+
+- handler 类型按同文件里的 `h := NewXxxHandler(...)` 推断，不写死 `*Handler`
+- `c.Open` 的路由落 `/api/open/v1` 且标 `@Tags 开放接口`、`@Security ApiKeyAuth`
+- 注解区间带 `KE:SWAGGER-BEGIN/END` 标记，重复执行幂等
+
+所以模块的路由换名、增删接口后跑一次 `make docs`（需 `make swag-install`），
+swagger 与真实路由就重新对齐，不需要手写注解。同名方法命中多个 Handler 时
+脚本会报「未找到」，按提示手工补，不要靠猜。
+
+## 9. 改完必须跑的校验
 
 ```bash
 cd web && pnpm typecheck      # 路由与模块契约的类型错误

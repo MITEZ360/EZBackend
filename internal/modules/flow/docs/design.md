@@ -113,14 +113,15 @@
 - `toNodes({nodes})` → array：按 y 坐标排序导出
 - 约束只许竖排调序、不许画分支，故用户画不出图，转换双向无损
 
-页面：`web/src/pages/workflow/{design,instances,tasks,delegates}`。待办/已办用 `el-table` + `el-drawer` + `el-timeline`；样式用 `tokens.scss` 现有令牌；i18n key 用中文原文；权限 `v-perm`。
+页面：`web/src/modules/flow/pages/{design/index.vue,instances.vue,tasks.vue,delegates.vue}`，接口封装在同模块的 `api.ts`，路由由 `web/src/modules/flow/index.ts` 声明，不写进中心路由表。待办/已办用 `el-table` + `el-drawer` + `el-timeline`；样式用 `tokens.scss` 现有令牌；i18n key 用中文原文；权限 `v-perm`。
 
 ## 8. 模块接入
 
 - `internal/modules/flow/{module.go,engine.go,service.go,handler.go}`，`init()` 注册 Spec，`Models` 列 5 张表 + 菜单
-- `internal/distribution/default.go` 加空白导入（Default 版收录；Base 版不含，前端路由同样由 `OPTIONAL_ROUTES` 按 `VITE_EDITION=base` 裁剪）；`configs/config.yaml` 的 `modules.enabled` 为空即全启用，无需单独登记
+- 菜单自带私有目录 `m_workflow`（流程中心，`/workflow`），四个页面挂其下；模块被裁掉时目录与页面一起消失，不污染系统管理
+- `internal/distribution/default.go` 加空白导入（Default 版收录；Base 版不含，前端由 `VITE_MODULES` 连同页面 chunk 一起裁掉）；`configs/config.yaml` 的 `modules.enabled` 为空即全启用，无需单独登记
 - `DependsOn: ["message"]`：超时提醒通过 `message.Service.Send` 发站内信；未启用时降级为日志留痕
-- 超时扫描挂 Spec.Jobs（`flow.timeout`，每 5 分钟），由 job 模块统一调度
+- 超时扫描挂 Spec.Jobs（`flow.timeout`，`*/5 * * * *`），由 job 模块统一调度。调度器走 `cron.ParseStandard`，只认 5 段，写成 6 段会在注册时失败且静默不跑
 - 权限点：`flow:def:*` / `flow:instance:*` / `flow:task:*` / `flow:delegate:*`
 
 ## 9. 实现校验记录

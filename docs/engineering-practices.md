@@ -82,7 +82,7 @@
   4. `RestoreOnline()` / `RestoreOffline()` 还原文件资产（先写临时目录再原子替换，避免半截状态）；
   5. 对象存储模式下**显式跳过并写明原因**，不能假装已备份；
   6. 运维中心页面展示文件数，下载时说明归档内容。
-- **涉及文件**：`internal/modules/maintenance/backup.go`、`internal/modules/maintenance/handler.go`、`web/src/api/maintenance.ts`、`web/src/pages/ops/maintenance/index.vue`、`docs/deploy.md` 7.2、`docs/api.md` 4.22。
+- **涉及文件**：`internal/modules/maintenance/backup.go`、`internal/modules/maintenance/handler.go`、`web/src/api/maintenance.ts`、`web/src/modules/maintenance/pages/index.vue`、`docs/deploy.md` 7.2、`docs/api.md` 4.22。
 - **验收**：上传图标 → 立即备份 → 删除 `uploads/` → 恢复 → 图标可访问；`Verify()` 报告文件数一致且哈希匹配；对象存储模式下 `Verify()` 明确提示「文件资产由对象存储自身保障」。
 
 ### P0-2　恢复演练（dry-run）与恢复后自检
@@ -94,7 +94,7 @@
   2. 新增 `POST /api/v1/maintenance/backups/:name/restore?dry_run=true`，以及 CLI `restore --dry-run <备份>`；
   3. 演练只输出「将校验什么 / 将覆盖什么 / 将留哪份底 / 将还原哪些文件」，**不改动任何文件**；校验不通过时在演练阶段就拒绝；
   4. 真实恢复后，按 `.meta.json` 的 `Tables` 与用户数逐项比对，差异写入结果并返回给页面。
-- **涉及文件**：`backup.go`、`handler.go`、`internal/router/routes_maintenance.go`、`internal/bootstrap/cli.go`、运维前端页面、`docs/deploy.md` 7.2、`docs/api.md` 4.22。
+- **涉及文件**：`backup.go`、`handler.go`、`internal/modules/maintenance/module.go`、`internal/bootstrap/cli.go`、运维前端页面、`docs/deploy.md` 7.2、`docs/api.md` 4.22。
 - **验收**：`dry_run=true` 前后 `data/tenon.db` 的 SHA-256 不变、备份目录不变、无 `pre-restore-*` 产生；传入损坏备份时演练即拒绝；真实恢复后结果里能逐表列出「清单行数 / 实际行数」。
 
 ### P0-3　GFS 备份保留策略

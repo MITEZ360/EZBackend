@@ -1,5 +1,5 @@
-import { api } from './client'
-import type { ListQuery, PageResult } from './types'
+import { api } from '@/api/client'
+import type { ListQuery, PageResult } from '@/api/types'
 
 /** 审批人来源 */
 export interface FlowAssignee {

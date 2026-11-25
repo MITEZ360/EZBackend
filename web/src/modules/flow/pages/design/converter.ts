@@ -1,4 +1,4 @@
-import type { FlowNode } from '@/api/flow'
+import type { FlowNode } from '../../api'
 
 /**
  * 有序节点数组 ↔ Vue Flow 图 的无损转换。

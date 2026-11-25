@@ -2,7 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
-import { flowApi, type DelegatePayload, type FlowDelegate } from '@/api/flow'
+import { flowApi, type DelegatePayload, type FlowDelegate } from '../api'
 import type { ListQuery, PageResult } from '@/api/types'
 import { fmtTime } from '@/utils/format'
 

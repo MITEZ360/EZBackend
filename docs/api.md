@@ -671,7 +671,83 @@ X-API-Key: ak_c_...
 SQLite 恢复需停机执行 `tenon -config ... restore [--dry-run] <文件>`；MySQL / PostgreSQL
 可在开启 `backup.allow_restore` 后在线导入。CLI 子命令见 `docs/deploy.md` 7.1 / 7.2。
 
-### 4.23 自动接口文档
+### 4.23 流程引擎
+
+轻量审批流：以单线为主，支持或签/会签、条件跳过、加减签、回退与委托。
+接口都在 `/api/v1` 下，需登录；模块未装配时整组路由不存在（404），
+不是权限问题。发起与审批的完整流程见 `internal/modules/flow/docs/design.md`。
+
+#### 流程定义
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| GET | `/flows` | 定义列表 | `flow:def:list` |
+| GET | `/flows/:id` | 定义详情（含节点数组） | `flow:def:list` |
+| POST | `/flows` | 新建定义（草稿态） | `flow:def:create` |
+| PUT | `/flows/:id` | 保存节点与节点属性 | `flow:def:update` |
+| PUT | `/flows/:id/status` | 发布 / 退回草稿 | `flow:def:update` |
+| DELETE | `/flows/:id` | 删除定义 | `flow:def:delete` |
+
+#### 流程实例
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| POST | `/flow-instances` | 发起流程（仅已发布定义） | `flow:instance:create` |
+| GET | `/flow-instances` | 实例列表（`mine=1` 只看自己发起的） | `flow:instance:list` |
+| GET | `/flow-instances/:id` | 实例详情 + 审批轨迹 | `flow:instance:list` |
+| POST | `/flow-instances/:id/cancel` | 撤销（仅发起人、运行中） | `flow:instance:list` |
+| POST | `/flow-instances/:id/rollback` | 回退到指定节点 | `flow:instance:list` |
+
+#### 审批任务
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| GET | `/flow-tasks` | 待办 / 已办（`status=todo\|done`） | `flow:task:list` |
+| GET | `/flow-tasks/:id` | 任务详情 | `flow:task:list` |
+| POST | `/flow-tasks/:id/approve` | 同意 | `flow:task:approve` |
+| POST | `/flow-tasks/:id/reject` | 驳回（按节点策略回发起人/上一节点/结束） | `flow:task:approve` |
+| POST | `/flow-tasks/:id/transfer` | 转交 | `flow:task:approve` |
+| POST | `/flow-tasks/:id/addsign` | 加签 | `flow:task:approve` |
+| POST | `/flow-tasks/:id/removesign` | 减签 | `flow:task:approve` |
+| POST | `/flow-tasks/timeout-scan` | 立即执行一次超时扫描 | `flow:task:approve` |
+
+#### 审批委托
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| GET | `/flow-delegates` | 我的委托 | `flow:delegate:list` |
+| POST | `/flow-delegates` | 新建委托 | `flow:delegate:create` |
+| PUT | `/flow-delegates/:id` | 修改有效期 | `flow:delegate:update` |
+| DELETE | `/flow-delegates/:id` | 删除委托 | `flow:delegate:delete` |
+
+**状态取值**
+
+| 对象 | 取值 |
+| --- | --- |
+| 定义 `status` | `0` 草稿（不可发起）、`1` 已发布 |
+| 实例 `status` | `running`、`approved`、`rejected`、`cancelled` |
+| 任务 `status` | `pending`、`approved`、`rejected`、`transferred`、`cancelled` |
+| 节点聚合 `mode` | `any` 或签（任一同意即通过）、`all` 会签（全部同意才通过） |
+| 驳回策略 `rejectAction` | `backToInitiator`、`prevNode`、`end` |
+| 超时动作 `timeoutAction` | `notify` 提醒、`approve` 自动同意、`reject` 自动驳回 |
+| 审批人 `type` | `user`、`role`、`deptLeader`、`initiatorLeader`、`initiatorSelf`、`initiatorInput` |
+
+**超时处理**：内置任务 `flow.timeout` 按 `*/5 * * * *` 每 5 分钟扫一次
+（可在「运维中心 → 定时任务」改 cron 或停用），超过节点 `timeoutHours` 的
+待办按 `timeoutAction` 处理；提醒写入站内信，`message` 模块未装配时只记日志。
+
+发起审批：
+
+```bash
+curl -s -X POST http://localhost:9000/api/v1/flow-instances \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"flowKey":"leave","title":"请假 3 天","businessType":"leave","businessId":"L20261125-001",
+       "variables":{"days":3,"reason":"回家"}}'
+```
+
+`flowKey` 是流程定义的业务键，`variables` 供条件跳过与表单回填使用。
+
+### 4.24 自动接口文档
 
 `docs.enabled` 未配置时，开发环境自动开启、生产环境自动关闭，路径由 `docs.path`
 指定（默认 `/docs`）。

@@ -220,5 +220,28 @@ func (r *Runner) definitions() []definition {
 					&model.FlowInstance{}, &model.Flow{})
 			},
 		},
+		{
+			Version: 11,
+			Name:    "flow_timeout_cron",
+			// v10 时期 flow.timeout 的默认 cron 写成了 6 段（0 */5 * * * *），
+			// 调度器走 cron.ParseStandard 只认 5 段，注册直接失败、任务静默不跑。
+			// 只改仍是旧默认值的记录：管理员自己调过的 cron 不覆盖。
+			Up: func(ctx context.Context, db *gorm.DB) error {
+				if !db.WithContext(ctx).Migrator().HasTable(&model.Job{}) {
+					return nil
+				}
+				return db.WithContext(ctx).Model(&model.Job{}).
+					Where("handler = ? AND cron = ?", "flow.timeout", "0 */5 * * * *").
+					Update("cron", "*/5 * * * *").Error
+			},
+			Down: func(ctx context.Context, db *gorm.DB) error {
+				if !db.WithContext(ctx).Migrator().HasTable(&model.Job{}) {
+					return nil
+				}
+				return db.WithContext(ctx).Model(&model.Job{}).
+					Where("handler = ? AND cron = ?", "flow.timeout", "*/5 * * * *").
+					Update("cron", "0 */5 * * * *").Error
+			},
+		},
 	}
 }

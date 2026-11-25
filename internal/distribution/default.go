@@ -48,9 +48,9 @@ import (
 
 	// 通用业务能力：与具体行业无关，默认保留。
 	_ "github.com/MITEZ360/tenon/internal/modules/apikey"
+	_ "github.com/MITEZ360/tenon/internal/modules/flow"
 	_ "github.com/MITEZ360/tenon/internal/modules/membership"
 	_ "github.com/MITEZ360/tenon/internal/modules/message"
-	_ "github.com/MITEZ360/tenon/internal/modules/flow"
 	// 资讯中心（news）是独立模块，不在默认发行版；需要时
 	// make dist MODULES="user news"，或在本文件加一行导入。
 )

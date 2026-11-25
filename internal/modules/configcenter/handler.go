@@ -19,7 +19,7 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 // List 配置项清单。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary List
-// @Tags 运维
+// @Tags 配置
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]interface{}
@@ -46,7 +46,7 @@ func (h *Handler) List(c *gin.Context) {
 // Save 保存配置。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary Save
-// @Tags 运维
+// @Tags 配置
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"
@@ -86,7 +86,7 @@ func (h *Handler) Save(c *gin.Context) {
 // Reload 重新加载配置。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary Reload
-// @Tags 运维
+// @Tags 配置
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"

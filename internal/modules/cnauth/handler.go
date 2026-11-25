@@ -34,7 +34,7 @@ func (h *Handler) setRefreshCookie(c *gin.Context, token string) {
 // PublicConfig 返回注册/短信登录开关，供前端登录页决定展示入口。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary PublicConfig
-// @Tags 运维
+// @Tags 认证
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]interface{}
@@ -54,7 +54,7 @@ func (h *Handler) PublicConfig(c *gin.Context) {
 // SendCode 发送短信验证码。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary SendCode
-// @Tags 运维
+// @Tags 认证
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"
@@ -84,7 +84,7 @@ func (h *Handler) SendCode(c *gin.Context) {
 // Register 用户自助注册，成功后直接签发登录态。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary Register
-// @Tags 运维
+// @Tags 认证
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"
@@ -116,7 +116,7 @@ func (h *Handler) Register(c *gin.Context) {
 // LoginByPhone 短信验证码登录。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary LoginByPhone
-// @Tags 运维
+// @Tags 认证
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"
@@ -155,7 +155,7 @@ type ResetPasswordInput struct {
 // ResetPassword 短信验证码重置密码。
 // KE:SWAGGER-BEGIN 本接口注解由路由表自动生成，字段说明见 docs/api.md
 // @Summary ResetPassword
-// @Tags 运维
+// @Tags 认证
 // @Accept json
 // @Produce json
 // @Param body body map[string]interface{} false "请求参数"
