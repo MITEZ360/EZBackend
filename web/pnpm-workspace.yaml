@@ -1,0 +1,7 @@
+# pnpm 10+ 默认拦截依赖的安装期脚本，未列白的包会让 `pnpm install` 直接失败
+# （ERR_PNPM_IGNORED_BUILDS），进而让 `make build` 卡在第一步。
+# 这里只放前端构建确实需要跑原生脚本的依赖；新增这类包时在此追加，
+# 或直接跑 `pnpm approve-builds` 让它自动写入。
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
