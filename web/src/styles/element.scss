@@ -480,7 +480,29 @@
     color: var(--ink-900);
   }
 
+  /* 展开箭头默认贴在 base-level-padding(20px) 处，再叠加条目自身的 10px 外边距，
+     离侧栏右边缘就空出 40px。这里收到 10px，与左侧 12px 内边距形成对称留白。
+     选择器必须带 :not(.el-menu--collapse)，与 Element 那条
+     `padding-right: calc(base + icon)` 同权重才能覆盖掉它。 */
+  &:not(.el-menu--collapse) .el-sub-menu__title {
+    padding-right: 28px;
+
+    .el-sub-menu__icon-arrow {
+      right: 10px;
+      /* 箭头也是 .el-icon，会继承上面统一加的 margin-right: 9px，
+         定位时又让出 9px，得单独清掉。 */
+      margin-right: 0;
+    }
+  }
+
   .el-menu--inline {
+    /* 展开动画由 Element 的 collapse-transition 用 max-height 驱动，
+       收尾时它会把 overflow 从 hidden 清空。这一下切换让 ul 不再是 BFC：
+       子项的上下 margin 从"计入高度"变成"相邻塌陷"，高度少掉几个像素，
+       于是子菜单"完全展开"后还会向上弹一下。用 flow-root 常驻 BFC，
+       高度在动画前后一致；相比 overflow: hidden 不会裁掉多级子菜单。 */
+    display: flow-root;
+
     .el-menu-item {
       margin-left: 10px;
       padding-left: 34px !important;
@@ -491,6 +513,38 @@
   .el-icon {
     font-size: 17px;
     margin-right: 9px;
+  }
+}
+
+/* 折叠态：所有图标必须落在同一条中线上。
+   Element 给带子菜单的标题额外加了 padding-right: calc(base-padding + icon-width)，
+   与本项目统一加的 padding-left 叠加后，标题内容区宽度变成负值，图标被挤偏；
+   而仪表盘这类 el-menu-item 没有那段 padding，于是两者错位。
+   折叠时把左右 padding 一并归零、用 flex 居中，图标位置就只由侧栏宽度决定。
+
+   另外折叠时 el-menu-item 的内容会被塞进一个绝对定位的
+   .el-menu-tooltip__trigger，它自带 padding: 0 var(--el-menu-base-level-padding)，
+   所以只清 li 的 padding 不够，图标仍会从左侧偏移一个 base-level-padding，
+   看起来比子菜单图标偏右——必须连这个触发器一起归零并居中。 */
+.el-menu.el-menu--collapse {
+  > .el-menu-item,
+  > .el-sub-menu > .el-sub-menu__title {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .el-menu-tooltip__trigger {
+      padding-left: 0;
+      padding-right: 0;
+      justify-content: center;
+    }
+
+    .el-icon {
+      margin-right: 0 !important;
+      flex-shrink: 0;
+    }
   }
 }
 

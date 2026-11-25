@@ -100,7 +100,7 @@ body:has(.shell) {
 /* 只做透明度过渡：带 transform 的动画会让元素成为 fixed 子元素的包含块，
    导致弹窗遮罩按内容高度而非视口高度计算（表现为弹窗被裁切）。 */
 .page {
-  padding: 24px;
+  padding: 16px;
   max-width: 1600px;
   margin: 0 auto;
   animation: page-in 0.2s ease;
