@@ -1,4 +1,8 @@
 // Package bootstrap 负责应用装配：配置、日志、数据库、缓存、服务、路由与生命周期。
+//
+// 本包不认识任何具体业务模块：模块清单来自 modulekit 的注册结果（由
+// internal/distribution 的导入决定），装配动作由各模块的 Setup 完成。
+// 加一个模块不需要改这里的任何代码。
 package bootstrap
 
 import (
@@ -18,27 +22,6 @@ import (
 
 	"github.com/keel-framework/keel/internal/micro"
 	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/modules/apikey"
-	"github.com/keel-framework/keel/internal/modules/audit"
-	"github.com/keel-framework/keel/internal/modules/auth"
-	"github.com/keel-framework/keel/internal/modules/cacheadmin"
-	"github.com/keel-framework/keel/internal/modules/cluster"
-	"github.com/keel-framework/keel/internal/modules/configcenter"
-	"github.com/keel-framework/keel/internal/modules/dashboard"
-	"github.com/keel-framework/keel/internal/modules/dept"
-	"github.com/keel-framework/keel/internal/modules/file"
-	"github.com/keel-framework/keel/internal/modules/job"
-	"github.com/keel-framework/keel/internal/modules/maintenance"
-	"github.com/keel-framework/keel/internal/modules/membership"
-	"github.com/keel-framework/keel/internal/modules/menu"
-	"github.com/keel-framework/keel/internal/modules/message"
-	"github.com/keel-framework/keel/internal/modules/monitor"
-	"github.com/keel-framework/keel/internal/modules/news"
-	"github.com/keel-framework/keel/internal/modules/role"
-	"github.com/keel-framework/keel/internal/modules/routemanage"
-	"github.com/keel-framework/keel/internal/modules/system"
-	"github.com/keel-framework/keel/internal/modules/user"
 	"github.com/keel-framework/keel/internal/platform/authn"
 	"github.com/keel-framework/keel/internal/platform/authz"
 	"github.com/keel-framework/keel/internal/platform/cache"
@@ -49,6 +32,7 @@ import (
 	"github.com/keel-framework/keel/internal/platform/logger"
 	"github.com/keel-framework/keel/internal/platform/mailer"
 	"github.com/keel-framework/keel/internal/platform/migrate"
+	"github.com/keel-framework/keel/internal/platform/modulekit"
 	"github.com/keel-framework/keel/internal/platform/storage"
 	"github.com/keel-framework/keel/internal/router"
 	"github.com/keel-framework/keel/pkg/discovery"
@@ -65,28 +49,19 @@ type App struct {
 	Storage   *storage.Manager
 	Mailer    mailer.Mailer
 	Engine    *gin.Engine
-	Jobs      *job.Service
-	Audit     *audit.Service
-	Cluster   *cluster.Service
 	Events    *event.Bus
 	Gateway   *micro.Gateway
 	Instance  string
 	Started   time.Time
 	SelfCheck *SelfCheckReport
 
-	// Modules 记录本次启动启用的模块，供运行期判断是否启动相关后台循环。
+	// Modules 记录本次启动启用的模块，供管理端与自检展示。
 	Modules map[string]bool
+	// mods 是模块装配上下文：启动与停机回调都由模块自己注册。
+	mods *modulekit.Context
 
 	server    *http.Server
 	restartCh chan struct{}
-}
-
-// moduleOn 判断模块是否启用；未设置时按全部启用处理。
-func (a *App) moduleOn(name string) bool {
-	if len(a.Modules) == 0 {
-		return true
-	}
-	return a.Modules[name]
 }
 
 // RequestRestart 由管理端运维接口调用，触发进程原地重启。
@@ -132,22 +107,18 @@ func New(cfgPath string) (*App, error) {
 	}
 
 	// 数据库先于模块解析打开：管理端保存的覆盖值（含 modules.enabled）存在
-	// runtime_config 表里，不先读库就无法按最新开关装配。
+	// runtime_config 表里，不先读库就无法按最新开关装配。覆盖值的合并由
+	// 配置中心模块注册的早期动作完成，本包不知道它的存在。
 	db, err := database.Open(cfg.DB, lg)
 	if err != nil {
 		return nil, err
 	}
-	// 配置中心：把管理端覆盖值合并进运行配置。必须早于模块解析与其它组件，
-	// 否则它们会拿到配置文件里的旧值。首次启动覆盖表尚不存在，跳过即可。
-	runtimeCfg := configcenter.NewService(db, cfg, lg)
-	if db.Migrator().HasTable(&model.RuntimeConfig{}) {
-		if err := runtimeCfg.ApplyFromDB(context.Background()); err != nil {
-			lg.Warn("加载运行时配置失败，继续使用配置文件", zap.Error(err))
-		}
-		cfg = config.Get()
+	for _, err := range modulekit.RunBootstrap(context.Background(), db) {
+		lg.Warn("启动早期动作失败，继续使用配置文件", zap.Error(err))
 	}
+	cfg = config.Get()
 
-	// 模块注册表：解析启停白名单、补齐依赖、未知模块 fail-fast。
+	// 模块注册表：解析启停白名单、补齐依赖、按依赖排序、未知模块 fail-fast。
 	registry, err := resolveModules(cfg)
 	if err != nil {
 		closeDB(db)
@@ -157,8 +128,6 @@ func New(cfgPath string) (*App, error) {
 		zap.String("source", registry.Source),
 		zap.Int("count", len(registry.Ordered)),
 		zap.Strings("modules", registry.Ordered))
-	// 实际启用集合会因依赖补齐而大于配置值，管理端用它说明"当前运行"。
-	runtimeCfg.SetActiveModules(registry.Ordered, registry.Source)
 
 	// ---- 数据库结构变更 ----
 	// versioned（默认）：按版本号执行，支持回滚与数据回填；
@@ -168,10 +137,9 @@ func New(cfgPath string) (*App, error) {
 	// 建表跟随模块开关：关闭的模块不建表。版本化迁移的 baseline 也用它，
 	// 因此后续新增的模块专属迁移必须先用 HasTable 判空，否则关闭该模块后
 	// 迁移会因目标表不存在而失败。
-	allModels := append(append([]any{}, registry.scopeModels()...), &model.UserOAuthBinding{})
 	switch migrationMode {
 	case "auto":
-		if err := database.Migrate(db, allModels...); err != nil {
+		if err := database.Migrate(db, registry.scopeModels()...); err != nil {
 			return nil, err
 		}
 		lg.Info("数据库表结构已同步（AutoMigrate）")
@@ -210,7 +178,6 @@ func New(cfgPath string) (*App, error) {
 		}
 	}
 
-	// 配置中心已在模块解析前完成覆盖合并，这里直接复用同一实例注册接口。
 	ch, err := cache.New(cfg.Redis, lg)
 	if err != nil {
 		return nil, err
@@ -266,126 +233,64 @@ func New(cfgPath string) (*App, error) {
 	})
 	authzLoader := authz.NewLoader(db, ch, lg)
 
-	menuSvc := menu.NewService(db, authzLoader)
-	authSvc := auth.NewService(db, ch, jwtMgr, captcha, cfg, lg, authzLoader, menuSvc)
-	membershipSvc := membership.NewService(db, lg)
-	userSvc := user.NewService(db, cfg, lg, authzLoader, membershipSvc)
-	roleSvc := role.NewService(db, authzLoader)
-	deptSvc := dept.NewService(db)
-	dictSvc := system.NewDictService(db, ch)
-	configSvc := system.NewConfigService(db, ch, cfg)
-	msgSvc := message.NewService(db, lg)
-	// 公告发布后同步投递站内信；message.Service 实现 system.NoticeNotifier。
-	noticeSvc := system.NewNoticeService(db, msgSvc, lg)
-	auditSvc := audit.NewService(db, ch, lg)
-	apiKeySvc := apikey.NewService(db, ch, lg)
-	newsSvc := news.NewService(db, ch, lg, cfg.News.RetentionDays)
-	jobSvc := job.NewService(db, ch, lg)
-	jobSvc.SetCleaner(auditSvc)
-	jobSvc.SetMessageCleaner(msgSvc)
-	// 资讯是滚动窗口数据，清理任务与业务同生命周期，不依赖外部调度。
-	if registry.On("news") {
-		jobSvc.Register("news.cleanup", func(ctx context.Context, p map[string]any) (string, error) {
-			days := 0
-			if v, ok := p["days"].(float64); ok {
-				days = int(v)
-			}
-			n, err := newsSvc.Cleanup(ctx, days)
-			if err != nil {
-				return "", err
-			}
-			return fmt.Sprintf("已清理 %d 条过期资讯", n), nil
-		})
-	}
-	// 备份与版本迁移：同一份服务供 HTTP 管理接口、定时任务与 CLI 复用
-	backupSvc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, cfg.Storage, lg)
-	maintenanceHandler := maintenance.NewHandler(backupSvc, migrationRunner, migrationMode)
-	if registry.On("maintenance") {
-		jobSvc.Register("db.backup", func(ctx context.Context, _ map[string]any) (string, error) {
-			if !cfg.Backup.Enabled {
-				return "备份已在配置中关闭（backup.enabled=false），跳过", nil
-			}
-			meta, err := backupSvc.Backup(ctx)
-			if err != nil {
-				return "", err
-			}
-			return fmt.Sprintf("已生成备份 %s（%d 字节）", meta.Name, meta.Size), nil
-		})
-	}
-
-	fileSvc := file.NewService(db, cfg, store, lg)
-	dashSvc := dashboard.NewService(db, ch)
-
+	// 模块装配上下文。engine 与 app 在装配末尾才就绪，闭包延迟解引用。
 	var engine *gin.Engine
-	var app *App // 重启回调在运行时才解引用，此处先声明
-	// 集群服务需要 app 的重启入口，闭包延迟解引用即可。
-	clusterSvc := cluster.NewService(db, cfg, lg, runtimeCfg, func() { app.RequestRestart() })
-	monitorSvc := monitor.NewService(db, ch, cfg, func() []monitor.RouteInfo {
-		if engine == nil {
-			return nil
-		}
-		routes := engine.Routes()
-		out := make([]monitor.RouteInfo, 0, len(routes))
-		for _, r := range routes {
-			out = append(out, monitor.RouteInfo{Method: r.Method, Path: r.Path})
-		}
-		return out
-	}, func() { app.RequestRestart() })
-	routeSvc := routemanage.NewService(func() []routemanage.Route {
-		if engine == nil {
-			return nil
-		}
-		routes := engine.Routes()
-		out := make([]routemanage.Route, 0, len(routes))
-		for _, r := range routes {
-			// gin 的 Handler 形如 pkg.(*Handler).List-fm，去掉包路径与编译后缀
-			name := r.Handler
-			if i := strings.LastIndex(name, "."); i >= 0 {
-				name = name[i+1:]
+	var app *App
+	mods := modulekit.NewContext(modulekit.Context{
+		DB: db, Cache: ch, Limiter: limiter, Config: cfg, Log: lg, Events: bus,
+		Storage: store, Mailer: mail, JWT: jwtMgr, Captcha: captcha, Authz: authzLoader,
+		Migration: migrationRunner, MigrationMode: migrationMode,
+		Instance: resolveInstanceID(cfg),
+		Restart:  func() { app.RequestRestart() },
+		Routes: func() []modulekit.Route {
+			if engine == nil {
+				return nil
 			}
-			if i := strings.Index(name, "-"); i >= 0 {
-				name = name[:i]
+			routes := engine.Routes()
+			out := make([]modulekit.Route, 0, len(routes))
+			for _, r := range routes {
+				out = append(out, modulekit.Route{Method: r.Method, Path: r.Path, Name: r.Handler})
 			}
-			out = append(out, routemanage.Route{Method: r.Method, Path: r.Path, Name: name})
-		}
-		return out
+			return out
+		},
 	})
+
+	// 依次装配模块。顺序由依赖图决定：被依赖的模块先 Setup 并 Provide 服务。
+	for _, spec := range registry.specs {
+		if spec.Setup == nil {
+			continue
+		}
+		if err := spec.Setup(mods); err != nil {
+			closeDB(db)
+			return nil, fmt.Errorf("模块 %s 装配失败: %w", spec.Name, err)
+		}
+	}
+	// 跨模块依赖注入：此时所有服务都已 Provide。
+	if err := mods.RunAfter(); err != nil {
+		closeDB(db)
+		return nil, err
+	}
+	// 把各模块注册的任务实现交给调度模块。
+	mods.FlushJobs()
 
 	engine = router.New(router.Deps{
 		Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
-		JWT: jwtMgr, Authz: authzLoader, AuditSvc: auditSvc,
-		Modules:      registry.asSet(),
-		Events:       bus,
-		Auth:         auth.NewHandler(authSvc, cfg.Security.CaptchaEnabled, cfg.Server.TrustProxy),
-		User:         user.NewHandler(userSvc),
-		Role:         role.NewHandler(roleSvc),
-		Menu:         menu.NewHandler(menuSvc),
-		Dept:         dept.NewHandler(deptSvc),
-		Dict:         system.NewDictHandler(dictSvc),
-		Config:       system.NewConfigHandler(configSvc),
-		Notice:       system.NewNoticeHandler(noticeSvc),
-		Message:      message.NewHandler(msgSvc),
-		Membership:   membership.NewHandler(membershipSvc),
-		APIKey:       apikey.NewHandler(apiKeySvc),
-		APIKeySvc:    apiKeySvc,
-		News:         news.NewHandler(newsSvc),
-		NewsOpen:     news.NewOpenHandler(newsSvc),
-		Audit:        audit.NewHandler(auditSvc),
-		Job:          job.NewHandler(jobSvc),
-		File:         file.NewHandler(fileSvc),
-		Dashboard:    dashboard.NewHandler(dashSvc),
-		Monitor:      monitor.NewHandler(monitorSvc),
-		Route:        routemanage.NewHandler(routeSvc),
-		CacheAdmin:   cacheadmin.NewHandler(cacheadmin.NewService(ch)),
-		Maintenance:  maintenanceHandler,
-		ConfigCenter: configcenter.NewHandler(runtimeCfg),
-		Cluster:      cluster.NewHandler(clusterSvc),
+		JWT: jwtMgr, Authz: authzLoader, Modules: mods,
 	})
 
 	app = &App{Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
-		Mailer: mail, Engine: engine, Jobs: jobSvc, Cluster: clusterSvc, restartCh: make(chan struct{}, 1),
-		Audit: auditSvc, Events: bus, Instance: resolveInstanceID(cfg), Started: time.Now(),
-		Modules: registry.asSet()}
+		Mailer: mail, Engine: engine, restartCh: make(chan struct{}, 1),
+		Events: bus, Instance: resolveInstanceID(cfg), Started: time.Now(),
+		Modules: registry.asSet(), mods: mods}
+
+	// 配置中心需要知道实际启用的集合（含依赖补齐），供管理端区分
+	// 「配置值」与「当前运行」。
+	if r, ok := mods.Lookup("configcenter").(interface {
+		SetActiveModules([]string, string)
+	}); ok {
+		r.SetActiveModules(registry.Ordered, registry.Source)
+	}
+
 	// 启动自检：关键依赖（数据库/缓存/存储）不可用时直接 fail-fast；
 	// 迁移版本落后、种子为空等只告警不阻断。报告挂在 App 上便于测试断言。
 	report, err := runSelfChecks(context.Background(), selfCheckDeps{
@@ -417,29 +322,11 @@ func resolveInstanceID(cfg *config.Config) string {
 	return fmt.Sprintf("%s-%d", host, os.Getpid())
 }
 
-func models() []any {
-	return []any{
-		&model.User{}, &model.UserRole{}, &model.UserRecoveryCode{}, &model.Role{}, &model.RoleMenu{}, &model.Menu{},
-		&model.Dept{}, &model.Session{}, &model.DictType{}, &model.DictItem{}, &model.SysConfig{},
-		&model.Notice{}, &model.LoginLog{}, &model.OperationLog{}, &model.Job{}, &model.JobLog{},
-		&model.File{}, &model.Message{}, &model.MessageRecipient{},
-		&model.MembershipLevel{}, &model.APIKey{},
-		&model.NewsSource{}, &model.NewsCategory{}, &model.NewsArticle{},
-		&model.RuntimeConfig{}, &model.ClusterNode{},
-		&model.ClusterCommand{}, &model.ClusterCommandTarget{},
-	}
-}
-
 // Run 启动服务并阻塞，收到信号后优雅停机。
 func (a *App) Run() error {
-	// 模块被关闭时不启动后台循环：相关表可能没建，跑起来只会反复报错。
-	if a.Jobs != nil && a.moduleOn("job") {
-		if err := a.Jobs.Start(context.Background()); err != nil {
-			a.Log.Warn("定时任务启动失败", zap.Error(err))
-		}
-	}
-	if a.Cluster != nil && a.moduleOn("cluster") {
-		a.Cluster.Start(context.Background())
+	// 后台循环（调度器、集群心跳）由模块在装配时注册，模块被裁掉时不存在。
+	for _, err := range a.mods.Start(context.Background()) {
+		a.Log.Warn("模块启动回调失败", zap.Error(err))
 	}
 
 	errCh := make(chan error, 1)
@@ -497,21 +384,15 @@ func (a *App) Run() error {
 	}
 }
 
-// Shutdown 依次停止 HTTP、定时任务、审计队列与存储连接。
+// Shutdown 依次停止模块后台循环、HTTP、事件总线与存储连接。
 func (a *App) Shutdown(ctx context.Context) error {
 	var err error
-	if a.Cluster != nil {
-		// 先停后台循环，避免重启过程中又领到新指令。
-		a.Cluster.Close()
+	// 先停后台循环，避免重启过程中又领到新指令。
+	if a.mods != nil {
+		a.mods.Stop()
 	}
 	if a.server != nil {
 		err = a.server.Shutdown(ctx)
-	}
-	if a.Jobs != nil {
-		a.Jobs.Stop()
-	}
-	if a.Audit != nil {
-		a.Audit.Close()
 	}
 	if a.Events != nil {
 		a.Events.Close()
@@ -572,7 +453,6 @@ func newGateway(cfg *config.Config, lg *zap.Logger) (*App, error) {
 	return app, nil
 }
 
-// moduleSet 计算 service 模式下启用的模块集合；返回 nil 表示全部启用。
 func newServer(cfg *config.Config, engine *gin.Engine) *http.Server {
 	return &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),

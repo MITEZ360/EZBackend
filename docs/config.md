@@ -281,7 +281,7 @@ KEEL_GATEWAY_ROUTES="/api/v1=keel-core,/uploads=keel-file"
 | --- | --- | --- |
 | `modules.enabled` | `[]` | 空表示全部启用；非空时作为白名单，只启用列出的模块。也可在管理端「配置中心 → 业务模块」勾选 |
 
-- **依赖自动补齐**：启用某模块时会自动启用它依赖的模块（`news` → `apikey`，
+- **依赖自动补齐**：启用某模块时会自动启用它依赖的模块（`news` → `apikey` + `job`，
   `user` → `role` → `menu`，`cluster` → `configcenter`）。
 - **基础模块常驻**：`auth` / `config` / `dict` / `notice` 因公开路由依赖，始终启用。
 - **未知模块 fail-fast**：列出不存在的模块名会在装配阶段直接拒绝启动，并打印可用清单。
@@ -299,7 +299,7 @@ KEEL_GATEWAY_ROUTES="/api/v1=keel-core,/uploads=keel-file"
 | 数据表 | 新库不建表；已存在的表保留 | 缺失的表自动补建 |
 | 定时任务 | 不再补种该模块的清理任务 | 恢复补种 |
 | 后台循环 | 调度器、集群心跳等不启动 | 恢复启动 |
-| 前端页面 | 页面仍在包里，但菜单守卫会拦到 403 | 恢复可达 |
+| 前端页面 | 页面仍在包里，但菜单守卫会拦到 403；登录后自动落到菜单里第一个可访问页面 | 恢复可达 |
 
 之所以「停用菜单」而不是删除：重新启用后角色授权、管理员自定义的名称与排序都还在。
 已建的表同理，关闭模块不会删数据。
@@ -329,22 +329,188 @@ KEEL_GATEWAY_ROUTES="/api/v1=keel-core,/uploads=keel-file"
 
 ### 发行版裁剪示例
 
-只保留后台管理与运维控制台，去掉资讯、消息、会员、API 密钥等演示业务：
+只保留后台管理与运维控制台，去掉资讯、消息、会员、API 密钥与工作台：
 
 ```yaml
 modules:
-  enabled: [auth, config, dict, notice, user, role, menu, dept, dashboard,
+  enabled: [auth, config, dict, notice, user, role, menu, dept,
             job, file, audit, monitor, routemanage, cacheadmin,
             maintenance, configcenter, cluster]
 ```
 
-实测效果：路由 172 → 132，内置菜单 83 → 61，`news_*` / `sys_message` /
-`sys_api_key` / `sys_membership_level` 不建表，定时任务 5 → 3。
+实测效果：路由 172 → 126，内置菜单停用 23 条（侧边栏 30 → 22 项），
+定时任务 5 → 3，被裁模块的接口全部 404。表与数据保留，重新启用后原样恢复。
 
-> 服务与处理器仍由 `bootstrap/app.go` 统一构造（构造本身很轻，不查表、不起协程），
-> 裁剪发生在路由、菜单、建表、任务与后台循环五个面上。归属关系集中在
-> `internal/bootstrap/module_scope.go` 的 `menuModules` / `moduleModels` 两张表，
-> 新增模块时在那里登记即可。
+### 两层裁剪：运行期开关 vs 编译期裁剪
+
+Go 里裁剪有两条独立路径，别混在一起：
+
+| | 运行期开关（`modules.enabled`） | 编译期裁剪（发行版导入清单） |
+| --- | --- | --- |
+| 作用 | 同一份二进制按配置关掉模块 | 不导入的模块不进入二进制 |
+| 生效 | 保存后重启 | 重新编译 |
+| 效果 | 路由、菜单、建表、任务、循环都不生效 | 代码根本不存在，体积与攻击面都变小 |
+| 适合 | 同一发行版交付不同客户，按需开功能 | 做精简发行版、把演示业务整块摘掉 |
+
+编译期裁剪改的是发行版清单：`internal/distribution/default.go` 只有空白导入，
+删一行就少一个模块的全部代码——路由、表、菜单、任务、后台循环一并消失。
+默认发行版只收通用后台能力（登录、RBAC、组织、运维控制台、消息/会员/API 密钥），
+演示业务（资讯中心）与国内能力（自助注册/短信登录、会员充值）不在其中，
+它们都是独立的可选模块。
+
+> 生成器要回答"要不要资讯中心"，就得看到完整的模块图，而默认清单里没有它。
+> `internal/distribution/catalog` 汇总「默认清单 + 可选模块」，只被 `cmd/distgen`
+> 与测试引用，不进入应用二进制。
+
+### 组装一个只含指定功能的系统
+
+不想手动删导入时，用生成器按模块名组装：
+
+```bash
+make dist-list                                    # 看有哪些模块、谁依赖谁；+ 为默认不装
+make dist MODULES="user configcenter cluster"     # 组装并编译
+make dist MODULES="user news"                     # 带资讯中心的系统
+make dist MODULES=all                             # 全量（含默认不装的模块）
+make dist-default                                 # 删掉定制清单，回到默认发行版
+```
+
+生成器做三件事：补齐依赖、强制带上常驻模块、把模块名翻译成包导入清单，
+写入 `internal/distribution/profile.go`（带 `profile` 构建标签，与 `default.go`
+的 `!profile` 互斥）。所以同一份源码能产出多个发行版，互不干扰。
+
+### 资讯中心：默认不装的独立模块
+
+`news` 的全部代码仍在 `internal/modules/news`（`service.go` + `handler.go` +
+`module.go`），只是默认发行版不导入它：
+
+| 影响面 | 默认发行版 |
+| --- | --- |
+| 路由 | `/api/v1/news*`、`/api/v1/news-sources`、`/api/open/v1/news*` 全部 404 |
+| 数据表 | 新库不建 `news_source` / `news_category` / `news_article` |
+| 菜单 | 资讯中心目录与其页面不出现；旧库里这些内置菜单被自动停用 |
+| 配置中心 | 「资讯」分组整组隐藏（配置项带 `Module` 归属，模块不在发行版就隐藏） |
+| 定时任务 | `news.cleanup` 不补种 |
+| 模块开关 | 配置中心的候选清单里没有 `news`（代码都不在，勾了也没用） |
+
+需要时显式组装，生成器会自动补齐 `apikey`、`job` 与常驻模块：
+
+```bash
+make dist MODULES="user news"
+# 显式选择：user news
+# 最终装配 11 个：menu auth config dict apikey job news notice role dept user
+```
+
+实测该组合 115 条路由（默认发行版 155，全量 172）：三张资讯表、清理任务、
+管理端接口与开放接口都齐全，`/api/v1/news` 返回 200。
+
+实测「用户管理 + 配置中心 + 集群管理」：
+
+```
+显式选择：user configcenter cluster
+最终装配 10 个：menu auth configcenter cluster config dict notice role dept user
+自动补齐 7 个：  menu auth config dict notice role dept
+```
+
+启动后 88 条路由（全量 172），侧边栏只剩系统管理与运维中心两组，
+`/api/v1/news`、`/api/v1/messages`、`/api/v1/dashboard/overview` 全部 404。
+
+> 包是裁剪的最小单位。`system` 包同时注册了 `dict` / `config` / `notice`
+> 三个模块，导入它就会把三个都带进来——它们本来就是常驻模块，没有实际影响。
+> 将来若某个包内含多个可选模块，包级裁剪后可用 `modules.enabled` 再做模块级筛选。
+
+### 国内能力：两个独立模块
+
+中国大陆常用的注册/短信与支付/充值做成两个模块，默认都不装：
+
+| 模块 | 依赖 | 内容 |
+| --- | --- | --- |
+| `cnauth` | `auth` | 手机号自助注册、短信验证码登录、找回密码 |
+| `recharge` | `membership` | 等级售价、充值下单、微信/支付宝回调、订单管理 |
+
+```bash
+make dist MODULES="user cnauth recharge"
+# 最终装配 11 个：menu auth cnauth config dict notice role dept user membership recharge
+```
+
+体量与边界和资讯中心一致：
+
+| 影响面 | 默认发行版 |
+| --- | --- |
+| 路由 | `/api/v1/auth/register`、`/api/v1/auth/sms/code`、`/api/v1/auth/login/phone`、`/api/v1/pay/notify/*`、`/api/v1/recharge/*` 全部 404 |
+| 数据表 | 新库不建 `cn_sms_code` / `cn_recharge_order` / `cn_payment_config` |
+| 菜单 | 充值订单与支付配置按钮不出现 |
+| 配置中心 | 「注册与短信」「支付」两组整组隐藏 |
+| 登录页 | `public/cn-config` 404，注册入口保持隐藏 |
+
+两点实现细节：
+
+- 平台库 `internal/platform/sms`、`internal/platform/pay` 不算模块，只在被模块
+  引用时进二进制；会员等级表的 `price` 列由迁移 v9 无条件加上（列在默认版里恒为 0，
+  不装配 `recharge` 时没有读取方）。
+- 微信/QQ 的 OAuth 协议适配留在 `auth` 模块内部，由 `oauth.providers[].protocol`
+  驱动；不填 `protocol` 时走标准 OAuth2，行为与之前一致。因此“第三方登录”不需要
+  额外模块，只要配置。
+
+### 遗留菜单会被自动停用
+
+先用全量版跑过、再换成精简版时，数据库里还留着被裁模块的菜单记录。
+启动时会把这些「不在当前发行版内」的内置菜单置为停用（`status=0`），
+不是删除，换回全量版后原样恢复。
+
+判据是菜单 ID 的 `m_` 前缀：内置菜单一律以 `m_` 开头，管理员自建菜单用
+雪花 ID，脚本按模块停用内置菜单时不会误伤手工建的菜单。**这也是内置菜单
+必须保留 `m_` 前缀的原因**——换成别的 ID 规范就会被当成自建菜单而漏掉。
+
+> 数据库里两条历史遗留菜单（`m_recharge`、`m_recharge_pay_config`）不属于
+> 任何模块，会在每次启动时被停用。这是预期行为，不是误伤。
+
+
+### 模块如何自描述
+
+每个模块包里有一个 `module.go`，在 `init()` 里声明自己的一切：
+
+```go
+func init() {
+    modulekit.Register(modulekit.Spec{
+        Name:      "news",
+        Label:     "资讯聚合",
+        DependsOn: []string{"apikey"},
+        Models:    []any{&model.NewsArticle{}, /* … */},
+        Menus:     []modulekit.Menu{ /* 扁平声明，Parent 指向目录 */ },
+        Jobs:      []modulekit.Job{{Handler: "news.cleanup", Cron: "15 * * * *"}},
+        Setup:     setup,  // 构造服务、挂路由、注册任务实现
+        Sync:      Sync,   // 每次启动的幂等数据补齐
+    })
+}
+```
+
+`Setup` 拿到的 `modulekit.Context` 只暴露平台能力（DB、Cache、Config、Log、
+Storage、JWT、Authz、事件总线、路由快照、重启入口）与服务查找：
+
+- `c.Authed/Public/Open(fn)` 声明路由，中间件由框架按组挂好；
+- `c.Provide(name, svc)` 供其它模块取用，`modulekit.Need[T](c, name)` 取；
+- `c.Job(handler, fn)` 注册任务实现；
+- `c.OnStart/OnStop` 声明后台循环的生命周期；
+- `c.After(fn)` 在全部模块装配完成后做跨模块注入。
+
+模块之间**不允许互相 import**。需要别的模块的能力时，在自己的包里定义
+一个小接口（如 `user.MembershipFiller`、`system.NoticeNotifier`），对方结构
+匹配即可，框架在装配末尾注入。这样任一模块都能被单独裁掉。
+
+### 新增一个模块
+
+1. 新建 `internal/modules/<name>/`，实现 service 与 handler；
+2. 写 `module.go`：`init()` 里 `modulekit.Register`（`Pkg` 填本包导入路径），`setup` 里挂路由；
+3. 加进发行版：通用能力写进 `internal/distribution/default.go`；独立模块写进
+   `internal/distribution/catalog/catalog.go`（同时把名字加进 `Optional`），
+   或用 `make dist MODULES="<name> …"` 组装；
+4. 写完。`bootstrap`、`router`、`seed` 都不用改。
+
+配置项仍集中在 `internal/modules/configcenter/schema.go`，每一项带 `Module` 归属：
+模块没编进发行版时，该项连同空分组一起隐藏，不会留下"改了不生效"的输入框。
+这是下一步要下沉的部分：模块应能自报 `Schema() []Item`，否则模块搬走了、
+它的配置项还得回主工程改。
+
 
 ---
 

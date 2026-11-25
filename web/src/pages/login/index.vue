@@ -6,6 +6,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { ArrowLeft, Key, Lock, Refresh, User } from '@element-plus/icons-vue'
 import OtpInput from '@/components/OtpInput.vue'
 import { authApi, oauthApi, type OAuthProvider } from '@/api/auth'
+import { cnApi } from '@/api/cn'
 import { ApiError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
@@ -24,6 +25,8 @@ const captcha = reactive({ enabled: false, id: '', image: '' })
 
 /** 由后端配置下发的第三方登录渠道；未配置时整块不显示 */
 const providers = ref<OAuthProvider[]>([])
+/** 自助注册是否开放，由后端 public/cn-config 下发；未装配 cnauth 模块时恒为 false */
+const registerEnabled = ref(false)
 const oauthLoading = ref('')
 
 /** credential：账号密码；totp：第二步动态码 */
@@ -184,6 +187,8 @@ async function goOAuth(p: OAuthProvider) {
 onMounted(() => {
   loadCaptcha()
   loadProviders()
+  // 未装配 cnauth 模块时接口 404，注册入口保持隐藏
+  cnApi.publicConfig().then((cfg) => { registerEnabled.value = cfg.registerEnabled }).catch(() => {})
   const err = route.query.oauth_error
   if (typeof err === 'string' && err) errorMsg.value = err
 })
@@ -366,6 +371,10 @@ onMounted(() => {
               <span>{{ oauthLoading === p.name ? $t('跳转中…') : p.label }}</span>
             </button>
           </div>
+        </div>
+
+        <div v-if="step === 'credential' && registerEnabled" class="register-entry">
+          {{ $t('还没有账号？') }} <router-link to="/register">{{ $t('立即注册') }}</router-link>
         </div>
 
         <!-- 默认凭据只在开发环境提示，生产环境展示等于公开超管账号密码 -->
@@ -728,6 +737,24 @@ onMounted(() => {
 /* ---------------------------------------------------------- 第三方登录 */
 .oauth {
   margin-top: 26px;
+}
+
+/* 自助注册入口：只在后端开启注册时出现 */
+.register-entry {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-400);
+
+  a {
+    color: var(--brand-600);
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 .oauth-divider {

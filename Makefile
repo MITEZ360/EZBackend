@@ -118,7 +118,7 @@ build-go: ## 仅编译 Go（复用已有 web/dist）
 	@echo "已生成 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
 
 .PHONY: build
-build: web ## 构建前端 + 编译当前平台二进制
+build: web ## 构建前端 + 编译当前平台二进制（默认发行版）
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/keel
 	@echo "已生成 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
@@ -134,6 +134,32 @@ build-all: ## 交叉编译多平台
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o $$out ./cmd/keel || exit 1; \
 	done
 	@ls -lh $(BIN_DIR)
+
+.PHONY: dist
+dist: ## 组装定制发行版（MODULES="user configcenter cluster"）
+	@test -n "$(MODULES)" || { echo '用法: make dist MODULES="user configcenter cluster"'; echo '查看可组合模块: make dist-list'; exit 1; }
+	@mkdir -p $(BIN_DIR)
+	go run ./cmd/distgen -modules "$(MODULES)"
+	CGO_ENABLED=0 go build -tags profile -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/keel
+	@echo "已生成定制发行版 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
+
+.PHONY: dist-list
+dist-list: ## 列出可组合的模块与依赖
+	@go run ./cmd/distgen -list
+
+.PHONY: dist-full
+dist-full: ## 组装全量发行版（含资讯中心等默认不装的模块）并编译
+	@mkdir -p $(BIN_DIR)
+	go run ./cmd/distgen -modules all
+	CGO_ENABLED=0 go build -tags profile -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/keel
+	@echo "已生成全量发行版 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
+
+.PHONY: dist-default
+dist-default: ## 删除定制清单，回到默认发行版并重新编译
+	@go run ./cmd/distgen -modules default
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/keel
+	@echo "已回到默认发行版 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
 
 .PHONY: run
 run: ## 本地运行（默认配置）

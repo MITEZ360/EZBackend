@@ -160,8 +160,8 @@ func (r *Runner) definitions() []definition {
 			},
 		},
 		{
-			// 版本号跳过 7：该号已被 CN 分支的支付配置迁移占用，
-			// 两个分支合并后必须保持版本号唯一且递增。
+			// v6/v7 曾预留给国内能力但未在 main 发布，故 v8 直接接在 v5 之后；
+			// 那部分能力现在以 v9 追加，已升级的库不会漏跑。
 			Version: 8,
 			Name:    "runtime_config_and_cluster",
 			// 配置中心与集群协同：运行时配置覆盖、节点心跳、运维指令及其明细。
@@ -175,6 +175,23 @@ func (r *Runner) definitions() []definition {
 				return db.WithContext(ctx).Migrator().DropTable(
 					&model.ClusterCommandTarget{}, &model.ClusterCommand{},
 					&model.ClusterNode{}, &model.RuntimeConfig{})
+			},
+		},
+		{
+			Version: 9,
+			Name:    "membership_price_col",
+			// 会员等级增加充值售价列（单位：分）。
+			// 只加列：充值订单、短信验证码、支付配置这些表属于可选模块，
+			// 由 Spec.Models 在装配模块时建；默认发行版不装它们，也不该建空表。
+			Up: func(ctx context.Context, db *gorm.DB) error {
+				return db.WithContext(ctx).AutoMigrate(&model.MembershipLevel{})
+			},
+			Down: func(ctx context.Context, db *gorm.DB) error {
+				m := db.WithContext(ctx).Migrator()
+				if m.HasColumn(&model.MembershipLevel{}, "Price") {
+					return m.DropColumn(&model.MembershipLevel{}, "Price")
+				}
+				return nil
 			},
 		},
 	}

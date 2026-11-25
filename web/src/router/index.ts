@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { translate } from '@/i18n'
+import type { MenuNode } from '@/api/types'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -18,6 +19,12 @@ const routes: RouteRecordRaw[] = [
     name: 'login',
     component: () => import('@/pages/login/index.vue'),
     meta: { title: '登录', public: true, hidden: true },
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/pages/register/index.vue'),
+    meta: { title: '用户注册', public: true, hidden: true },
   },
   {
     path: '/oauth/callback',
@@ -53,6 +60,12 @@ const routes: RouteRecordRaw[] = [
         name: 'system-menu',
         component: () => import('@/pages/system/menu/index.vue'),
         meta: { title: '菜单管理' },
+      },
+      {
+        path: 'recharge',
+        name: 'recharge',
+        component: () => import('@/pages/recharge/index.vue'),
+        meta: { title: '会员充值' },
       },
       {
         path: 'system/membership',
@@ -237,12 +250,38 @@ router.beforeEach(async (to) => {
     }
   }
 
+  // 首页兜底：定制发行版未必含 dashboard 模块（make dist 按需组装），
+  // 写死 /dashboard 会让登录后直接撞上 403。落到菜单里第一个可访问页面。
+  if ((to.path === '/' || to.path === '/dashboard') && !inMenus(to.path)) {
+    const home = homePath()
+    if (home !== to.path) return { path: home }
+  }
+
   // 页面级权限：以服务端返回的菜单树为唯一依据，避免用户点到空白页
   if (to.name !== 'forbidden' && !isFreeRoute(to.path) && !inMenus(to.path)) {
     return { name: 'forbidden' }
   }
   return true
 })
+
+/** 菜单树里第一个可访问的页面路径 */
+function homePath(nodes: MenuNode[] = useAuthStore().menus): string {
+  return pickPath(nodes) || '/profile'
+}
+
+/** 目录节点本身没有页面，取它的第一个页面后代；递归空串表示这条分支没有可用页面 */
+function pickPath(nodes: MenuNode[]): string {
+  for (const node of nodes) {
+    if (node.type === 'button') continue
+    if (node.type === 'dir') {
+      const inner = pickPath(node.children ?? [])
+      if (inner) return inner
+      continue
+    }
+    if (node.path) return node.path
+  }
+  return ''
+}
 
 /** profile 等不在菜单中的页面放行 */
 function isFreeRoute(path: string): boolean {

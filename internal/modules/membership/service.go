@@ -52,6 +52,7 @@ type LevelInput struct {
 	Status      *int8           `json:"status" binding:"omitempty,oneof=0 1" label:"状态"`
 	Description string          `json:"description" binding:"max=255" label:"说明"`
 	DefaultDays int             `json:"defaultDays" binding:"omitempty,min=0,max=36500" label:"默认时长"`
+	Price       int64           `json:"price" binding:"omitempty,min=0,max=100000000" label:"充值价格（分）"`
 	Color       string          `json:"color" binding:"omitempty,max=16" label:"标识色"`
 	Benefits    []model.Benefit `json:"benefits" label:"权益"`
 }
@@ -169,7 +170,7 @@ func (s *Service) Create(ctx context.Context, in *LevelInput) (*model.Membership
 	lv := &model.MembershipLevel{
 		Code: in.Code, Name: in.Name, Rank: in.Rank,
 		Status:      utils.Int8Or(in.Status, model.StatusEnabled),
-		Description: in.Description, DefaultDays: in.DefaultDays,
+		Description: in.Description, DefaultDays: in.DefaultDays, Price: in.Price,
 		Color: in.Color, Benefits: in.Benefits,
 	}
 	if lv.Benefits == nil {
@@ -217,7 +218,7 @@ func (s *Service) Update(ctx context.Context, id string, in *LevelInput) error {
 		Updates(map[string]any{
 			"code": in.Code, "name": in.Name, "rank": in.Rank,
 			"status":      utils.Int8Or(in.Status, model.StatusEnabled),
-			"description": in.Description, "default_days": in.DefaultDays,
+			"description": in.Description, "default_days": in.DefaultDays, "price": in.Price,
 			"color": in.Color, "benefits": string(encoded),
 		}).Error
 	if err != nil && isUniqueViolation(err) {
@@ -253,7 +254,18 @@ type GrantInput struct {
 
 // Grant 给用户开通或续费会员，返回最新会员状态。
 func (s *Service) Grant(ctx context.Context, userID string, in *GrantInput) (*model.MembershipSnapshot, error) {
-	db := s.db.WithContext(ctx)
+	return s.grantOn(ctx, s.db.WithContext(ctx), userID, in)
+}
+
+// GrantTx 在外部事务上发放会员。充值回调用它把「订单状态变更 + 会员发放」放进同一事务。
+func (s *Service) GrantTx(ctx context.Context, tx *gorm.DB, userID string, in *GrantInput) (*model.MembershipSnapshot, error) {
+	if tx == nil {
+		return s.Grant(ctx, userID, in)
+	}
+	return s.grantOn(ctx, tx.WithContext(ctx), userID, in)
+}
+
+func (s *Service) grantOn(ctx context.Context, db *gorm.DB, userID string, in *GrantInput) (*model.MembershipSnapshot, error) {
 	if strings.TrimSpace(userID) == "" {
 		return nil, errs.BadRequest("请选择用户")
 	}

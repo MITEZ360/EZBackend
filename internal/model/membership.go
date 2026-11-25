@@ -26,15 +26,18 @@ type Benefit struct {
 // 与 RBAC 角色无关：角色决定能进哪些后台页面，等级决定能享受哪些业务权益。
 type MembershipLevel struct {
 	Base
-	Code        string    `gorm:"size:32;uniqueIndex;not null" json:"code"`
-	Name        string    `gorm:"size:64;not null" json:"name"`
-	Rank        int       `gorm:"default:0" json:"rank"`
-	Status      int8      `gorm:"index" json:"status"`
-	Description string    `gorm:"size:255" json:"description,omitempty"`
-	DefaultDays int       `gorm:"default:0" json:"defaultDays"`
-	Color       string    `gorm:"size:16" json:"color,omitempty"`
-	Benefits    []Benefit `gorm:"serializer:json;type:text" json:"benefits"`
-	UserCount   int64     `gorm:"-" json:"userCount"`
+	Code        string `gorm:"size:32;uniqueIndex;not null" json:"code"`
+	Name        string `gorm:"size:64;not null" json:"name"`
+	Rank        int    `gorm:"default:0" json:"rank"`
+	Status      int8   `gorm:"index" json:"status"`
+	Description string `gorm:"size:255" json:"description,omitempty"`
+	DefaultDays int    `gorm:"default:0" json:"defaultDays"`
+	// Price 充值售价，单位「分」；0 表示该等级不参与自助购买。
+	// 只有装配 recharge 模块时才有意义，默认发行版里恒为 0。
+	Price     int64     `gorm:"default:0" json:"price"`
+	Color     string    `gorm:"size:16" json:"color,omitempty"`
+	Benefits  []Benefit `gorm:"serializer:json;type:text" json:"benefits"`
+	UserCount int64     `gorm:"-" json:"userCount"`
 }
 
 // TableName 指定表名。

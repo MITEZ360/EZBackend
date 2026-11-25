@@ -488,11 +488,12 @@ func (h *Handler) RevokeSession(c *gin.Context) {
 // KE:SWAGGER-END
 func (h *Handler) PublicConfig(c *gin.Context) {
 	response.OK(c, gin.H{
-		"siteName":        h.svc.cfg.App.Name,
-		"version":         h.svc.cfg.App.Version,
-		"env":             h.svc.cfg.App.Env,
-		"captchaEnabled":  h.svc.cfg.Security.CaptchaEnabled,
-		"registerEnabled": false,
+		"siteName":       h.svc.cfg.App.Name,
+		"version":        h.svc.cfg.App.Version,
+		"env":            h.svc.cfg.App.Env,
+		"captchaEnabled": h.svc.cfg.Security.CaptchaEnabled,
+		// 装配了 cnauth 模块并开放自助注册时，同步反映到标准公开配置。
+		"registerEnabled": h.svc.cfg.CN.RegisterEnabled,
 	})
 }
 

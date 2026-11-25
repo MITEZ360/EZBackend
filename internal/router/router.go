@@ -1,9 +1,12 @@
-// Package router 组装 Gin 引擎、全局中间件与全部业务路由。
+// Package router 组装 Gin 引擎、全局中间件与业务路由。
 //
 // 三种形态共用同一套引擎：
 //   - mono：全部业务路由挂载在一个进程内；
 //   - gateway：只保留健康检查、指标、静态资源与反向代理；
 //   - service：按 micro.modules 裁剪业务路由，一个进程只暴露部分模块。
+//
+// 本包不认识任何具体业务模块：路由由各模块在装配时通过 modulekit.Context
+// 声明，这里只负责给出三组带中间件的挂载点（公开 / 登录后 / 开放接口）。
 package router
 
 import (
@@ -22,82 +25,33 @@ import (
 	"github.com/keel-framework/keel/internal/apidocs"
 	"github.com/keel-framework/keel/internal/micro"
 	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/modules/apikey"
-	"github.com/keel-framework/keel/internal/modules/audit"
-	"github.com/keel-framework/keel/internal/modules/auth"
-	"github.com/keel-framework/keel/internal/modules/cacheadmin"
-	"github.com/keel-framework/keel/internal/modules/cluster"
-	"github.com/keel-framework/keel/internal/modules/configcenter"
-	"github.com/keel-framework/keel/internal/modules/dashboard"
-	"github.com/keel-framework/keel/internal/modules/dept"
-	"github.com/keel-framework/keel/internal/modules/file"
-	"github.com/keel-framework/keel/internal/modules/job"
-	"github.com/keel-framework/keel/internal/modules/maintenance"
-	"github.com/keel-framework/keel/internal/modules/membership"
-	"github.com/keel-framework/keel/internal/modules/menu"
-	"github.com/keel-framework/keel/internal/modules/message"
-	"github.com/keel-framework/keel/internal/modules/monitor"
-	"github.com/keel-framework/keel/internal/modules/news"
-	"github.com/keel-framework/keel/internal/modules/role"
-	"github.com/keel-framework/keel/internal/modules/routemanage"
-	"github.com/keel-framework/keel/internal/modules/system"
-	"github.com/keel-framework/keel/internal/modules/user"
 	"github.com/keel-framework/keel/internal/platform/authn"
 	"github.com/keel-framework/keel/internal/platform/authz"
 	"github.com/keel-framework/keel/internal/platform/cache"
 	"github.com/keel-framework/keel/internal/platform/config"
 	"github.com/keel-framework/keel/internal/platform/database"
+	"github.com/keel-framework/keel/internal/platform/modulekit"
 	"github.com/keel-framework/keel/internal/platform/storage"
 	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/event"
 	"github.com/keel-framework/keel/pkg/i18n"
 	"github.com/keel-framework/keel/pkg/response"
 	"github.com/keel-framework/keel/web"
 )
 
-// Deps 路由依赖集合。
+// Deps 路由依赖集合。业务侧的一切都在 Modules 里，本结构只含平台能力。
 type Deps struct {
-	Cfg      *config.Config
-	Log      *zap.Logger
-	DB       *gorm.DB
-	Cache    cache.Cache
-	Limiter  cache.Limiter
-	Storage  *storage.Manager
-	JWT      *authn.Manager
-	Authz    *authz.Loader
-	AuditSvc *audit.Service
+	Cfg     *config.Config
+	Log     *zap.Logger
+	DB      *gorm.DB
+	Cache   cache.Cache
+	Limiter cache.Limiter
+	Storage *storage.Manager
+	JWT     *authn.Manager
+	Authz   *authz.Loader
 	// Gateway 非空时按网关模式装配：仅保留健康检查、指标、静态资源与转发规则。
 	Gateway *micro.Gateway
-	// Modules 为 service 模式下启用的业务模块；为空表示全部启用。
-	Modules map[string]bool
-	// Events 进程内事件总线，可为空；用于发布审计等业务事件。
-	Events *event.Bus
-
-	Auth        *auth.Handler
-	User        *user.Handler
-	Role        *role.Handler
-	Menu        *menu.Handler
-	Dept        *dept.Handler
-	Dict        *system.DictHandler
-	Config      *system.ConfigHandler
-	Notice      *system.NoticeHandler
-	Message     *message.Handler
-	Membership  *membership.Handler
-	APIKey      *apikey.Handler
-	APIKeySvc   *apikey.Service
-	News        *news.Handler
-	NewsOpen    *news.OpenHandler
-	Audit       *audit.Handler
-	Job         *job.Handler
-	File        *file.Handler
-	Dashboard   *dashboard.Handler
-	Monitor     *monitor.Handler
-	Route       *routemanage.Handler
-	CacheAdmin  *cacheadmin.Handler
-	Maintenance *maintenance.Handler
-	// ConfigCenter 运行时配置中心；Cluster 多节点协同。
-	ConfigCenter *configcenter.Handler
-	Cluster      *cluster.Handler
+	// Modules 是模块装配上下文：路由闭包、会话校验器与审计器都由模块提供。
+	Modules *modulekit.Context
 }
 
 // New 创建 HTTP 引擎。
@@ -163,7 +117,7 @@ func New(d Deps) *gin.Engine {
 	}
 
 	authMW := middleware.Auth(middleware.AuthDeps{
-		JWT: d.JWT, Authz: d.Authz, Sessions: sessionValidator{d.Auth},
+		JWT: d.JWT, Authz: d.Authz, Sessions: d.Modules.Sessions,
 	})
 
 	// 限流实现由缓存决定：Redis 缓存对应跨实例共享配额，否则进程内令牌桶。
@@ -176,116 +130,30 @@ func New(d Deps) *gin.Engine {
 	// 使用动态版本：管理端调整限流阈值后无需重启即可生效。
 	v1 := e.Group("/api/v1")
 	public := v1.Group("", middleware.RateLimitDynamic(limiter, d.Cfg.Server.TrustProxy, false))
-	d.publicRoutes(public)
+	for _, fn := range d.Modules.PublicRoutes() {
+		fn(public)
+	}
 
 	// ---- 登录后接口：认证之后按用户维度限流 ----
 	authed := v1.Group("", authMW,
 		middleware.RateLimitDynamic(limiter, d.Cfg.Server.TrustProxy, true),
-		middleware.Audit(d.AuditSvc, d.Events))
-	d.authRoutes(authed)
-	if d.on("dashboard") {
-		d.dashboardRoutes(authed)
-	}
-	if d.on("user") {
-		d.userRoutes(authed)
-	}
-	if d.on("membership") {
-		d.membershipRoutes(authed)
-	}
-	if d.on("apikey") {
-		d.apiKeyRoutes(authed)
-	}
-	if d.on("news") {
-		d.newsRoutes(authed)
-	}
-	if d.on("role") {
-		d.roleRoutes(authed)
-	}
-	if d.on("menu") {
-		d.menuRoutes(authed)
-	}
-	if d.on("dept") {
-		d.deptRoutes(authed)
-	}
-	if d.on("dict") {
-		d.dictRoutes(authed)
-	}
-	if d.on("config") {
-		d.configRoutes(authed)
-	}
-	if d.on("notice") {
-		d.noticeRoutes(authed)
-	}
-	if d.on("message") {
-		d.messageRoutes(authed)
-	}
-	if d.on("audit") {
-		d.auditRoutes(authed)
-	}
-	if d.on("job") {
-		d.jobRoutes(authed)
-	}
-	if d.on("file") {
-		d.fileRoutes(authed)
-	}
-	if d.on("monitor") {
-		d.monitorRoutes(authed)
-	}
-	if d.on("routemanage") && d.Route != nil {
-		d.routeManageRoutes(authed)
-	}
-	if d.on("cacheadmin") && d.CacheAdmin != nil {
-		d.cacheAdminRoutes(authed)
-	}
-	if d.on("maintenance") && d.Maintenance != nil {
-		d.maintenanceRoutes(authed)
-	}
-	if d.on("configcenter") && d.ConfigCenter != nil {
-		d.configCenterRoutes(authed)
-	}
-	if d.on("cluster") && d.Cluster != nil {
-		d.clusterRoutes(authed)
+		middleware.Audit(d.Modules.Auditor, d.Modules.Events))
+	for _, fn := range d.Modules.AuthedRoutes() {
+		fn(authed)
 	}
 
 	// ---- 开放接口：面向程序调用方，用 API 密钥认证，不经过用户会话 ----
-	if d.APIKeySvc != nil {
+	// 密钥能力来自 apikey 模块；该模块被裁掉时整组接口不存在。
+	if auth, ok := d.Modules.Lookup("apikey").(middleware.APIKeyAuthenticator); ok {
 		open := e.Group("/api/open/v1",
-			middleware.APIKeyAuth(d.APIKeySvc, d.Cfg.Server.TrustProxy))
-		open.GET("/whoami", d.APIKey.Whoami)
-		if d.NewsOpen != nil {
-			open.POST("/news/batch", middleware.RequirePerm("news:ingest"), d.NewsOpen.Ingest)
-			open.GET("/news/meta", middleware.RequirePerm("news:read"), d.NewsOpen.Meta)
-			open.GET("/news", middleware.RequirePerm("news:read"), d.NewsOpen.List)
-			open.GET("/news/:id", middleware.RequirePerm("news:read"), d.NewsOpen.Detail)
+			middleware.APIKeyAuth(auth, d.Cfg.Server.TrustProxy))
+		for _, fn := range d.Modules.OpenRoutes() {
+			fn(open)
 		}
 	}
 
 	e.NoRoute(d.notFound)
 	return e
-}
-
-// on 判断某业务模块在当前进程是否启用。
-func (d Deps) on(module string) bool {
-	if len(d.Modules) == 0 {
-		return true
-	}
-	return d.Modules[module]
-}
-
-// publicRoutes 注册无需登录的接口。
-func (d Deps) publicRoutes(v1 *gin.RouterGroup) {
-	v1.GET("/auth/captcha", d.Auth.Captcha)
-	v1.POST("/auth/login", d.Auth.Login)
-	v1.POST("/auth/refresh", d.Auth.Refresh)
-	v1.GET("/public/config", d.Auth.PublicConfig)
-	v1.GET("/public/configs", d.Config.Public)
-	v1.GET("/public/dicts/:code", d.Dict.Data)
-	v1.GET("/public/notices", d.Notice.Latest)
-
-	// 配置化第三方登录：渠道列表、发起授权与回调均无需登录
-	v1.GET("/oauth/providers", d.Auth.OAuthProviders)
-	v1.GET("/oauth/authorize/:name", d.Auth.OAuthAuthorize)
-	v1.GET("/oauth/callback/:name", d.Auth.OAuthCallback)
 }
 
 // healthRoutes 注册存活与就绪探针。
@@ -356,15 +224,6 @@ func (d Deps) notFound(c *gin.Context) {
 		return
 	}
 	serveIndex(c)
-}
-
-type sessionValidator struct{ h *auth.Handler }
-
-func (s sessionValidator) ValidateSession(ctx context.Context, sid, uid string) (bool, error) {
-	if s.h == nil {
-		return true, nil
-	}
-	return s.h.ValidateSession(ctx, sid, uid)
 }
 
 // mountDocs 挂载 Swagger UI 与生成的 OpenAPI 描述。

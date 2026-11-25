@@ -91,7 +91,30 @@
 - **决定**：定义轻量 `Module` 契约（`Name/DependsOn/AlwaysOn`）与注册表，统一 `micro.modules` 与 `modules.enabled`；服务/处理器仍由 `app.go` 统一构造，路由按注册表结果挂载；基础模块常驻、依赖自动补齐、未知模块 fail-fast。
 - **后果**：获得按配置裁剪与依赖自检能力，且路由零回归；代价是这不是彻底的服务定位，彻底解耦仍需未来重构（P1-2 已为它留出契约边界）。
 
----
+## #15　2026-11-25　模块自注册，装配层不再认识具体模块
 
+- **背景**：#14 的声明式契约只做到"按配置开关模块"，加一个模块仍要改 6 处（modulekit 清单、`router.Deps` 字段、`app.go` 构造、`seed.go` 菜单、`module_scope.go` 归属、`router` 挂载分支），裁一个模块也要改同样多地方。这与"基础项目轻量、额外功能按需引入"的目标相悖——目录分了，装配仍是集中的。
+- **决定**：① 每个模块一个 `module.go`，`init()` 里 `modulekit.Register` 声明 Name/Label/Desc/DependsOn/AlwaysOn/Models/Menus/Jobs/Setup/Sync；② 装配上下文 `modulekit.Context` 只暴露平台能力与路由分组，模块自己挂路由、注册任务实现、声明启停回调；③ `internal/distribution/default.go` 作为默认发行版清单，只放空白导入，删一行即少一个模块的全部代码；④ 跨模块依赖改由消费方定义小接口 + `Context.After` 注入，模块之间禁止互相 import。
+- **后果**：新增/裁剪模块只改一个文件；装配层显著瘦身——`bootstrap/app.go` 599 → 479 行、`internal/router/router.go` 417 → 276 行（零模块 import）、`bootstrap/seed.go` 640 → 365 行、`bootstrap/module_scope.go` 142 → 50 行，11 个 `routes_*.go` 全部删除，声明代码搬进 22 个 `module.go`（合计约 1170 行，属于模块自己的事）。实测裁剪 5 个模块：路由 172 → 126、内置菜单停用 23 条、任务 5 → 3，装配链路零回归。代价是路由顺序由「手写顺序」变成「依赖拓扑序 + 注册序」，需靠路由清单与权限点核对（管理端「路由管理」页）兜底；前端页面仍是全量打包，尚未同构。
+
+## #16　2026-11-25　发行版由生成器组装，备份能力下沉 platform
+
+- **背景**：#15 之后"加模块只改一行导入"，但手工删改导入清单仍不便于按客户组装。同时发现 `bootstrap/cli.go` 为了 `backup` / `restore` 子命令直接 import 了 `modules/maintenance`，导致精简发行版要么缺备份命令、要么被迫带上整个维护模块——装配层仍偷偷绑着一个具体模块。
+- **决定**：① `Spec` 增加 `Pkg`，记录模块所属包路径；② 新增 `cmd/distgen`，按给定模块名算依赖闭包（含常驻模块）、翻译成包导入清单，生成带 `profile` 构建标签的 `internal/distribution/profile.go`；`default.go` 为 `!profile`，两者互斥，同一份源码可产出多个发行版；③ `make dist MODULES="…"` / `make dist-list` / `make dist MODULES=all` / `make dist-default` 作为操作入口；④ 备份恢复从 `modules/maintenance` 移到 `internal/platform/backup`，CLI 与运维模块都依赖它，任发行版都有备份能力。
+- **后果**：`make dist MODULES="user configcenter cluster"` 产出 10 模块 / 88 路由的精简二进制，被裁接口全 404，装配层零模块 import（`grep internal/modules` 在 bootstrap/router/platform/middleware 下无结果）。代价是包级裁剪的粒度受包结构约束——同包多模块（`system` 包的 dict/config/notice）会整体带进来，模块级差异交给 `modules.enabled`；二进制体积减少有限（约 1MB），因为前端产物全量内嵌，真正瘦身需前端同构。
+
+## #17　2026-11-25　资讯中心移出默认发行版，成为可选模块
+
+- **背景**：#15/#16 解决了"加模块只改一行导入"，但默认清单仍把资讯中心这类演示业务和通用后台混在一起交付——每个项目都白拿一套资讯表、菜单、清理任务和配置项，"按需引入"只是说法。
+- **决定**：① `news` 从默认清单移除，代码原地保留在 `internal/modules/news`；② 默认清单改名 `default.go`，全量不再固化成源码里的第二个清单，改由 `make dist MODULES=all` 生成；③ 新增 `internal/distribution/catalog`（默认清单 + 可选模块，只被生成器与测试读取），让 `make dist MODULES="user news"` 仍然组装得出来；④ 配置项增加 `Module` 归属，模块不在发行版时整项与空分组一起隐藏；⑤ `news` 依赖补 `job`，并且发行版没有 `job` 时跳过任务补种（首次种子与增量补种两处都判表是否存在），不再让"这套发行版没有调度器"升级成启动失败。
+- **后果**：默认构建 155 条路由（全量 172），新库不建 `news_*` 表，不补种 `news.cleanup`，配置中心没有资讯分组，模块候选清单里也没有 `news`；`make dist MODULES="user news"` 产出 11 模块 / 115 路由的带资讯系统，三张表、清理任务、管理端与开放接口齐全。代价是可选模块要在 catalog 再登记一次（空白导入 + `Optional` 名单），开发者需要判断一个模块属于"通用能力"还是"行业模块"；前端页面仍随骨架打包，菜单进不去、直接访问落 403，同构仍是下一步。
+
+## #18　2026-11-25　国内能力以可选模块并入 main，废弃 main-cn 分支
+
+- **背景**：`main-cn` 平行分支承接国内短信、支付与会员充值，基线停在 `f2873ac`，落后 main 一个提交；此后每个通用改动都要双向合并，分支迟早失同步。而 #15/#16 已让"模块 + 生成器"能表达发行版差异，再用分支表达已无必要。
+- **决定**：① 新增两个可选模块：`cnauth`（手机号注册、短信登录、找回密码，依赖 `auth`）与 `recharge`（等级售价、下单、微信/支付宝回调、订单管理，依赖 `membership`），各自 `module.go` 自注册，默认发行版不导入；② 短信 `platform/sms` 与支付 `platform/pay` 留在平台层，仅作为被模块引用的库；③ 微信/QQ 的 OAuth 协议适配留在 `auth` 内部，由 `oauth.providers[].protocol` 驱动，不填即标准 OAuth2；④ 会员 `price` 列由迁移 v9 追加，`cn_sms_code`/`cn_recharge_order`/`cn_payment_config` 三张表交给 `Spec.Models` 在装配时建；⑤ 支付渠道凭据在「充值订单 → 支付配置」维护（加密入库、保存即生效），配置中心只放 `payment.enabled` 总开关与注册/短信参数；⑥ 删除 `main-cn`。
+- **后果**：默认发行版零国内代码——注册接口 404、新库无 `cn_*` 表、配置中心无「注册与短信」「支付」分组、模块候选里没有这两个名字；`make dist MODULES="user configcenter cnauth recharge"` 产出完整国内版，实测注册全流程（发码→注册→拿到令牌）与充值接口 200。代价：`cnauth → auth`、`recharge → membership` 是模块间单向 import（架构检查只禁 platform/pkg 反向依赖模块，方向无环，依赖已在 `DependsOn` 显式声明）；顺带修了继承来的缺陷——发码只看 `sms_login_enabled`，只开注册不开短信登录时注册会卡在发码，现按 scene 拆分开关。
+
+---
 > 决策 #1 前的项目基线、分支模型与提交规范见 `docs/development.md` 与历史提交 `d882683`、`d553e4f`。
 > 外部借鉴来源与完整改进路线见 [engineering-practices.md](engineering-practices.md)。

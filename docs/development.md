@@ -1,6 +1,6 @@
 # 二次开发指南
 
-以新增一个「客户管理」模块为例，完整走一遍：模型 → 服务 → 处理器 → 路由 → 权限点 → 菜单 → 前端页面 → 测试。
+以新增一个「客户管理」模块为例，完整走一遍：模型 → 服务 → 处理器 → 模块声明 → 接入发行版 → 权限点 → 菜单 → 前端页面 → 测试。
 
 ---
 
@@ -8,7 +8,7 @@
 
 | 项 | 约定 |
 | --- | --- |
-| 目录 | `internal/modules/<模块>/`，每个模块最多两个文件：`service.go`、`handler.go` |
+| 目录 | `internal/modules/<模块>/`，通常三个文件：`service.go`、`handler.go`、`module.go`（模块声明，见第 4 节） |
 | 命名 | 服务 `Service` / `XxxService`，处理器 `Handler` / `XxxHandler` |
 | 分层 | handler 只做参数与响应；业务、事务、数据权限写在 service |
 | 错误 | 一律返回 `*errs.Error`（`errs.NotFound/Conflict/BadRequest/Forbidden`…），由 `response.Fail` 统一渲染 |
@@ -51,16 +51,14 @@ func (Customer) TableName() string { return "biz_customer" }
 
 `Base` 已提供 20 位雪花 ID 与 `created_at/updated_at/deleted_at`，无需重复定义。
 
-注册到迁移列表 `internal/bootstrap/app.go`：
+在模型的 `module.go` 里声明 `Models`，框架会按模块开关决定是否建表：
 
 ```go
-func models() []any {
-	return []any{
-		// ... 现有模型
-		&model.Customer{},
-	}
-}
+Models: []any{&model.Customer{}},
 ```
+
+版本化迁移的 baseline 也用它，因此新增的模块专属迁移必须先用 `HasTable` 判空，
+否则关闭该模块后迁移会因目标表不存在而失败。
 
 ---
 
@@ -246,50 +244,100 @@ func (h *Handler) Get(c *gin.Context) {
 
 ---
 
-## 4. 路由注册
+## 4. 模块声明
 
-`internal/router/routes_system.go` 追加：
+`internal/modules/customer/module.go`——一个文件声明这个模块的全部装配信息：
 
 ```go
-func (d Deps) customerRoutes(g *gin.RouterGroup) {
-	g.GET("/customers", middleware.RequirePerm("biz:customer:list"), d.Customer.List)
-	g.POST("/customers", middleware.RequirePerm("biz:customer:create"), d.Customer.Create)
-	g.GET("/customers/:id", middleware.RequirePerm("biz:customer:list"), d.Customer.Get)
-	g.PUT("/customers/:id", middleware.RequirePerm("biz:customer:update"), d.Customer.Update)
-	g.DELETE("/customers/:id", middleware.RequirePerm("biz:customer:delete"), d.Customer.Delete)
+package customer
+
+import (
+	"github.com/gin-gonic/gin"
+
+	"github.com/keel-framework/keel/internal/middleware"
+	"github.com/keel-framework/keel/internal/model"
+	"github.com/keel-framework/keel/internal/platform/modulekit"
+)
+
+func init() {
+	modulekit.Register(modulekit.Spec{
+		Name:   "customer",
+		Label:  "客户管理",
+		Desc:   "客户建档与跟进",
+		Models: []any{&model.Customer{}},          // 建表跟着模块开关走
+		Menus: []modulekit.Menu{                    // 扁平声明，Parent 指向目录
+			modulekit.DirSystem,
+			{ID: "m_customer", Parent: "m_system", Name: "客户管理", Type: model.MenuPage,
+				Path: "/system/customer", Icon: "users", Perm: "biz:customer:list", Sort: 11},
+			{ID: "m_customer_add", Parent: "m_customer", Name: "新增客户",
+				Type: model.MenuButton, Perm: "biz:customer:create"},
+		},
+		Setup: setup,
+	})
+}
+
+func setup(c *modulekit.Context) error {
+	h := NewHandler(NewService(c.DB))
+	c.Authed(func(g *gin.RouterGroup) {
+		g.GET("/customers", middleware.RequirePerm("biz:customer:list"), h.List)
+		g.POST("/customers", middleware.RequirePerm("biz:customer:create"), h.Create)
+		g.GET("/customers/:id", middleware.RequirePerm("biz:customer:list"), h.Get)
+		g.PUT("/customers/:id", middleware.RequirePerm("biz:customer:update"), h.Update)
+		g.DELETE("/customers/:id", middleware.RequirePerm("biz:customer:delete"), h.Delete)
+	})
+	return nil
 }
 ```
 
-`internal/router/router.go`：在 `Deps` 加字段并在 `New` 中按模块开关挂载：
+`Setup` 拿到的 `modulekit.Context` 只暴露平台能力：`DB`、`Cache`、`Limiter`、
+`Config`、`Log`、`Storage`、`JWT`、`Authz`、`Events`、`Routes`（路由快照）、
+`Restart`。路由分组已经带好中间件——`Authed` 是认证 + 限流 + 审计，
+`Public` 是匿名 + IP 限流，`Open` 是 API 密钥认证，模块只管路径与权限点。
 
-```go
-type Deps struct {
-	// ...
-	Customer *customer.Handler
-}
-
-// New 中：
-if d.on("customer") {
-	d.customerRoutes(authed)
-}
-```
+需要别的模块的能力时不要 import 对方，在自己包里定义一个小接口，用
+`c.After` 在装配末尾注入（参考 `user.MembershipFiller`、`system.NoticeNotifier`）。
 
 ---
 
-## 5. 装配
+## 5. 接入发行版
 
-`internal/bootstrap/app.go`
+发行版清单有两个文件，按模块的定位选一个：
+
+| 文件 | 收录范围 | 适用 |
+| --- | --- | --- |
+| `internal/distribution/default.go` | 默认发行版（`make build`） | 通用后台能力：登录、RBAC、组织、运维控制台 |
+| `internal/distribution/catalog/catalog.go` | 全部可装配模块（仅工具读取） | 演示业务/行业模块：资讯中心这类默认不装的 |
+
+通用能力加进 `default.go`，一行空白导入：
 
 ```go
-customerSvc := customer.NewService(db)
-
-engine = router.New(router.Deps{
-	// ...
-	Customer: customer.NewHandler(customerSvc),
-})
+_ "github.com/keel-framework/keel/internal/modules/customer"
 ```
 
-service 形态下想启用该模块，配置 `micro.modules` 里加上 `customer` 即可。
+独立模块只加进 `catalog/catalog.go` 的空白导入与 `Optional` 名单，默认构建不含它：
+
+```go
+_ "github.com/keel-framework/keel/internal/modules/news"
+
+var Optional = []string{"news"}
+```
+
+到此为止。`bootstrap`、`router`、`seed` 都不用改。运行期想关掉它，
+`modules.enabled` 里不列即可；想从二进制里彻底摘掉，删掉这行导入。
+
+如果这个发行版只要一部分模块，不要手工删导入，用生成器：
+
+```bash
+make dist-list                                  # 看模块与依赖，+ 为默认不装
+make dist MODULES="user configcenter cluster"   # 算依赖、生成清单、编译
+make dist MODULES=all                           # 全量（含资讯中心）
+make dist-default                               # 回到默认发行版
+```
+
+生成器把结果写入 `internal/distribution/profile.go`（`profile` 构建标签），
+与 `default.go`（`!profile`）互斥，几种发行版可以反复切换而不必互相删文件。
+它依赖 `Spec.Pkg` 把模块名翻译成包路径，所以 `module.go` 里必须填 `Pkg`。
+
 
 ### 5.1 接入一个新的外部依赖
 
@@ -317,18 +365,26 @@ if err != nil {
 
 ## 6. 菜单与权限点
 
-`internal/bootstrap/seed.go` 的 `menuSeeds` 中追加（注意 `Perm` 与路由上的权限点一致）：
+在模块的 `module.go` 里追加（注意 `Perm` 与路由上的权限点一致，`Parent` 指向目录 ID，
+父目录也要在本模块或共享目录常量里声明）：
 
 ```go
-{ID: "m_customer", Name: "客户管理", Type: model.MenuPage, Path: "/biz/customer", Icon: "users", Perm: "biz:customer:list", Sort: 9, Children: []menuSeed{
-	{ID: "m_customer_add", Name: "新增客户", Type: model.MenuButton, Perm: "biz:customer:create"},
-	{ID: "m_customer_edit", Name: "编辑客户", Type: model.MenuButton, Perm: "biz:customer:update"},
-	{ID: "m_customer_del", Name: "删除客户", Type: model.MenuButton, Perm: "biz:customer:delete"},
-}},
+Menus: []modulekit.Menu{
+	modulekit.DirSystem, // 共享目录，多个模块重复声明只保留一份
+	{ID: "m_customer", Parent: "m_system", Name: "客户管理", Type: model.MenuPage,
+		Path: "/biz/customer", Icon: "users", Perm: "biz:customer:list", Sort: 9},
+	{ID: "m_customer_add", Parent: "m_customer", Name: "新增客户", Type: model.MenuButton, Perm: "biz:customer:create"},
+	{ID: "m_customer_edit", Parent: "m_customer", Name: "编辑客户", Type: model.MenuButton, Perm: "biz:customer:update"},
+	{ID: "m_customer_del", Parent: "m_customer", Name: "删除客户", Type: model.MenuButton, Perm: "biz:customer:delete"},
+},
 ```
 
+> **内置菜单必须用 `m_` 前缀**。启动时靠这个前缀区分内置菜单与管理员自建菜单，
+> 前者跟随模块启停，后者永不被模块开关影响。用别的命名会被当成自建菜单漏掉，
+> 裁剪模块后留下点进去 404 的死入口。
+
 > 业务种子数据只在**首次启动**（库里没有用户时）写入。但**内置菜单**是例外：
-> 每次启动都会比对 `menuSeeds`，补齐缺失的节点并授权给内置超管角色，因此新增框架功能后
+> 每次启动都会比对模块声明，补齐缺失的节点并授权给内置超管角色，因此新增框架功能后
 > 升级即可看到入口，不必清库。新页面若是业务自建菜单，仍需在「菜单管理」里手工添加。
 
 ---

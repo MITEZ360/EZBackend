@@ -1,0 +1,328 @@
+# ============================================================================
+# Keel 企业服务端框架 - 主配置文件
+# 优先级：默认值 < 本文件 < 环境变量（KEEL_SERVER_PORT 对应 server.port）
+# ============================================================================
+app:
+  name: Keel 企业管理平台
+  env: dev                 # dev / test / prod
+  version: 1.0.0
+  # IANA 时区名，影响 GORM 时间戳、定时任务、备份文件名等所有时间语义
+  timezone: Asia/Shanghai
+
+# 语言协商：客户端可用 X-Locale 或 Accept-Language 指定，未指定时用 default_locale
+# 支持 zh-CN / en；未收录译文的文案自动降级为中文原文
+i18n:
+  default_locale: zh-CN
+
+server:
+  host: 0.0.0.0
+  port: 9000
+  mode: release            # debug / release
+  read_timeout: 30s
+  write_timeout: 60s
+  idle_timeout: 120s
+  shutdown_timeout: 15s
+  max_body_size: 33554432  # 32MB
+  trust_proxy: false       # 仅在确认请求来自可信网关时开启，否则 X-Forwarded-For 可被伪造
+  web_dir: web
+
+log:
+  level: info              # debug / info / warn / error
+  format: json             # json（便于采集）/ console
+  dir: logs
+  filename: keel.log
+  max_size_mb: 64
+  max_age_days: 14
+  max_backups: 30
+  compress: true
+  console: true
+  caller: true
+
+db:
+  # driver 留空时按 dsn 自动推断：sqlite / mysql / postgres
+  driver: ""
+  dsn: data/keel.db
+  # MySQL 示例（driver 可省略，DSN 含 @tcp( 即识别为 mysql）：
+  # dsn: keel:Keel@123456@tcp(127.0.0.1:3306)/keel?charset=utf8mb4
+  # PostgreSQL 示例（driver 可省略，DSN 以 postgres:// 或含 host= 即识别）：
+  # dsn: host=127.0.0.1 user=keel password=Keel@123456 dbname=keel port=5432 sslmode=disable TimeZone=Asia/Shanghai
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: 1h
+  conn_max_idle_time: 10m
+  slow_threshold: 200ms
+  log_level: warn
+  auto_migrate: true
+  seed: true               # 首次启动写入内置数据
+
+redis:
+  # 留空使用进程内 LRU 缓存；填写地址即自动启用 Redis（多实例部署必须）
+  addr: ""
+  # enabled: false         # 可选，显式关闭；不写则按 addr 是否为空自动判断
+  # optional: true         # 可选，Redis 连不上时降级为进程内缓存（默认 false 直接失败）
+  password: ""
+  db: 0
+  pool_size: 32
+  prefix: keel
+  dial_timeout: 3s
+  read_timeout: 3s
+  local_size: 100000
+
+jwt:
+  secret: "请务必在生产环境替换为至少32位的随机字符串-keel-default-secret"
+  issuer: keel
+  access_ttl: 2h
+  refresh_ttl: 168h
+
+security:
+  captcha_enabled: false   # 生产建议开启
+  max_login_fail: 5
+  lock_duration: 15m
+  password_min_len: 8
+  password_strength: 2     # 1 长度 / 2 字母+数字 / 3 四类字符
+  data_encrypt_key: ""     # 为空则复用 jwt.secret，用于加密 TOTP 密钥与敏感配置
+  session_single: false    # 是否只允许单处登录
+  internal_token: "keel-internal-token-change-me"
+
+storage:
+  # auto：配置了 s3.bucket 与 endpoint 就用对象存储，否则本地磁盘
+  type: auto
+  local_dir: data/uploads
+  base_url: /uploads
+  max_size: 20971520       # 20MB
+  allow_ext: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".pdf", ".doc", ".docx",
+              ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".md", ".zip", ".rar", ".7z",
+              ".mp4", ".mp3"]
+  # 对象存储示例（MinIO / 阿里云 OSS / AWS S3 / 腾讯云 COS）
+  s3:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    access_key: ""
+    secret_key: ""
+    use_ssl: true
+    public_url: ""         # 留空时按 endpoint/bucket 拼接
+
+mail:
+  # host 留空即关闭；填写 SMTP 地址自动启用
+  host: ""
+  # enabled: false         # 可选，显式关闭
+  port: 587
+  username: ""
+  password: ""
+  from: noreply@example.com
+  tls: true
+
+cors:
+  allow_origins: ["*"]
+  allow_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+  allow_headers: ["Origin", "Content-Type", "Authorization", "X-Requested-With", "X-Trace-Id"]
+  expose_headers: ["X-Trace-Id", "Content-Disposition"]
+  allow_credentials: false
+  max_age: 86400
+
+rate_limit:
+  enabled: true
+  rps: 200
+  burst: 400
+  by_user: true
+
+metrics:
+  enabled: true
+  path: /metrics
+  token: ""
+
+runtime:
+  # 多实例无状态校验：auto 仅告警 / strict 拒绝启动 / off 不检查
+  stateless: auto
+  # 计划运行的实例数，>1 时 auto 策略会检查本地缓存、本地磁盘、SQLite
+  instances: 1
+  instance_id: ""          # 留空自动生成，用于日志与任务归属
+
+micro:
+  mode: mono               # mono / gateway / service
+  modules: []              # service 模式下启用的模块，空表示全部
+  timeout: 5s
+
+# ---------------------------------------------------------------- 业务模块启停
+# 不配置（默认）：全部 18 个模块挂载；配置后只挂载列出的模块，自动补齐依赖。
+# 基础模块 auth/config/dict/notice 常驻（公开路由依赖），不可裁剪。
+# 与 micro.modules 区别：micro.modules 仅在 service 模式生效，本项在 mono 也能裁剪。
+# modules:
+#   enabled: [dashboard, user, news]
+  retries: 2
+  registry:
+    type: static
+    endpoints: []
+    dns_suffix: ""
+    interval: 30s
+  routes: []
+  breaker:
+    enabled: true
+    max_failed: 10
+    interval: 30
+    timeout: 15
+
+news:
+  # 资讯保留天数。超过该窗口的条目由 news.cleanup 任务物理删除，
+  # 查询侧也会强制加上时间窗，即使清理延迟也不会读到过期数据。
+  retention_days: 7
+
+# ---------------------------------------------------------------- 数据库结构变更
+migration:
+  # versioned（默认）：按版本号执行迁移，支持回滚与数据回填，版本表 keel_schema_migrations
+  # auto：沿用 GORM AutoMigrate（只增不减，适合本地快速迭代）
+  # off：启动时不动表结构，由 CI / DBA 执行 `keel migrate up`
+  mode: versioned
+  table_name: keel_schema_migrations
+
+# ---------------------------------------------------------------- 数据库备份与恢复
+backup:
+  enabled: true          # 定时任务 db.backup 是否真正执行备份
+  dir: data/backups      # 备份产物目录
+  retain: 7              # 兜底：保留最近 N 份（GFS 四档全为 0 时生效）
+  # GFS 分档保留（推荐）：按小时/天/周/月的槽位各留 N 份，断档时不会误删唯一备份。
+  # 任一项 >0 即启用分档；无论哪档都永不删除最新一份。
+  retain_hourly: 24
+  retain_daily: 14
+  retain_weekly: 8
+  retain_monthly: 12
+  compress: true         # gzip 压缩（备份为 tar 容器，含数据库快照与 files/ 文件资产）
+  # 在线恢复默认关闭：恢复会覆盖当前数据，MySQL/PostgreSQL 需显式开启；
+  # SQLite 必须停机后用 `keel restore <文件>` 替换数据文件。
+  allow_restore: false
+  mysql_dump: mysqldump
+  mysql_restore: mysql
+  pg_dump: pg_dump
+  pg_restore: psql
+
+# ---------------------------------------------------------------- 第三方登录（配置化）
+oauth:
+  # enabled=true 且至少有一个完整 provider 时，登录页才会出现第三方登录按钮
+  enabled: false
+  # 部署在网关 / 域名后面时必填，如 https://console.example.com；留空按请求 Host 推断
+  callback_base: ""
+  frontend_path: /oauth/callback
+  state_ttl: 10m
+  # 内置微信开放平台扫码登录与 QQ 互联。凭据留空时渠道不会出现在登录页。
+  providers:
+    - name: wechat
+      label: 微信扫码登录
+      enabled: true
+      client_id: ""             # 开放平台 AppID，建议用 KEEL_OAUTH_WECHAT_CLIENT_ID
+      client_secret: ""         # AppSecret，建议用 KEEL_OAUTH_WECHAT_CLIENT_SECRET
+      auth_url: https://open.weixin.qq.com/connect/qrconnect
+      token_url: https://api.weixin.qq.com/sns/oauth2/access_token
+      user_info_url: https://api.weixin.qq.com/sns/userinfo
+      scopes: [snsapi_login]
+      protocol: wechat
+      authorize_suffix: "#wechat_redirect"
+      token_params_in_query: true
+      profile_query:
+        access_token: "{token}"
+        openid: "{openid}"
+      field_map:
+        id: unionid             # 未绑定开放平台时自动回退 openid
+        nickname: nickname
+        avatar: headimgurl
+      auto_register: true
+      default_roles: []
+    - name: qq
+      label: QQ 登录
+      enabled: true
+      client_id: ""
+      client_secret: ""
+      auth_url: https://graph.qq.com/oauth2.0/authorize
+      token_url: https://graph.qq.com/oauth2.0/token
+      user_info_url: https://graph.qq.com/user/get_user_info
+      scopes: [get_user_info]
+      protocol: qq
+      token_response_json: true
+      profile_prefetch_url: https://graph.qq.com/oauth2.0/me
+      profile_prefetch_fields:
+        openid: openid
+      profile_jsonp: true
+      profile_query:
+        access_token: "{token}"
+        oauth_consumer_key: "{client_id}"
+        openid: "{openid}"
+      field_map:
+        id: openid
+        nickname: nickname
+        avatar: figureurl_qq_2
+      auto_register: true
+      default_roles: []
+  # 新增渠道只需在下面加一段，代码无需改动。凭据建议用环境变量注入，避免落盘：
+  #   KEEL_OAUTH_GITHUB_CLIENT_ID / KEEL_OAUTH_GITHUB_CLIENT_SECRET
+  # providers:
+  #   - name: github
+  #     label: GitHub 登录
+  #     icon: ""                # 可选，按钮图标 URL
+  #     enabled: true
+  #     client_id: ""
+  #     client_secret: ""
+  #     auth_url: https://github.com/login/oauth/authorize
+  #     token_url: https://github.com/login/oauth/access_token
+  #     user_info_url: https://api.github.com/user
+  #     email_url: https://api.github.com/user/emails
+  #     scopes: [read:user, user:email]
+  #     field_map:             # 用户信息字段 -> 系统字段，支持点路径与逗号分隔的候选
+  #       id: id
+  #       username: login
+  #       nickname: name
+  #       avatar: avatar_url
+  #     link_existing: true    # 允许按已验证邮箱关联已有本地账号
+  #     match_by: email        # email / username
+  #     auto_register: false   # 匹配不到时自动注册（随机密码 + default_roles）
+  #     default_roles: []      # 自动注册时分配的角色编码
+  #     auth_style: auto       # auto / in_header / in_params
+
+# ---------------------------------------------------------------- 自动接口文档
+docs:
+  # 不配置时：dev 自动开启、prod 自动关闭；显式 true/false 可覆盖
+  # enabled: true
+  path: /docs             # Swagger UI 与 swagger.json 的挂载前缀
+
+# ---------------------------------------------------------------- 可选模块 cnauth：注册与短信
+cn:
+  # 开放用户自助注册；默认关闭，开启后会出现 POST /api/v1/auth/register
+  register_enabled: false
+  # 开放短信验证码登录/找回密码；开启前必须先配置 sms.provider
+  sms_login_enabled: false
+  # 自助注册用户默认角色编码（对应 sys_role.code）
+  default_roles: []
+  code_ttl: 5m
+  code_length: 6
+  daily_send_limit: 10
+
+# ---------------------------------------------------------------- 可选模块 cnauth：短信网关
+sms:
+  # mock 只把验证码打到日志，适合本地开发；生产用 aliyun 或 tencent
+  provider: mock
+  # enabled: true
+  access_key_id: ""       # 阿里云 AccessKeyId / 腾讯云 SecretId
+  access_key_secret: ""   # 阿里云 AccessKeySecret / 腾讯云 SecretKey
+  sign_name: ""
+  template_code: ""
+  region: cn-hangzhou
+  endpoint: ""            # 自定义网关地址；腾讯云可填 sdkappid 数字
+
+# ---------------------------------------------------------------- 可选模块 recharge：支付网关
+payment:
+  enabled: false
+  wechat:
+    enabled: false
+    app_id: ""
+    mch_id: ""
+    api_key: ""           # 微信支付 V2 API 密钥，建议用 KEEL_PAYMENT_WECHAT_API_KEY
+    notify_url: ""        # 必须为公网可访问的 /api/v1/pay/notify/wechat
+    sign_type: MD5        # MD5 / HMAC-SHA256
+    sandbox: false
+  alipay:
+    enabled: false
+    app_id: ""
+    private_key: ""       # 应用私钥 PEM，支持 PKCS#1 / PKCS#8
+    public_key: ""        # 支付宝公钥 PEM
+    notify_url: ""        # 必须为公网可访问的 /api/v1/pay/notify/alipay
+    return_url: ""
+    sandbox: false

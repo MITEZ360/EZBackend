@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/keel-framework/keel/internal/middleware"
+	"github.com/keel-framework/keel/internal/platform/backup"
 	"github.com/keel-framework/keel/internal/platform/migrate"
 	"github.com/keel-framework/keel/pkg/errs"
 	"github.com/keel-framework/keel/pkg/response"
@@ -14,13 +15,13 @@ import (
 
 // Handler 备份与迁移管理接口。
 type Handler struct {
-	backup *BackupService
+	backup *backup.Service
 	runner *migrate.Runner
 	mode   string
 }
 
 // NewHandler 创建运维处理器；runner 为空表示当前未启用版本化迁移。
-func NewHandler(b *BackupService, runner *migrate.Runner, mode string) *Handler {
+func NewHandler(b *backup.Service, runner *migrate.Runner, mode string) *Handler {
 	return &Handler{backup: b, runner: runner, mode: mode}
 }
 

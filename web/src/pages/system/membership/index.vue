@@ -42,6 +42,7 @@ const form = reactive<MembershipLevelPayload>({
   status: 1,
   description: '',
   defaultDays: 365,
+  price: 0,
   color: COLOR_PRESETS[0],
   benefits: [],
 })
@@ -66,6 +67,7 @@ function resetForm() {
     status: 1,
     description: '',
     defaultDays: 365,
+    price: 0,
     color: COLOR_PRESETS[0],
     benefits: [] as MembershipBenefit[],
   })
@@ -88,6 +90,7 @@ function openEdit(lv: MembershipLevel) {
     status: lv.status,
     description: lv.description ?? '',
     defaultDays: lv.defaultDays,
+    price: lv.price ?? 0,
     color: lv.color || COLOR_PRESETS[0],
     benefits: (lv.benefits ?? []).map((b) => ({ ...b })),
   })
@@ -305,6 +308,10 @@ async function remove(lv: MembershipLevel) {
           <el-form-item :label="$t('默认时长（天）')">
             <el-input-number v-model="form.defaultDays" :min="0" :max="36500" controls-position="right" style="width: 100%" />
             <p class="field-tip">{{ $t('开通时默认带出的天数，0 表示长期有效') }}</p>
+          </el-form-item>
+          <el-form-item :label="$t('充值价格（分）')">
+            <el-input-number v-model="form.price" :min="0" :max="100000000" :step="100" controls-position="right" style="width: 100%" />
+            <p class="field-tip">{{ $t('0 表示不可自助购买；只在装配充值模块时生效') }}</p>
           </el-form-item>
         </div>
 

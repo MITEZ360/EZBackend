@@ -38,6 +38,12 @@ type Config struct {
 	OAuth     OAuth     `mapstructure:"oauth"`
 	Docs      Docs      `mapstructure:"docs"`
 	Cluster   Cluster   `mapstructure:"cluster"`
+
+	// 可选能力：自助注册/短信登录、短信网关、支付网关。
+	// 默认全部关闭；只有装配了 cnauth / recharge 模块时才需要填。
+	CN      CN      `mapstructure:"cn"`
+	SMS     SMS     `mapstructure:"sms"`
+	Payment Payment `mapstructure:"payment"`
 }
 
 // Cluster 多节点协同参数。
@@ -184,6 +190,26 @@ type OAuthProvider struct {
 	AuthStyle   string            `mapstructure:"auth_style"`
 	ExtraAuth   map[string]string `mapstructure:"extra_auth"`
 	UserInfoRaw bool              `mapstructure:"user_info_raw"` // true 时用 POST 提交 token
+
+	// ---- 国内渠道协议适配 ----
+	// Protocol 协议适配器：空 / standard 走通用 OAuth2；wechat / qq 走专用流程。
+	Protocol string `mapstructure:"protocol"`
+	// AuthorizeSuffix 附加到授权 URL 末尾的片段，微信扫码登录需要 #wechat_redirect。
+	AuthorizeSuffix string `mapstructure:"authorize_suffix"`
+	// ExtraTokenParams 令牌交换时附加的参数（微信 appid/secret，QQ fmt=json）。
+	ExtraTokenParams map[string]string `mapstructure:"extra_token_params"`
+	// TokenParamsInQuery 为 true 时令牌交换参数放 query 而非表单 body。
+	TokenParamsInQuery bool `mapstructure:"token_params_in_query"`
+	// TokenResponseJSON 为 false 时按 URL 查询串解析令牌响应（QQ 默认格式）。
+	TokenResponseJSON *bool `mapstructure:"token_response_json"`
+	// ProfileQuery 用户信息接口的附加 query 参数（模板支持 {token} 与 {openid}）。
+	ProfileQuery map[string]string `mapstructure:"profile_query"`
+	// ProfilePrefetchURL 拉取用户信息前先请求的端点（QQ 的 /oauth2.0/me），用于取 openid。
+	ProfilePrefetchURL string `mapstructure:"profile_prefetch_url"`
+	// ProfilePrefetchFields 从 prefetch 响应中提取的字段映射，如 {openid: "openid"}。
+	ProfilePrefetchFields map[string]string `mapstructure:"profile_prefetch_fields"`
+	// ProfileJSONP 为 true 时 prefetch 响应是 callback({...}) 形式，需剥壳。
+	ProfileJSONP bool `mapstructure:"profile_jsonp"`
 }
 
 // Active 判断 provider 是否可以对外提供。
@@ -602,6 +628,15 @@ func build(path string, overrides map[string]any) (*viper.Viper, *Config, error)
 		"oauth.enabled", "oauth.callback_base", "oauth.frontend_path", "oauth.state_ttl",
 		"docs.enabled", "docs.path",
 		"cluster.enabled", "cluster.name", "cluster.advertise_addr",
+		// 可选模块（cnauth / recharge）用到的凭据，容器里直接注入
+		"cn.register_enabled", "cn.sms_login_enabled", "cn.code_ttl", "cn.code_length", "cn.daily_send_limit",
+		"sms.enabled", "sms.provider", "sms.access_key_id", "sms.access_key_secret", "sms.sign_name",
+		"sms.template_code", "sms.region", "sms.endpoint",
+		"payment.enabled",
+		"payment.wechat.enabled", "payment.wechat.app_id", "payment.wechat.mch_id", "payment.wechat.api_key",
+		"payment.wechat.notify_url", "payment.wechat.sign_type", "payment.wechat.sandbox",
+		"payment.alipay.enabled", "payment.alipay.app_id", "payment.alipay.private_key",
+		"payment.alipay.public_key", "payment.alipay.notify_url", "payment.alipay.return_url", "payment.alipay.sandbox",
 	} {
 		_ = v.BindEnv(key)
 	}
@@ -826,6 +861,11 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("oauth.providers 名称重复: %s", name)
 			}
 			seen[name] = true
+			switch strings.ToLower(strings.TrimSpace(p.Protocol)) {
+			case "", "standard", "wechat", "qq":
+			default:
+				return fmt.Errorf("oauth.providers.%s.protocol 非法: %s（可选 standard / wechat / qq）", name, p.Protocol)
+			}
 			for label, u := range map[string]string{"auth_url": p.AuthURL, "token_url": p.TokenURL, "user_info_url": p.UserInfoURL} {
 				if u != "" && !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
 					return fmt.Errorf("oauth.providers.%s.%s 必须是 http(s) URL", name, label)
@@ -835,6 +875,47 @@ func (c *Config) Validate() error {
 	}
 	if c.Mail.Enabled != nil && *c.Mail.Enabled && strings.TrimSpace(c.Mail.Host) == "" {
 		return fmt.Errorf("mail.enabled 为 true 但 mail.host 为空")
+	}
+	// 可选模块（cnauth / recharge）参数：未装配模块时这些值不参与启动，
+	// 但校验一视同仁，避免配置写错却到运行时才暴露。
+	if c.CN.CodeLength <= 0 {
+		c.CN.CodeLength = 6
+	}
+	if c.CN.CodeLength < 4 || c.CN.CodeLength > 8 {
+		return fmt.Errorf("cn.code_length 需在 4-8 之间")
+	}
+	if c.CN.CodeTTL <= 0 {
+		c.CN.CodeTTL = 5 * time.Minute
+	}
+	if c.CN.DailySendLimit <= 0 {
+		c.CN.DailySendLimit = 10
+	}
+	if c.CN.SMSLoginEnabled && !c.SMS.Use() {
+		return fmt.Errorf("cn.sms_login_enabled 为 true 但未配置短信网关（sms.provider）")
+	}
+	switch strings.ToLower(strings.TrimSpace(c.SMS.Provider)) {
+	case "", "mock", "aliyun", "tencent":
+	default:
+		return fmt.Errorf("sms.provider 非法: %s（可选 mock / aliyun / tencent）", c.SMS.Provider)
+	}
+	if c.Payment.Enabled {
+		if c.Payment.Wechat.Enabled {
+			w := c.Payment.Wechat
+			if w.AppID == "" || w.MchID == "" || w.APIKey == "" {
+				return fmt.Errorf("payment.wechat 已启用但 app_id / mch_id / api_key 未配置完整")
+			}
+			switch strings.ToUpper(w.SignType) {
+			case "MD5", "HMAC-SHA256":
+			default:
+				return fmt.Errorf("payment.wechat.sign_type 非法: %s（可选 MD5 / HMAC-SHA256）", w.SignType)
+			}
+		}
+		if c.Payment.Alipay.Enabled {
+			a := c.Payment.Alipay
+			if a.AppID == "" || a.PrivateKey == "" || a.PublicKey == "" {
+				return fmt.Errorf("payment.alipay 已启用但 app_id / private_key / public_key 未配置完整")
+			}
+		}
 	}
 	if c.App.Env == "prod" {
 		if len(c.JWT.Secret) < 32 {
@@ -997,4 +1078,15 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cluster.enabled", true)
 	v.SetDefault("cluster.heartbeat", "15s")
 	v.SetDefault("cluster.offline_after", "45s")
+
+	// 可选模块默认值：注册/短信登录/支付全部关闭，升级不会意外开放入口。
+	v.SetDefault("cn.register_enabled", false)
+	v.SetDefault("cn.sms_login_enabled", false)
+	v.SetDefault("cn.code_ttl", "5m")
+	v.SetDefault("cn.code_length", 6)
+	v.SetDefault("cn.daily_send_limit", 10)
+	v.SetDefault("sms.provider", "mock")
+	v.SetDefault("sms.region", "cn-hangzhou")
+	v.SetDefault("payment.enabled", false)
+	v.SetDefault("payment.wechat.sign_type", "MD5")
 }

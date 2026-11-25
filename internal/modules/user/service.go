@@ -12,7 +12,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/modules/membership"
 	"github.com/keel-framework/keel/internal/platform/authn"
 	"github.com/keel-framework/keel/internal/platform/authz"
 	"github.com/keel-framework/keel/internal/platform/config"
@@ -27,16 +26,29 @@ type Service struct {
 	cfg   *config.Config
 	log   *zap.Logger
 	authz *authz.Loader
-	mem   *membership.Service
+	mem   MembershipFiller
+}
+
+// MembershipFiller 由会员模块实现：补齐用户列表的等级信息。
+// 关闭会员模块时为 nil，用户管理照常可用，只是不展示等级。
+//
+// 接口声明在消费方而不是会员包里，用户模块才不需要 import 会员模块——
+// 这样会员模块可以整体裁掉，用户模块不受影响。
+type MembershipFiller interface {
+	Fill(ctx context.Context, users []*model.User) error
 }
 
 // NewService 创建用户服务。mem 可为空：关闭会员模块时不展示等级信息。
-func NewService(db *gorm.DB, cfg *config.Config, log *zap.Logger, al *authz.Loader, mem *membership.Service) *Service {
+func NewService(db *gorm.DB, cfg *config.Config, log *zap.Logger, al *authz.Loader, mem MembershipFiller) *Service {
 	if log == nil {
 		log = zap.NewNop()
 	}
 	return &Service{db: db, cfg: cfg, log: log, authz: al, mem: mem}
 }
+
+// SetMembershipFiller 在会员模块装配完成后再注入。装配顺序由依赖图决定，
+// 用户模块可能先于会员模块构造，因此不走构造函数参数。
+func (s *Service) SetMembershipFiller(mem MembershipFiller) { s.mem = mem }
 
 // Scope 数据权限范围。
 type Scope struct {

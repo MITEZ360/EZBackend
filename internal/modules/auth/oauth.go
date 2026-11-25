@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -148,7 +149,110 @@ func (f *oauthFlow) Authorize(ctx context.Context, name, mode, userID, redirectU
 	for k, v := range p.spec.ExtraAuth {
 		opts = append(opts, oauth2.SetAuthURLParam(k, v))
 	}
-	return conf.AuthCodeURL(state, opts...), state, nil
+	authURL := conf.AuthCodeURL(state, opts...)
+	// 微信扫码登录要求授权地址带 #wechat_redirect 片段，标准 oauth2 库不会生成。
+	if p.spec.AuthorizeSuffix != "" {
+		authURL += p.spec.AuthorizeSuffix
+	}
+	return authURL, state, nil
+}
+
+// tokenResult 令牌交换结果。Extras 保存微信 openid/unionid 等非标准字段，供用户信息阶段使用。
+type tokenResult struct {
+	AccessToken string
+	Extras      map[string]string
+}
+
+// exchange 完成授权码换令牌。standard 走 oauth2 库；wechat/qq 走厂商协议。
+func (f *oauthFlow) exchange(ctx context.Context, p *oauthProvider, code, redirectURI string) (*tokenResult, error) {
+	protocol := strings.ToLower(strings.TrimSpace(p.spec.Protocol))
+	if protocol == "" || protocol == "standard" {
+		conf := p.conf
+		conf.RedirectURL = redirectURI
+		tok, err := conf.Exchange(ctx, code)
+		if err != nil {
+			return nil, errs.BadRequest("第三方授权失败，请重试")
+		}
+		return &tokenResult{AccessToken: tok.AccessToken, Extras: map[string]string{}}, nil
+	}
+
+	q := url.Values{}
+	for k, v := range p.spec.ExtraTokenParams {
+		q.Set(k, v)
+	}
+	if protocol == "wechat" {
+		q.Set("appid", p.spec.ClientID)
+		q.Set("secret", p.spec.ClientSecret)
+	} else if protocol == "qq" {
+		q.Set("client_id", p.spec.ClientID)
+		q.Set("client_secret", p.spec.ClientSecret)
+		if q.Get("fmt") == "" {
+			q.Set("fmt", "json")
+		}
+	}
+	q.Set("code", code)
+	q.Set("grant_type", "authorization_code")
+
+	endpoint := p.spec.TokenURL
+	var req *http.Request
+	var err error
+	if p.spec.TokenParamsInQuery {
+		if strings.Contains(endpoint, "?") {
+			endpoint += "&" + q.Encode()
+		} else {
+			endpoint += "?" + q.Encode()
+		}
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	} else {
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(q.Encode()))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+	}
+	if err != nil {
+		return nil, errs.Internal("第三方授权请求构造失败")
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return nil, errs.BadRequest("第三方授权失败，请重试")
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, errs.Internal("读取第三方授权结果失败")
+	}
+	// 微信/QQ 把业务错误藏在 HTTP 200 的响应体里，必须解析 errcode/ret。
+	vals := map[string]any{}
+	if json.Unmarshal(data, &vals) != nil || len(vals) == 0 {
+		parsed, e := url.ParseQuery(string(data))
+		if e != nil {
+			return nil, errs.BadRequest("第三方授权结果格式不正确")
+		}
+		vals = map[string]any{}
+		for k, v := range parsed {
+			if len(v) > 0 {
+				vals[k] = v[0]
+			}
+		}
+	}
+	if codeVal := stringVal(vals["errcode"]); codeVal != "" && codeVal != "0" {
+		return nil, errs.BadRequest(stringVal(vals["errmsg"]) + "（" + codeVal + "）")
+	}
+	if ret := stringVal(vals["ret"]); ret != "" && ret != "0" {
+		return nil, errs.BadRequest("第三方授权失败（" + ret + "）")
+	}
+	access := stringVal(vals["access_token"])
+	if access == "" {
+		return nil, errs.BadRequest("第三方授权失败，未返回访问令牌")
+	}
+	extras := map[string]string{"client_id": p.spec.ClientID}
+	for k, v := range vals {
+		if s, ok := v.(string); ok {
+			extras[k] = s
+		}
+	}
+	return &tokenResult{AccessToken: access, Extras: extras}, nil
 }
 
 // OAuthCallbackResult 回调结果；绑定模式不签发令牌。
@@ -193,13 +297,11 @@ func (f *oauthFlow) Callback(ctx context.Context, name, code, state, redirectURI
 		return nil, errs.BadRequest("登录已超时，请重新发起")
 	}
 
-	conf := p.conf
-	conf.RedirectURL = redirectURI
-	tok, err := conf.Exchange(ctx, code)
+	tok, err := f.exchange(ctx, p, code, redirectURI)
 	if err != nil {
-		return nil, errs.BadRequest("第三方授权失败，请重试")
+		return nil, err
 	}
-	prof, err := f.fetchProfile(ctx, p, tok.AccessToken)
+	prof, err := f.fetchProfile(ctx, p, tok)
 	if err != nil {
 		return nil, err
 	}
@@ -422,18 +524,66 @@ func (f *oauthFlow) registerUser(ctx context.Context, p *oauthProvider, provider
 }
 
 // fetchProfile 拉取用户信息并按字段映射提取标准字段。
-func (f *oauthFlow) fetchProfile(ctx context.Context, p *oauthProvider, accessToken string) (*oauthProfile, error) {
+// 国内渠道通过 prefetch / 模板参数把 openid、unionid 等非标准字段注入映射。
+func (f *oauthFlow) fetchProfile(ctx context.Context, p *oauthProvider, tok *tokenResult) (*oauthProfile, error) {
+	extras := tok.Extras
+	if extras == nil {
+		extras = map[string]string{}
+	}
+
+	// QQ 等渠道需要先调 /oauth2.0/me 拿 openid，响应可能是 JSONP。
+	if p.spec.ProfilePrefetchURL != "" {
+		prefetchURL := renderOAuthTemplate(p.spec.ProfilePrefetchURL, tok.AccessToken, extras)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, prefetchURL, nil)
+		if err != nil {
+			return nil, errs.Internal("构造用户信息请求失败")
+		}
+		req.Header.Set("Accept", "application/json")
+		resp, err := f.client.Do(req)
+		if err != nil {
+			return nil, errs.BadRequest("读取第三方用户信息失败，请重试")
+		}
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		_ = resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			return nil, errs.BadRequest(fmt.Sprintf("第三方用户信息接口返回 %d", resp.StatusCode))
+		}
+		if p.spec.ProfileJSONP {
+			data = stripJSONP(data)
+		}
+		var prefetch any
+		if json.Unmarshal(data, &prefetch) == nil {
+			for k, field := range p.spec.ProfilePrefetchFields {
+				if v := firstValue(prefetch, field); v != "" {
+					extras[k] = v
+				}
+			}
+		}
+	}
+
+	profileURL := renderOAuthTemplate(p.spec.UserInfoURL, tok.AccessToken, extras)
+	q := url.Values{}
+	for k, v := range p.spec.ProfileQuery {
+		q.Set(k, renderOAuthTemplate(v, tok.AccessToken, extras))
+	}
+	if len(q) > 0 {
+		if strings.Contains(profileURL, "?") {
+			profileURL += "&" + q.Encode()
+		} else {
+			profileURL += "?" + q.Encode()
+		}
+	}
 	method := http.MethodGet
 	body := io.Reader(nil)
 	if p.spec.UserInfoRaw {
 		method = http.MethodPost
 	}
-	req, err := http.NewRequestWithContext(ctx, method, p.spec.UserInfoURL, body)
+	req, err := http.NewRequestWithContext(ctx, method, profileURL, body)
 	if err != nil {
 		return nil, errs.Internal("构造用户信息请求失败")
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Authorization", "Bearer "+tok.AccessToken)
 	if method == http.MethodPost {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
@@ -453,10 +603,25 @@ func (f *oauthFlow) fetchProfile(ctx context.Context, p *oauthProvider, accessTo
 	if err := json.Unmarshal(data, &obj); err != nil {
 		return nil, errs.BadRequest("第三方用户信息不是合法 JSON")
 	}
-	m := p.spec.FieldMap
+	if m, ok := obj.(map[string]any); ok {
+		if code := stringVal(m["errcode"]); code != "" && code != "0" {
+			return nil, errs.BadRequest(stringVal(m["errmsg"]) + "（" + code + "）")
+		}
+		if ret := stringVal(m["ret"]); ret != "" && ret != "0" {
+			return nil, errs.BadRequest("第三方用户信息获取失败（" + ret + "）")
+		}
+		// 把令牌阶段得到的 openid/unionid 合并进对象，供 field_map 提取。
+		for k, v := range extras {
+			if _, exists := m[k]; !exists {
+				m[k] = v
+			}
+		}
+	}
+
+	mapping := p.spec.FieldMap
 	pick := func(key string) string {
 		paths := defaultFieldMap[key]
-		if v, ok := m[key]; ok && strings.TrimSpace(v) != "" {
+		if v, ok := mapping[key]; ok && strings.TrimSpace(v) != "" {
 			paths = v
 		}
 		return firstValue(obj, paths)
@@ -465,14 +630,39 @@ func (f *oauthFlow) fetchProfile(ctx context.Context, p *oauthProvider, accessTo
 		Subject: pick("id"), Username: pick("username"), Nickname: pick("nickname"),
 		Email: pick("email"), Avatar: pick("avatar"), Raw: data,
 	}
+	// field_map.id 指 unionid 但该应用未绑定开放平台时，回退到 openid。
+	if prof.Subject == "" {
+		prof.Subject = extras["openid"]
+	}
+	if prof.Subject == "" {
+		prof.Subject = extras["unionid"]
+	}
 	verified := strings.ToLower(pick("email_verified"))
 	// provider 未返回该字段时按「已验证」处理，否则 link_existing 会永远不生效
 	prof.EmailVerified = verified == "" || verified == "true" || verified == "1"
 
 	if prof.Email == "" && p.spec.EmailURL != "" {
-		prof.Email, prof.EmailVerified = f.fetchEmail(ctx, p.spec.EmailURL, accessToken)
+		prof.Email, prof.EmailVerified = f.fetchEmail(ctx, p.spec.EmailURL, tok.AccessToken)
 	}
 	return prof, nil
+}
+
+// renderOAuthTemplate 展开 {token} 与令牌阶段拿到的自定义字段占位符。
+func renderOAuthTemplate(s, token string, extras map[string]string) string {
+	s = strings.ReplaceAll(s, "{token}", token)
+	for k, v := range extras {
+		s = strings.ReplaceAll(s, "{"+k+"}", v)
+	}
+	return s
+}
+
+// stripJSONP 把 callback({...}); 剥成 {...}。
+func stripJSONP(data []byte) []byte {
+	s := strings.TrimSpace(string(data))
+	if i := strings.IndexByte(s, '('); i >= 0 && strings.HasSuffix(s, ")") {
+		s = s[i+1 : len(s)-1]
+	}
+	return []byte(strings.TrimSuffix(strings.TrimSpace(s), ";"))
 }
 
 // fetchEmail 处理 GitHub 一类把邮箱放在独立接口、返回数组的情况。

@@ -184,6 +184,34 @@ func (s *Service) Login(ctx context.Context, in *LoginInput, meta ClientMeta) (*
 	return pair, info, nil
 }
 
+// SignIn 为已经完成凭据校验的用户签发会话并更新登录统计。
+// 自助注册与短信登录（cnauth 模块）在校验完成后调用本方法，避免复制登录态逻辑。
+func (s *Service) SignIn(ctx context.Context, user *model.User, meta ClientMeta) (*TokenPair, *UserInfo, error) {
+	if user.Status != model.StatusEnabled {
+		return nil, nil, errs.Forbidden("账号已被禁用，请联系管理员")
+	}
+	s.clearFail(ctx, user.Username)
+	if s.cfg.Security.SessionSingle {
+		s.revokeAllSessions(ctx, user.ID)
+	}
+	pair, err := s.issueSession(ctx, user, meta)
+	if err != nil {
+		return nil, nil, err
+	}
+	now := time.Now()
+	_ = s.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{
+		"last_login_at": now,
+		"last_login_ip": meta.IP,
+		"login_count":   gorm.Expr("login_count + 1"),
+	}).Error
+	s.writeLoginLog(ctx, user, meta, 1, "登录成功")
+	info, err := s.buildUserInfo(ctx, user)
+	if err != nil {
+		return nil, nil, err
+	}
+	return pair, info, nil
+}
+
 func (s *Service) issueSession(ctx context.Context, user *model.User, meta ClientMeta) (*TokenPair, error) {
 	sid := idgen.Next()
 	refresh := idgen.Token(32)
@@ -461,6 +489,14 @@ func (s *Service) ChangePassword(ctx context.Context, userID, sessionID string, 
 		Where("user_id = ? AND id <> ? AND revoked = ?", userID, sessionID, false).
 		Update("revoked", true)
 	return nil
+}
+
+// RefreshTTL 返回刷新令牌有效期，供 cnauth 写入 HttpOnly Cookie。
+func (s *Service) RefreshTTL() time.Duration { return s.jwt.RefreshTTL() }
+
+// ValidatePassword 暴露密码强度校验，供 cnauth 的自助注册复用。
+func (s *Service) ValidatePassword(ctx context.Context, pw string) error {
+	return s.checkPasswordPolicy(ctx, pw)
 }
 
 func (s *Service) checkPasswordPolicy(ctx context.Context, pw string) error {

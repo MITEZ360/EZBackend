@@ -1,5 +1,6 @@
 // 英文包。key 与中文原文一致，便于逐页替换时保持可读。
 // 各页面分片由 partials/ 汇总，避免单文件过大。
+import cn from './partials/cn'
 import content from './partials/content'
 import opsLogs from './partials/ops-logs'
 import opsMisc from './partials/ops-misc'
@@ -173,6 +174,7 @@ const base = {
 // 分片译文覆盖基础条目；Object.assign 避免对象字面量中重复键的 TS2783 告警。
 const messages: Record<string, string> = Object.assign(
   base,
+  cn,
   content,
   opsLogs,
   opsMisc,

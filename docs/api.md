@@ -491,6 +491,9 @@ X-API-Key: ak_s_8fQ2mN...
 
 ### 4.19 资讯中心（后台管理）
 
+> 资讯中心是**可选模块**，默认发行版不含这些接口（`make dist MODULES="user news"`
+> 组装后才存在）。默认构建下它们统一返回 404，侧边栏也不会出现资讯中心。
+
 | 方法 | 路径 | 说明 | 权限点 |
 | --- | --- | --- | --- |
 | GET | `/news` | 分页；`keyword`、`category`、`sourceId`、`from`、`to`、`status` | `content:news:list` |

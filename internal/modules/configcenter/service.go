@@ -83,15 +83,19 @@ func (s *Service) List(ctx context.Context) ([]GroupView, *DeployView, error) {
 	s.mu.Unlock()
 	groups := make([]GroupView, 0, len(groupMeta))
 	for _, g := range groupMeta {
-		gv := GroupView{Name: g.Name, Label: g.Label, Desc: g.Desc, Items: make([]ItemView, 0)}
-		for _, it := range items {
-			if it.Group != g.Name {
-				continue
-			}
+		visible := itemsOf(g.Name)
+		// 整组配置项都不属于当前发行版时，连分组标题一起隐藏，
+		// 否则页面上会留下一个空分组。
+		if len(visible) == 0 {
+			continue
+		}
+		gv := GroupView{Name: g.Name, Label: g.Label, Desc: g.Desc, Items: make([]ItemView, 0, len(visible))}
+		for _, it := range visible {
 			iv := ItemView{Item: it, Editable: true, Source: "default"}
-			if it.Key == "modules.enabled" {
+			if it.Key == KeyModules {
 				iv.Running = active
 				iv.RunningSource = activeSource
+				iv.Choices = moduleChoices()
 			}
 			if row, ok := stored[it.Key]; ok {
 				iv.Overridden = true
@@ -433,9 +437,13 @@ func (s *Service) message(res *Result) string {
 func validate(it Item, raw string) error {
 	// 带候选项的 list 逐项校验：写错模块名会让下次启动 fail-fast 起不来，
 	// 必须在保存时拦住，而不是留到重启才暴露。
-	if it.Type == "list" && len(it.Choices) > 0 {
-		allowed := make(map[string]bool, len(it.Choices))
-		for _, c := range it.Choices {
+	choices := it.Choices
+	if it.Key == KeyModules {
+		choices = moduleChoices()
+	}
+	if it.Type == "list" && len(choices) > 0 {
+		allowed := make(map[string]bool, len(choices))
+		for _, c := range choices {
 			allowed[c.Value] = true
 		}
 		var unknown []string

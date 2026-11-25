@@ -12,8 +12,8 @@ import (
 	"github.com/keel-framework/keel/internal/platform/config"
 	"github.com/keel-framework/keel/internal/platform/crypto"
 	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/utils"
 	"github.com/keel-framework/keel/pkg/query"
+	"github.com/keel-framework/keel/pkg/utils"
 )
 
 // ConfigService 系统参数业务。
@@ -205,6 +205,10 @@ func NewNoticeService(db *gorm.DB, notifier NoticeNotifier, log *zap.Logger) *No
 	return &NoticeService{db: db, notifier: notifier, log: log}
 }
 
+// SetNotifier 在消息模块装配完成后注入投递能力。
+// 装配顺序由依赖图决定，公告模块可能先于消息模块构造。
+func (s *NoticeService) SetNotifier(n NoticeNotifier) { s.notifier = n }
+
 // List 公告分页。
 func (s *NoticeService) List(ctx context.Context, p *query.Params) ([]*model.Notice, int64, error) {
 	allowed := map[string]string{"title": "title", "type": "type", "status": "status", "created_at": "created_at"}
@@ -235,7 +239,7 @@ type NoticeInput struct {
 func (s *NoticeService) Create(ctx context.Context, in *NoticeInput) (*model.Notice, error) {
 	now := time.Now()
 	n := &model.Notice{Title: in.Title, Content: in.Content, Type: in.Type,
-		Status: utils.Int8Or(in.Status, model.StatusEnabled),
+		Status:      utils.Int8Or(in.Status, model.StatusEnabled),
 		PublisherID: in.Publisher, PublishAt: &now}
 	if n.Type == "" {
 		n.Type = "notice"

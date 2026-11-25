@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/modules/maintenance"
+	"github.com/keel-framework/keel/internal/platform/backup"
 	"github.com/keel-framework/keel/internal/platform/config"
 	"github.com/keel-framework/keel/internal/platform/database"
 	"github.com/keel-framework/keel/internal/platform/migrate"
@@ -97,7 +97,7 @@ func migrateCommand(args []string, cfgPath string) error {
 		return err
 	}
 	defer cleanup()
-	runner, err := migrate.New(db, cfg.Migration, cfg.DB.ResolveDriver(), zap.NewNop(), models())
+	runner, err := migrate.New(db, cfg.Migration, cfg.DB.ResolveDriver(), zap.NewNop(), allModels())
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func backupCommand(cfgPath string) error {
 		return err
 	}
 	defer cleanup()
-	svc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, cfg.Storage, zap.NewNop())
+	svc := backup.NewService(db, cfg.Backup, cfg.DB, cfg.Storage, zap.NewNop())
 	meta, err := svc.Backup(context.Background())
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func restoreCommand(cfgPath, name string, dryRun bool) error {
 		return err
 	}
 	defer cleanup()
-	svc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, cfg.Storage, zap.NewNop())
+	svc := backup.NewService(db, cfg.Backup, cfg.DB, cfg.Storage, zap.NewNop())
 	if dryRun {
 		res, err := svc.RestorePlan(name)
 		if err != nil {
@@ -188,7 +188,7 @@ func pruneCommand(cfgPath string, dryRun bool) error {
 		return err
 	}
 	defer cleanup()
-	svc := maintenance.NewBackupService(db, cfg.Backup, cfg.DB, cfg.Storage, zap.NewNop())
+	svc := backup.NewService(db, cfg.Backup, cfg.DB, cfg.Storage, zap.NewNop())
 	plan, err := svc.PruneDryRun()
 	if err != nil {
 		return err

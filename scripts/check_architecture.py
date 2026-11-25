@@ -29,13 +29,13 @@ SNAPSHOT = ROOT / "pkg" / ".api-snapshot.json"
 #   - config：ResolveDriver / 校验 / 默认值
 #   - database：GORM dialector 选择
 #   - migrate：goose dialect 映射
-#   - maintenance/backup：备份必须按驱动分支（转储/恢复工具不同）
+#   - platform/backup：备份必须按驱动分支（转储/恢复工具不同）
 #   - bootstrap/runtime：启动期按驱动做 SQLite 特判
 DIALECT_WHITELIST = {
     "internal/platform/config/config.go",
     "internal/platform/database/database.go",
     "internal/platform/migrate/migrate.go",
-    "internal/modules/maintenance/backup.go",
+    "internal/platform/backup/backup.go",
     "internal/bootstrap/runtime.go",
 }
 

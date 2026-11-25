@@ -20,10 +20,12 @@
 ```
 cmd/keel                进程入口：解析参数 → bootstrap.New → Run
   └─ internal/bootstrap 装配与生命周期（唯一的"上帝对象"，集中管理依赖顺序）
-       ├─ internal/router        路由注册（按模块拆分文件，支持按需裁剪）
+       ├─ internal/router        引擎与中间件；路由由各模块自行声明，本包不认识具体模块
        │    ├─ internal/middleware   通用中间件
        │    └─ internal/modules/*    业务：handler（协议层）+ service（领域层）
+       ├─ internal/distribution  发行版清单：默认只收通用能力，定制版由 cmd/distgen 生成
        ├─ internal/platform/*    基础设施：config logger database cache authn authz crypto idgen httpx
+       │                         可选模块专用库：sms（短信网关）pay（微信/支付宝）backup
        └─ pkg/*                  可复用通用库：errs response query utils client discovery version
 ```
 
@@ -265,7 +267,7 @@ SSR 只会把 Node 重新塞回运行时。
 
 | 形态 | 加载内容 | 典型用途 |
 | --- | --- | --- |
-| `mono` | 全部模块 + DB + 缓存 + 定时任务 | 中小项目、单机部署、私有化交付 |
+| `mono` | 默认发行版的全部模块 + DB + 缓存 + 定时任务 | 中小项目、单机部署、私有化交付 |
 | `gateway` | 无 DB、无业务模块，仅转发 + 静态资源 + 指标 | 统一入口、灰度、鉴权前置（可选） |
 | `service` | 全部基础设施，仅暴露 `micro.modules` 指定的模块 | 拆分热点模块独立扩容 |
 

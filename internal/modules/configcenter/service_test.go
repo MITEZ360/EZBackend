@@ -8,6 +8,14 @@ import (
 	"github.com/keel-framework/keel/internal/platform/modulekit"
 )
 
+// 测试进程不加载发行版清单（导入 distribution 会与本包形成循环），
+// 这里手动注册几个模块，供候选项生成与白名单校验使用。
+func init() {
+	modulekit.Register(modulekit.Spec{Name: "alpha", Label: "Alpha"})
+	modulekit.Register(modulekit.Spec{Name: "beta", Label: "Beta", DependsOn: []string{"alpha"}})
+	modulekit.Register(modulekit.Spec{Name: "gamma", Label: "Gamma", AlwaysOn: true})
+}
+
 func TestLookupReturnsCurrentValues(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Security.CaptchaEnabled = true
@@ -126,13 +134,17 @@ func TestModuleSwitchItem(t *testing.T) {
 	if !it.Restart || it.Hot {
 		t.Error("模块开关决定装配范围，只能标为需重启")
 	}
-	// 候选项直接来自 modulekit，两边漂移会导致写进白名单的名字解析不了，
-	// 下次启动 fail-fast 起不来。
-	if len(it.Choices) != len(modulekit.Specs) {
-		t.Fatalf("候选项 %d 个，模块声明 %d 个", len(it.Choices), len(modulekit.Specs))
+	// 候选项直接来自注册表，两边漂移会导致写进白名单的名字解析不了，
+	// 下次启动 fail-fast 起不来。候选项是动态生成的，静态字段应为空。
+	if len(it.Choices) != 0 {
+		t.Error("模块候选项应动态生成，不写成包级常量")
 	}
-	for i, spec := range modulekit.Specs {
-		c := it.Choices[i]
+	choices := moduleChoices()
+	if len(choices) != len(modulekit.All()) {
+		t.Fatalf("候选项 %d 个，模块声明 %d 个", len(choices), len(modulekit.All()))
+	}
+	for i, spec := range modulekit.All() {
+		c := choices[i]
 		if c.Value != spec.Name || c.Locked != spec.AlwaysOn {
 			t.Errorf("第 %d 项不一致: %+v vs %+v", i, c, spec)
 		}
@@ -140,12 +152,12 @@ func TestModuleSwitchItem(t *testing.T) {
 }
 
 func TestValidateModuleList(t *testing.T) {
-	it := itemIndex["modules.enabled"]
-	if err := validate(it, "news,apikey"); err != nil {
+	it := itemIndex[KeyModules]
+	if err := validate(it, "alpha,beta"); err != nil {
 		t.Fatalf("合法模块名应通过: %v", err)
 	}
 	// 写错名字必须当场拒绝，而不是留到重启时 fail-fast。
-	if err := validate(it, "news,nosuchmodule"); err == nil {
+	if err := validate(it, "alpha,nosuchmodule"); err == nil {
 		t.Fatal("未知模块名应被拒绝")
 	}
 }

@@ -98,8 +98,13 @@ micro:
 可用的模块名：
 
 ```
-auth  user  role  menu  dept  dict  config  notice  audit  job  file  dashboard  monitor  apikey  news
+auth  user  role  menu  dept  dict  config  notice  audit  job  file  dashboard  monitor  apikey  news  cnauth  recharge  membership  configcenter  cluster  maintenance
 ```
+
+> 以当前 `make dist-list` 输出为准。`news`（资讯中心）、`cnauth`（注册/短信登录）、
+> `recharge`（会员充值）默认发行版不含，需要先 `make dist MODULES=all` 或
+> `make dist MODULES="<模块…> cnauth recharge"` 编进二进制；`micro.modules`
+> 只能在已编入的模块里挑，代码不在时列了也不会注册。
 
 拆分示例：
 

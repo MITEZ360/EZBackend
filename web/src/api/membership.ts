@@ -14,6 +14,8 @@ export interface MembershipLevelPayload {
   status: number
   description?: string
   defaultDays: number
+  /** 充值售价（分），0 表示不可自助购买 */
+  price?: number
   color?: string
   benefits: MembershipBenefit[]
 }

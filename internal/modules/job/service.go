@@ -34,15 +34,6 @@ type Service struct {
 	entries  map[string]cron.EntryID // jobID -> entry
 	running  map[string]bool
 	handlers map[string]HandlerFunc
-	audit    Cleaner
-	messages MessageCleaner
-}
-
-// Cleaner 由审计模块注入，用于内置清理任务。
-type Cleaner interface {
-	ClearLoginLogs(ctx context.Context, days int) (int64, error)
-	ClearOperationLogs(ctx context.Context, days int) (int64, error)
-	CleanupSessions(ctx context.Context, days int) (int64, error)
 }
 
 // NewService 创建调度服务。
@@ -62,18 +53,8 @@ func NewService(db *gorm.DB, c cache.Cache, log *zap.Logger) *Service {
 	return s
 }
 
-// MessageCleaner 由消息中心注入，用于清理历史收件记录。
-type MessageCleaner interface {
-	CleanupMessages(ctx context.Context, days int) (int64, error)
-}
-
-// SetCleaner 注入清理能力（避免包循环依赖）。
-func (s *Service) SetCleaner(c Cleaner) { s.audit = c }
-
-// SetMessageCleaner 注入消息清理能力。
-func (s *Service) SetMessageCleaner(c MessageCleaner) { s.messages = c }
-
-// Register 注册任务处理器。
+// Register 注册任务处理器。各业务模块在装配时注册自己的任务实现，
+// 调度器不关心任务来自哪个模块。
 func (s *Service) Register(name string, fn HandlerFunc) { s.handlers[name] = fn }
 
 // Handlers 返回已注册的处理器名称。
@@ -85,6 +66,9 @@ func (s *Service) Handlers() []string {
 	return out
 }
 
+// registerBuiltins 只保留一个示例实现，用于验证管理端的「手动执行」链路。
+// 真实清理任务由各自模块注册：清除日志在审计模块、清理会话在审计模块
+// （会话表由它维护清理逻辑）、清理消息在消息模块。调度器不认识这些模块。
 func (s *Service) registerBuiltins() {
 	s.Register("demo.hello", func(ctx context.Context, p map[string]any) (string, error) {
 		msg := "Hello from Keel"
@@ -93,56 +77,6 @@ func (s *Service) registerBuiltins() {
 		}
 		return fmt.Sprintf("%s at %s", msg, time.Now().Format(time.RFC3339)), nil
 	})
-	s.Register("log.cleanup", func(ctx context.Context, p map[string]any) (string, error) {
-		if s.audit == nil {
-			return "", fmt.Errorf("清理能力未注入")
-		}
-		days := intParam(p, "days", 30)
-		n1, err := s.audit.ClearLoginLogs(ctx, days)
-		if err != nil {
-			return "", err
-		}
-		n2, err := s.audit.ClearOperationLogs(ctx, days)
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("清理登录日志 %d 条、操作日志 %d 条（保留 %d 天）", n1, n2, days), nil
-	})
-	s.Register("session.cleanup", func(ctx context.Context, p map[string]any) (string, error) {
-		if s.audit == nil {
-			return "", fmt.Errorf("清理能力未注入")
-		}
-		n, err := s.audit.CleanupSessions(ctx, intParam(p, "days", 7))
-		return fmt.Sprintf("清理过期会话 %d 条", n), err
-	})
-	s.Register("message.cleanup", func(ctx context.Context, p map[string]any) (string, error) {
-		if s.messages == nil {
-			return "", fmt.Errorf("消息清理能力未注入")
-		}
-		n, err := s.messages.CleanupMessages(ctx, intParam(p, "days", 180))
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("清理历史收件记录 %d 条", n), nil
-	})
-}
-
-func intParam(p map[string]any, key string, def int) int {
-	if p == nil {
-		return def
-	}
-	switch v := p[key].(type) {
-	case float64:
-		return int(v)
-	case int:
-		return v
-	case string:
-		var n int
-		if _, err := fmt.Sscanf(v, "%d", &n); err == nil {
-			return n
-		}
-	}
-	return def
 }
 
 // Start 加载启用状态的任务并开始调度。

@@ -143,6 +143,8 @@ export interface MembershipLevel {
   description?: string
   /** 开通时的默认天数，0 表示长期有效 */
   defaultDays: number
+  /** 充值售价（分），0 表示不可自助购买；只有装配充值模块时才有值 */
+  price?: number
   /** 徽章标识色 #RRGGBB */
   color?: string
   benefits: MembershipBenefit[]

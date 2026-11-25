@@ -7,6 +7,8 @@ import (
 	"os"
 
 	"github.com/keel-framework/keel/internal/bootstrap"
+	// 发行版清单：显式列出本二进制包含哪些业务模块，删一行即裁掉一个模块。
+	_ "github.com/keel-framework/keel/internal/distribution"
 	"github.com/keel-framework/keel/pkg/version"
 )
 
