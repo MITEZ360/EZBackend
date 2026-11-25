@@ -18,7 +18,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 // Mailer 是邮件发送抽象。

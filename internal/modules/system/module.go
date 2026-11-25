@@ -8,14 +8,14 @@ package system
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:  "github.com/keel-framework/keel/internal/modules/system",
+		Pkg:  "github.com/MITEZ360/tenon/internal/modules/system",
 		Name: "dict", Label: "数据字典", AlwaysOn: true,
 		Desc: "下拉选项等字典数据，多处表单依赖，不可关闭",
 		Menus: []modulekit.Menu{
@@ -30,7 +30,7 @@ func init() {
 	})
 
 	modulekit.Register(modulekit.Spec{
-		Pkg:  "github.com/keel-framework/keel/internal/modules/system",
+		Pkg:  "github.com/MITEZ360/tenon/internal/modules/system",
 		Name: "config", Label: "公开配置", AlwaysOn: true,
 		Desc: "前端启动时读取的站点配置与开关，不可关闭",
 		Menus: []modulekit.Menu{
@@ -43,7 +43,7 @@ func init() {
 	})
 
 	modulekit.Register(modulekit.Spec{
-		Pkg:  "github.com/keel-framework/keel/internal/modules/system",
+		Pkg:  "github.com/MITEZ360/tenon/internal/modules/system",
 		Name: "notice", Label: "站内公告", AlwaysOn: true,
 		Desc: "公告读取接口，消息模块依赖，不可关闭",
 		Menus: []modulekit.Menu{

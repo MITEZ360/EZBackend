@@ -9,10 +9,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/platform/backup"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/database"
-	"github.com/keel-framework/keel/internal/platform/migrate"
+	"github.com/MITEZ360/tenon/internal/platform/backup"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/database"
+	"github.com/MITEZ360/tenon/internal/platform/migrate"
 )
 
 // openDB 供运维子命令使用：只加载配置与数据库，不启动 HTTP / 定时任务。
@@ -54,7 +54,7 @@ func RunCommand(args []string, cfgPath string) (bool, error) {
 		return true, backupCommand(cfgPath)
 	case "restore":
 		if len(args) < 2 {
-			return true, fmt.Errorf("用法: keel restore [--dry-run] <备份文件名或路径>")
+			return true, fmt.Errorf("用法: tenon restore [--dry-run] <备份文件名或路径>")
 		}
 		if len(args) >= 3 && (args[1] == "--dry-run" || args[1] == "-n") {
 			return true, restoreCommand(cfgPath, args[2], true)
@@ -72,17 +72,17 @@ func RunCommand(args []string, cfgPath string) (bool, error) {
 }
 
 func printCommandUsage() {
-	fmt.Fprintln(os.Stdout, `Keel 运维子命令（均需 -config 指定同一份配置文件）：
+	fmt.Fprintln(os.Stdout, `Tenon 运维子命令（均需 -config 指定同一份配置文件）：
 
-  keel -config configs/config.yaml migrate status          查看版本状态
-  keel -config configs/config.yaml migrate up              升级到最新版本
-  keel -config configs/config.yaml migrate down            回滚最近一个版本
-  keel -config configs/config.yaml migrate up-to 2         升级到指定版本
-  keel -config configs/config.yaml migrate down-to 1       回滚到指定版本
-  keel -config configs/config.yaml backup                 生成一份备份（数据库 + 本地文件资产）
-  keel -config configs/config.yaml restore <文件名|路径>   停机恢复 SQLite 数据文件与文件资产
-  keel -config configs/config.yaml restore --dry-run <文件> 只输出恢复计划，不改动任何文件
-  keel -config configs/config.yaml backup-prune --dry-run  演练 GFS 保留策略，列出将删除的备份
+  tenon -config configs/config.yaml migrate status          查看版本状态
+  tenon -config configs/config.yaml migrate up              升级到最新版本
+  tenon -config configs/config.yaml migrate down            回滚最近一个版本
+  tenon -config configs/config.yaml migrate up-to 2         升级到指定版本
+  tenon -config configs/config.yaml migrate down-to 1       回滚到指定版本
+  tenon -config configs/config.yaml backup                 生成一份备份（数据库 + 本地文件资产）
+  tenon -config configs/config.yaml restore <文件名|路径>   停机恢复 SQLite 数据文件与文件资产
+  tenon -config configs/config.yaml restore --dry-run <文件> 只输出恢复计划，不改动任何文件
+  tenon -config configs/config.yaml backup-prune --dry-run  演练 GFS 保留策略，列出将删除的备份
 
 恢复 SQLite 前必须先停止服务；恢复会自动把当前库另存为 pre-restore-*.db，
 文件资产会先改名保留旧目录再原子替换。备份产物为 tar 容器，含 database.db 与 files/。`)
@@ -90,7 +90,7 @@ func printCommandUsage() {
 
 func migrateCommand(args []string, cfgPath string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("用法: keel migrate <status|up|down|up-to N|down-to N>")
+		return fmt.Errorf("用法: tenon migrate <status|up|down|up-to N|down-to N>")
 	}
 	cfg, db, cleanup, err := openDB(cfgPath)
 	if err != nil {
@@ -124,7 +124,7 @@ func migrateCommand(args []string, cfgPath string) error {
 		return printJSON(res)
 	case "up-to", "down-to":
 		if len(args) < 2 {
-			return fmt.Errorf("用法: keel migrate %s <版本号>", op)
+			return fmt.Errorf("用法: tenon migrate %s <版本号>", op)
 		}
 		var version int64
 		if _, err := fmt.Sscanf(args[1], "%d", &version); err != nil || version < 0 {

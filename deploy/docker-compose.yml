@@ -1,20 +1,20 @@
 # ============================================================================
-# 单机编排：MySQL 8 + Redis 7 + Keel
+# 单机编排：MySQL 8 + Redis 7 + Tenon
 # 启动：docker compose -f deploy/docker-compose.yml up -d
 # 访问：http://localhost:9000  默认账号 admin / Admin@123456
 # ============================================================================
-name: keel
+name: tenon
 
 services:
   mysql:
     image: mysql:8.0
-    container_name: keel-mysql
+    container_name: tenon-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: keel-root-2026
-      MYSQL_DATABASE: keel
-      MYSQL_USER: keel
-      MYSQL_PASSWORD: Keel@123456
+      MYSQL_ROOT_PASSWORD: tenon-root-2026
+      MYSQL_DATABASE: tenon
+      MYSQL_USER: tenon
+      MYSQL_PASSWORD: Tenon@123456
       TZ: Asia/Shanghai
     command:
       - --character-set-server=utf8mb4
@@ -24,16 +24,16 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ukeel", "-pKeel@123456"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-utenon", "-pTenon@123456"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
-    networks: [keel]
+    networks: [tenon]
 
   redis:
     image: redis:7-alpine
-    container_name: keel-redis
+    container_name: tenon-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     volumes:
@@ -43,14 +43,14 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-    networks: [keel]
+    networks: [tenon]
 
-  keel:
+  tenon:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: keel:latest
-    container_name: keel-app
+    image: tenon:latest
+    container_name: tenon-app
     restart: unless-stopped
     depends_on:
       mysql:
@@ -58,36 +58,36 @@ services:
       redis:
         condition: service_healthy
     environment:
-      KEEL_APP_ENV: prod
-      KEEL_SERVER_PORT: "9000"
-      KEEL_DB_DRIVER: mysql
-      KEEL_DB_DSN: "keel:Keel@123456@tcp(mysql:3306)/keel?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai"
-      KEEL_REDIS_ADDR: "redis:6379"
+      TENON_APP_ENV: prod
+      TENON_SERVER_PORT: "9000"
+      TENON_DB_DRIVER: mysql
+      TENON_DB_DSN: "tenon:Tenon@123456@tcp(mysql:3306)/tenon?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai"
+      TENON_REDIS_ADDR: "redis:6379"
       # 生产环境务必替换为 32 位以上随机串：openssl rand -base64 48
-      KEEL_JWT_SECRET: "please-change-this-to-a-random-48-chars-secret-key"
-      KEEL_SECURITY_INTERNAL_TOKEN: "please-change-this-internal-token"
-      KEEL_SECURITY_CAPTCHA_ENABLED: "false"
-      KEEL_LOG_LEVEL: info
-      KEEL_LOG_CONSOLE: "false"
+      TENON_JWT_SECRET: "please-change-this-to-a-random-48-chars-secret-key"
+      TENON_SECURITY_INTERNAL_TOKEN: "please-change-this-internal-token"
+      TENON_SECURITY_CAPTCHA_ENABLED: "false"
+      TENON_LOG_LEVEL: info
+      TENON_LOG_CONSOLE: "false"
     ports:
       - "9000:9000"
     volumes:
-      - keel-data:/app/data
-      - keel-logs:/app/logs
+      - tenon-data:/app/data
+      - tenon-logs:/app/logs
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9000/healthz"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 15s
-    networks: [keel]
+    networks: [tenon]
 
 volumes:
   mysql-data:
   redis-data:
-  keel-data:
-  keel-logs:
+  tenon-data:
+  tenon-logs:
 
 networks:
-  keel:
+  tenon:
     driver: bridge

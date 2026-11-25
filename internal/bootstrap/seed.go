@@ -10,15 +10,15 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/authn"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/authn"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 // 本文件只负责底座数据：部门、字典、参数、内置角色与管理员账号。
 // 菜单、任务、业务初始数据都来自各模块的声明，加模块不用改这里。
 
-var deptSeeds = []struct{ ID, ParentID, Name, Leader string }{{"d_root", "0", "Keel 科技", "管理员"},
+var deptSeeds = []struct{ ID, ParentID, Name, Leader string }{{"d_root", "0", "Tenon 科技", "管理员"},
 	{"d_tech", "d_root", "技术中心", "张工"},
 	{"d_product", "d_root", "产品中心", "李产品"},
 	{"d_ops", "d_root", "运营中心", "王运营"},
@@ -39,12 +39,12 @@ var configSeeds = []struct {
 	Key, Value, Name, Group, Remark string
 	Public                          bool
 }{
-	{"site.name", "Keel 企业管理平台", "站点名称", "basic", "显示在登录页与侧边栏", true},
-	{"site.copyright", "© 2026 Keel Framework", "版权信息", "basic", "", true},
+	{"site.name", "Tenon 企业管理平台", "站点名称", "basic", "显示在登录页与侧边栏", true},
+	{"site.copyright", "© 2026 Tenon Framework", "版权信息", "basic", "", true},
 	{"security.password.min_len", "8", "密码最小长度", "security", "", false},
 	{"security.login.max_fail", "5", "最大登录失败次数", "security", "超过后锁定账号", false},
 	{"upload.max_size_mb", "20", "上传大小上限(MB)", "storage", "", true},
-	{"mail.from_name", "Keel 通知", "邮件发件人名称", "mail", "", false},
+	{"mail.from_name", "Tenon 通知", "邮件发件人名称", "mail", "", false},
 }
 
 // jobSeedsOf 汇总已启用模块声明的定时任务。
@@ -328,12 +328,12 @@ func seed(db *gorm.DB, log *zap.Logger, reg *ModuleRegistry) error {
 		demoPwd, _ := authn.HashPassword("Demo@123456")
 		admin := model.User{
 			Username: "admin", Password: adminPwd, Nickname: "系统管理员", RealName: "Admin",
-			Email: "admin@keel.dev", Phone: "13800138000", DeptID: "d_tech",
+			Email: "admin@tenon.dev", Phone: "13800138000", DeptID: "d_tech",
 			Status: model.StatusEnabled, IsSuper: true, Remark: "系统内置超级管理员",
 		}
 		demo := model.User{
 			Username: "demo", Password: demoPwd, Nickname: "演示账号", RealName: "Demo",
-			Email: "demo@keel.dev", Phone: "13900139000", DeptID: "d_product",
+			Email: "demo@tenon.dev", Phone: "13900139000", DeptID: "d_product",
 			Status: model.StatusEnabled,
 		}
 		for _, u := range []*model.User{&admin, &demo} {
@@ -384,7 +384,7 @@ func seed(db *gorm.DB, log *zap.Logger, reg *ModuleRegistry) error {
 		}
 
 		notice := model.Notice{
-			Title:   "欢迎使用 Keel 企业服务端框架",
+			Title:   "欢迎使用 Tenon 企业服务端框架",
 			Content: "本平台已内置用户、角色、权限、部门、字典、配置、日志、任务、文件等企业常用能力，可直接作为中后台系统的起点。",
 			Type:    "notice", Status: model.StatusEnabled, PublishAt: &now,
 		}

@@ -17,11 +17,11 @@ import (
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/authn"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/idgen"
-	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/authn"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/idgen"
+	"github.com/MITEZ360/tenon/pkg/errs"
 )
 
 // oauthFlow 通用 OAuth2 / OIDC 登录流程。

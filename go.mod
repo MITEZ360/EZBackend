@@ -1,4 +1,4 @@
-module github.com/keel-framework/keel
+module github.com/MITEZ360/tenon
 
 go 1.21.0
 

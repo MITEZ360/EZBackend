@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 // Options 日志构建参数。
@@ -64,7 +64,7 @@ func New(o Options) (*zap.Logger, error) {
 		}
 		name := o.Config.Filename
 		if name == "" {
-			name = "keel.log"
+			name = "tenon.log"
 		}
 		w := &lumberjack.Logger{
 			Filename:   filepath.Join(o.Config.Dir, name),

@@ -15,7 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 // ErrMiss 表示缓存未命中。

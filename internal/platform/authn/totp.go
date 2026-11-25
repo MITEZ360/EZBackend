@@ -9,7 +9,7 @@ import (
 	"github.com/pquerna/otp/totp"
 	qrcode "github.com/skip2/go-qrcode"
 
-	"github.com/keel-framework/keel/internal/platform/crypto"
+	"github.com/MITEZ360/tenon/internal/platform/crypto"
 )
 
 // TOTP 参数固定为 30 秒 / 6 位 / SHA1。

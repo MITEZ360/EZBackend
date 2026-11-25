@@ -5,7 +5,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-BASE = os.environ.get("KEEL_BASE", "http://127.0.0.1:9000").rstrip("/")
+BASE = os.environ.get("TENON_BASE", "http://127.0.0.1:9000").rstrip("/")
 ok = 0
 fail = 0
 
@@ -47,7 +47,7 @@ code_src = "src-" + suffix
 
 print("== 登录 ==")
 st, r = call("POST", "/api/v1/auth/login", {
-    "username": "admin", "password": os.environ.get("KEEL_ADMIN_PASS", "Admin@123456"),
+    "username": "admin", "password": os.environ.get("TENON_ADMIN_PASS", "Admin@123456"),
     "captchaId": "", "captchaCode": "", "totpCode": "",
 })
 tk = (r.get("data") or {}).get("token") or {}

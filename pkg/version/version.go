@@ -2,9 +2,9 @@
 package version
 
 // 构建时可通过 -ldflags 注入：
-// -X github.com/keel-framework/keel/pkg/version.Version=1.0.0
+// -X github.com/MITEZ360/tenon/pkg/version.Version=1.0.0
 var (
-	Name      = "Keel"
+	Name      = "Tenon"
 	Version   = "1.0.0"
 	Commit    = "dev"
 	BuildTime = "unknown"

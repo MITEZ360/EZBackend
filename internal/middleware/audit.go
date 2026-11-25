@@ -10,9 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/idgen"
-	"github.com/keel-framework/keel/pkg/utils"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/idgen"
+	"github.com/MITEZ360/tenon/pkg/utils"
 )
 
 // Auditor 接收操作日志，由审计模块异步落库。

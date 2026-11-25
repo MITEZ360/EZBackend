@@ -9,10 +9,10 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/gin-gonic/gin"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/cache"
-	"github.com/keel-framework/keel/pkg/response"
-	"github.com/keel-framework/keel/pkg/utils"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
+	"github.com/MITEZ360/tenon/pkg/response"
+	"github.com/MITEZ360/tenon/pkg/utils"
 )
 
 // Service 仪表盘业务。

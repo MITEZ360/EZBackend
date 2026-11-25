@@ -10,14 +10,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 func init() { gin.SetMode(gin.TestMode) }
 
 func newGW(t *testing.T, cfg config.Micro) *Gateway {
 	t.Helper()
-	gw, err := New(cfg, nil, "internal-token", "keel-gateway", nil)
+	gw, err := New(cfg, nil, "internal-token", "tenon-gateway", nil)
 	if err != nil {
 		t.Fatalf("创建网关失败: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestGatewayProxyAndStrip(t *testing.T) {
 	if gotToken != "internal-token" {
 		t.Fatalf("内部令牌未注入: %q", gotToken)
 	}
-	if gotCaller != "keel-gateway" {
+	if gotCaller != "tenon-gateway" {
 		t.Fatalf("调用方标识未注入: %q", gotCaller)
 	}
 }

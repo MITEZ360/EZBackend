@@ -18,10 +18,10 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/modules/configcenter"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/modules/configcenter"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/pkg/errs"
 )
 
 // 支持的运维指令。
@@ -67,7 +67,7 @@ type Service struct {
 func NewService(db *gorm.DB, cfg *config.Config, log *zap.Logger, cfgSvc *configcenter.Service, restart func()) *Service {
 	host, err := os.Hostname()
 	if err != nil || host == "" {
-		host = "keel"
+		host = "tenon"
 	}
 	port := cfg.Server.Port
 	if addr := strings.TrimSpace(cfg.Cluster.AdvertiseAddr); addr != "" {

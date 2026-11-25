@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/platform/idgen"
+	"github.com/MITEZ360/tenon/internal/platform/idgen"
 )
 
 // Base 提供通用主键与审计字段（含软删除）。

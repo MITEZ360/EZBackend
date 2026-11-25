@@ -115,6 +115,12 @@
 - **决定**：① 新增两个可选模块：`cnauth`（手机号注册、短信登录、找回密码，依赖 `auth`）与 `recharge`（等级售价、下单、微信/支付宝回调、订单管理，依赖 `membership`），各自 `module.go` 自注册，默认发行版不导入；② 短信 `platform/sms` 与支付 `platform/pay` 留在平台层，仅作为被模块引用的库；③ 微信/QQ 的 OAuth 协议适配留在 `auth` 内部，由 `oauth.providers[].protocol` 驱动，不填即标准 OAuth2；④ 会员 `price` 列由迁移 v9 追加，`cn_sms_code`/`cn_recharge_order`/`cn_payment_config` 三张表交给 `Spec.Models` 在装配时建；⑤ 支付渠道凭据在「充值订单 → 支付配置」维护（加密入库、保存即生效），配置中心只放 `payment.enabled` 总开关与注册/短信参数；⑥ 删除 `main-cn`。
 - **后果**：默认发行版零国内代码——注册接口 404、新库无 `cn_*` 表、配置中心无「注册与短信」「支付」分组、模块候选里没有这两个名字；`make dist MODULES="user configcenter cnauth recharge"` 产出完整国内版，实测注册全流程（发码→注册→拿到令牌）与充值接口 200。代价：`cnauth → auth`、`recharge → membership` 是模块间单向 import（架构检查只禁 platform/pkg 反向依赖模块，方向无环，依赖已在 `DependsOn` 显式声明）；顺带修了继承来的缺陷——发码只看 `sms_login_enabled`，只开注册不开短信登录时注册会卡在发码，现按 scene 拆分开关。
 
+## #19　2026-11-25　前端页面按模块自包含，裁剪清单与后端同源
+
+- **背景**：#15~#18 让后端的模块化形成了闭环——加模块只改一个目录加一行导入，`make dist MODULES=…` 能把模块连代码一起裁掉。前端没跟上：20 多个页面全堆在 `web/src/pages/`，路由写死在 `router/index.ts`，裁剪只有 base / full 两档。结果是任何中间组合都是"后端没接口、前端还有页面"，而且加一个模块要改路由表、`api/`、`i18n/locales/partials/`、`pages/` 四处，漏一处就是 404 或缺英文。
+- **决定**：① 页面搬到 `web/src/modules/<name>/`，模块名等于后端 `modulekit.Spec.Name`；② 模块默认导出 `WebModule`（`name` / `routes` / `publicRoutes` / `i18n`），`registry.ts` 用 `import.meta.glob` 自动发现，`router/index.ts` 只保留应用壳与全局守卫；③ 裁剪清单由 `cmd/distgen -print` 算出后端实际装配集合（含依赖补齐与常驻模块），Makefile 经 `FRONT_MODULES` 传给 `VITE_MODULES`；④ `web/plugins/module-filter.ts` 在 `load` 阶段把未启用模块的 `index.ts` 换成空模块，使其页面 chunk 真的不进产物，而不是靠运行期开关隐藏入口。
+- **后果**：加模块只改模块目录，`router/index.ts`、`i18n/index.ts`、`vite.config.ts` 都不用动；`make dist MODULES="dashboard user role …"` 的产物里 `news`/`recharge`/`apikey`/`cluster`/`workflow` 的页面 chunk 实测全部消失。代价有三：① 模块名与后端不一致时只在运行时表现为 404，靠 `distgen -list` 与文档约定兜底；② 共享接口封装（如 `api/membership.ts`，390 字节，被布局、个人中心、用户页引用）不随模块裁剪，横切引用无法被静态消除；③ i18n 的 key 是全局共享空间，同一句中文不能有两个译法，模块词条只覆盖自己独有的文案，通用词仍集中在 `locales/`。
+
 ---
 > 决策 #1 前的项目基线、分支模型与提交规范见 `docs/development.md` 与历史提交 `d882683`、`d553e4f`。
 > 外部借鉴来源与完整改进路线见 [engineering-practices.md](engineering-practices.md)。

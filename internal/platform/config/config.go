@@ -1,5 +1,5 @@
 // Package config 基于 Viper 提供分层配置：默认值 -> 配置文件 -> 环境变量 -> 动态覆盖。
-// 环境变量约定：KEEL_SERVER_PORT 对应 server.port（点号替换为下划线）。
+// 环境变量约定：TENON_SERVER_PORT 对应 server.port（点号替换为下划线）。
 package config
 
 import (
@@ -110,12 +110,12 @@ func (m Migration) VersionTable() string {
 	if v := strings.TrimSpace(m.TableName); v != "" {
 		return v
 	}
-	return "keel_schema_migrations"
+	return "tenon_schema_migrations"
 }
 
 // Backup 数据库备份参数。
 //
-// 备份产物落在 Dir，文件名形如 keel-sqlite-20261112-152524.db.gz；
+// 备份产物落在 Dir，文件名形如 tenon-sqlite-20261112-152524.db.gz；
 // Retain 只保留最近 N 份，Compress 用 gzip 压缩。MySQL / PostgreSQL
 // 通过外部 dump 工具导出，路径可配置，未安装时备份任务会明确报错。
 type Backup struct {
@@ -156,7 +156,7 @@ func (b Backup) EffectiveDir() string {
 //
 // 新增渠道只需在 providers 里加一段配置，代码不需要改动：
 // 每个 provider 自行声明端点、scope 以及用户信息字段到本系统字段的映射。
-// 敏感凭据建议用环境变量 KEEL_OAUTH_<NAME>_CLIENT_ID / _CLIENT_SECRET 覆盖，
+// 敏感凭据建议用环境变量 TENON_OAUTH_<NAME>_CLIENT_ID / _CLIENT_SECRET 覆盖，
 // 避免明文写进配置文件。
 type OAuth struct {
 	Enabled      bool            `mapstructure:"enabled"`
@@ -608,7 +608,7 @@ func build(path string, overrides map[string]any) (*viper.Viper, *Config, error)
 			}
 		}
 	}
-	v.SetEnvPrefix("KEEL")
+	v.SetEnvPrefix("TENON")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 	// 切片类型字段在配置文件中缺省时需要显式绑定，环境变量才会参与 Unmarshal
@@ -709,13 +709,13 @@ func Watch() {
 }
 
 // applyMicroRoutesEnv 支持用环境变量提供网关转发规则，
-// 形如 KEEL_GATEWAY_ROUTES="/api/v1=keel-core,/uploads=keel-file"。
+// 形如 TENON_GATEWAY_ROUTES="/api/v1=tenon-core,/uploads=tenon-file"。
 // 配置文件中已显式声明 routes 时以文件为准。
 func applyMicroRoutesEnv(c *Config) {
 	if len(c.Micro.Routes) > 0 {
 		return
 	}
-	raw := strings.TrimSpace(os.Getenv("KEEL_GATEWAY_ROUTES"))
+	raw := strings.TrimSpace(os.Getenv("TENON_GATEWAY_ROUTES"))
 	if raw == "" {
 		return
 	}
@@ -735,7 +735,7 @@ func applyMicroRoutesEnv(c *Config) {
 }
 
 // DefaultJWTSecret 是内置的开发用密钥，生产环境必须显式覆盖。
-const DefaultJWTSecret = "keel-dev-secret-please-change-in-production"
+const DefaultJWTSecret = "tenon-dev-secret-please-change-in-production"
 
 // applyEnvFallbacks 处理未绑定到结构体字段的关键环境变量（如密钥）。
 func applyEnvFallbacks(c *Config) {
@@ -746,7 +746,7 @@ func applyEnvFallbacks(c *Config) {
 		c.Security.DataEncryptKey = c.JWT.Secret
 	}
 	if c.Security.InternalToken == "" {
-		c.Security.InternalToken = "keel-internal-token"
+		c.Security.InternalToken = "tenon-internal-token"
 	}
 	if c.Backup.Retain <= 0 {
 		c.Backup.Retain = 7
@@ -772,9 +772,9 @@ func applyEnvFallbacks(c *Config) {
 }
 
 // applyOAuthEnvOverrides 允许用环境变量注入各 provider 的凭据，避免密钥落盘。
-// 约定：KEEL_OAUTH_GITHUB_CLIENT_ID / KEEL_OAUTH_GITHUB_CLIENT_SECRET，
+// 约定：TENON_OAUTH_GITHUB_CLIENT_ID / TENON_OAUTH_GITHUB_CLIENT_SECRET，
 // 名称中的非字母数字统一转为下划线。仅配置了一个 provider 时也可用
-// KEEL_OAUTH_CLIENT_ID / KEEL_OAUTH_CLIENT_SECRET 简写。
+// TENON_OAUTH_CLIENT_ID / TENON_OAUTH_CLIENT_SECRET 简写。
 func applyOAuthEnvOverrides(c *Config) {
 	if len(c.OAuth.Providers) == 0 {
 		return
@@ -793,13 +793,13 @@ func applyOAuthEnvOverrides(c *Config) {
 	}
 	for i := range c.OAuth.Providers {
 		p := &c.OAuth.Providers[i]
-		prefix := "KEEL_OAUTH_" + envKey(p.Name) + "_"
+		prefix := "TENON_OAUTH_" + envKey(p.Name) + "_"
 		id, secret := os.Getenv(prefix+"CLIENT_ID"), os.Getenv(prefix+"CLIENT_SECRET")
 		if len(c.OAuth.Providers) == 1 {
-			if v := os.Getenv("KEEL_OAUTH_CLIENT_ID"); v != "" {
+			if v := os.Getenv("TENON_OAUTH_CLIENT_ID"); v != "" {
 				id = v
 			}
-			if v := os.Getenv("KEEL_OAUTH_CLIENT_SECRET"); v != "" {
+			if v := os.Getenv("TENON_OAUTH_CLIENT_SECRET"); v != "" {
 				secret = v
 			}
 		}
@@ -926,7 +926,7 @@ func (c *Config) Validate() error {
 		if !strings.EqualFold(c.Micro.Mode, "gateway") {
 			for _, weak := range []string{
 				DefaultJWTSecret,
-				"请务必在生产环境替换为至少32位的随机字符串-keel-default-secret",
+				"请务必在生产环境替换为至少32位的随机字符串-tenon-default-secret",
 			} {
 				if strings.EqualFold(strings.TrimSpace(c.JWT.Secret), weak) {
 					return fmt.Errorf("生产环境必须显式配置 jwt.secret，不能使用内置默认值或仓库占位符")
@@ -957,7 +957,7 @@ func (c *Config) Validate() error {
 func (c *Config) IsProd() bool { return c.App.Env == "prod" }
 
 func setDefaults(v *viper.Viper) {
-	v.SetDefault("app.name", "Keel 企业服务端框架")
+	v.SetDefault("app.name", "Tenon 企业服务端框架")
 	v.SetDefault("app.env", "dev")
 	v.SetDefault("app.version", "1.0.0")
 	v.SetDefault("app.timezone", "Asia/Shanghai")
@@ -977,7 +977,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.level", "info")
 	v.SetDefault("log.format", "json")
 	v.SetDefault("log.dir", "logs")
-	v.SetDefault("log.filename", "keel.log")
+	v.SetDefault("log.filename", "tenon.log")
 	v.SetDefault("log.max_size_mb", 64)
 	v.SetDefault("log.max_age_days", 14)
 	v.SetDefault("log.max_backups", 30)
@@ -987,7 +987,7 @@ func setDefaults(v *viper.Viper) {
 
 	// driver 留空表示按 dsn 自动推断，单机默认落到 SQLite
 	v.SetDefault("db.driver", "")
-	v.SetDefault("db.dsn", "data/keel.db")
+	v.SetDefault("db.dsn", "data/tenon.db")
 	v.SetDefault("db.max_open_conns", 50)
 	v.SetDefault("db.max_idle_conns", 10)
 	v.SetDefault("db.conn_max_lifetime", "1h")
@@ -1000,12 +1000,12 @@ func setDefaults(v *viper.Viper) {
 	// addr 留空表示使用进程内缓存；填写地址即自动启用 Redis
 	v.SetDefault("redis.addr", "")
 	v.SetDefault("redis.pool_size", 32)
-	v.SetDefault("redis.prefix", "keel")
+	v.SetDefault("redis.prefix", "tenon")
 	v.SetDefault("redis.dial_timeout", "3s")
 	v.SetDefault("redis.read_timeout", "3s")
 	v.SetDefault("redis.local_size", 100000)
 
-	v.SetDefault("jwt.issuer", "keel")
+	v.SetDefault("jwt.issuer", "tenon")
 	v.SetDefault("jwt.access_ttl", "2h")
 	v.SetDefault("jwt.refresh_ttl", "168h")
 
@@ -1056,7 +1056,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("news.retention_days", 7)
 
 	v.SetDefault("migration.mode", "versioned")
-	v.SetDefault("migration.table_name", "keel_schema_migrations")
+	v.SetDefault("migration.table_name", "tenon_schema_migrations")
 
 	v.SetDefault("backup.enabled", true)
 	v.SetDefault("backup.dir", "data/backups")

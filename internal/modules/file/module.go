@@ -3,14 +3,14 @@ package file
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:    "github.com/keel-framework/keel/internal/modules/file",
+		Pkg:    "github.com/MITEZ360/tenon/internal/modules/file",
 		Name:   "file",
 		Label:  "文件管理",
 		Desc:   "上传记录浏览与清理",

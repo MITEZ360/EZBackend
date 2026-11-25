@@ -17,7 +17,7 @@ func TestGetJSON(t *testing.T) {
 		if r.Header.Get("X-Caller-Service") == "" {
 			t.Error("缺少调用方标识头")
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"code": 0, "data": map[string]string{"name": "keel"}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": 0, "data": map[string]string{"name": "tenon"}})
 	}))
 	defer srv.Close()
 
@@ -28,7 +28,7 @@ func TestGetJSON(t *testing.T) {
 	if err := c.Get(context.Background(), "/ping", &out); err != nil {
 		t.Fatalf("请求失败: %v", err)
 	}
-	if out.Data["name"] != "keel" {
+	if out.Data["name"] != "tenon" {
 		t.Fatalf("响应解析异常: %+v", out)
 	}
 }
@@ -94,7 +94,7 @@ func TestBreakerOpen(t *testing.T) {
 }
 
 func TestResolveFromRegistry(t *testing.T) {
-	c := New(Options{Service: "keel-core", Timeout: time.Second})
+	c := New(Options{Service: "tenon-core", Timeout: time.Second})
 	if err := c.Get(context.Background(), "/ping", nil); err == nil {
 		t.Fatal("未配置注册表与直连地址时应报错")
 	}

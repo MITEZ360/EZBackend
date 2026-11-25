@@ -7,10 +7,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
@@ -25,7 +25,7 @@ func init() {
 	})
 
 	modulekit.Register(modulekit.Spec{
-		Pkg:   "github.com/keel-framework/keel/internal/modules/configcenter",
+		Pkg:   "github.com/MITEZ360/tenon/internal/modules/configcenter",
 		Name:  "configcenter",
 		Label: "配置中心",
 		Desc:  "运行时配置的管理端入口。关闭后本页消失，只能改配置文件或直接改数据库里的覆盖表",

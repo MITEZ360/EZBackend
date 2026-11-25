@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 const (

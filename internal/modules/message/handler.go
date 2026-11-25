@@ -3,10 +3,10 @@ package message
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/platform/httpx"
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/response"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/platform/httpx"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/response"
 )
 
 // Handler 消息中心接口。

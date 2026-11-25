@@ -10,9 +10,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/authn"
-	"github.com/keel-framework/keel/internal/platform/cache"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/authn"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
 )
 
 const (

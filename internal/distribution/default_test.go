@@ -3,7 +3,7 @@ package distribution
 import (
 	"testing"
 
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 // 默认发行版的边界要可断言：谁把可选业务模块加回 default.go，这条会红。

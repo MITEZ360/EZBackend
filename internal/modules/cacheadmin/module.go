@@ -3,14 +3,14 @@ package cacheadmin
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:   "github.com/keel-framework/keel/internal/modules/cacheadmin",
+		Pkg:   "github.com/MITEZ360/tenon/internal/modules/cacheadmin",
 		Name:  "cacheadmin",
 		Label: "缓存管理",
 		Desc:  "缓存键浏览与按前缀清理",

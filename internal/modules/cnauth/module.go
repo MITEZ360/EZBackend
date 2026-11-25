@@ -5,15 +5,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/modules/auth"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
-	"github.com/keel-framework/keel/internal/platform/sms"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/modules/auth"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/platform/sms"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:       "github.com/keel-framework/keel/internal/modules/cnauth",
+		Pkg:       "github.com/MITEZ360/tenon/internal/modules/cnauth",
 		Name:      "cnauth",
 		Label:     "自助注册与短信登录",
 		Desc:      "手机号注册、短信验证码登录、找回密码；会话签发复用认证模块，不另立一套登录态",

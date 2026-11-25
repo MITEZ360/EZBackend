@@ -3,11 +3,11 @@
 配置加载顺序（后者覆盖前者）：
 
 ```
-内置默认值  →  configs/config.yaml  →  环境变量（KEEL_ 前缀）  →  运行期覆盖（-mode）
+内置默认值  →  configs/config.yaml  →  环境变量（TENON_ 前缀）  →  运行期覆盖（-mode）
 ```
 
-环境变量映射规则：配置键的 `.` 替换为 `_`，加 `KEEL_` 前缀。
-例如 `server.port` → `KEEL_SERVER_PORT`，`db.conn_max_lifetime` → `KEEL_DB_CONN_MAX_LIFETIME`。
+环境变量映射规则：配置键的 `.` 替换为 `_`，加 `TENON_` 前缀。
+例如 `server.port` → `TENON_SERVER_PORT`，`db.conn_max_lifetime` → `TENON_DB_CONN_MAX_LIFETIME`。
 
 ---
 
@@ -41,14 +41,14 @@
 校验项：进程内缓存、进程内限流、本地磁盘、SQLite。`strict` 适合 CI 的部署清单检查：
 
 ```bash
-KEEL_RUNTIME_STATELESS=strict go run ./cmd/keel -config configs/config.service.yaml
+TENON_RUNTIME_STATELESS=strict go run ./cmd/tenon -config configs/config.service.yaml
 ```
 
 ## 1. app
 
 | 键 | 默认值 | 说明 |
 | --- | --- | --- |
-| `app.name` | `Keel 企业服务端框架` | 服务名，写入日志与网关调用方标识 |
+| `app.name` | `Tenon 企业服务端框架` | 服务名，写入日志与网关调用方标识 |
 | `app.env` | `dev` | `dev` / `test` / `prod`；`prod` 会启用额外的安全校验 |
 | `app.version` | `1.0.0` | 版本号，健康检查返回 |
 | `app.timezone` | `Asia/Shanghai` | IANA 时区名。启动时设为进程 `time.Local`，统一影响 GORM 时间戳、cron 调度、备份文件名、会员到期解析等；非法值启动失败 |
@@ -82,7 +82,7 @@ KEEL_RUNTIME_STATELESS=strict go run ./cmd/keel -config configs/config.service.y
 | --- | --- | --- |
 | `level` | `info` | `debug` / `info` / `warn` / `error` |
 | `format` | `json` | `json`（便于采集）/ `console`（人读） |
-| `dir` / `filename` | `logs` / `keel.log` | 落盘位置 |
+| `dir` / `filename` | `logs` / `tenon.log` | 落盘位置 |
 | `max_size_mb` | `64` | 单文件大小上限，超出轮转 |
 | `max_age_days` | `14` | 保留天数 |
 | `max_backups` | `30` | 最多保留文件数 |
@@ -97,7 +97,7 @@ KEEL_RUNTIME_STATELESS=strict go run ./cmd/keel -config configs/config.service.y
 | 键 | 默认值 | 说明 |
 | --- | --- | --- |
 | `driver` | 空 | `sqlite` / `mysql` / `postgres`；留空按 `dsn` 自动推断 |
-| `dsn` | `data/keel.db` | 见下方示例 |
+| `dsn` | `data/tenon.db` | 见下方示例 |
 | `max_open_conns` | `50` | 连接池上限（实际最小值 10） |
 | `max_idle_conns` | `10` | 空闲连接（实际最小值 5） |
 | `conn_max_lifetime` | `1h` | 连接最大存活 |
@@ -111,15 +111,15 @@ DSN 示例（`driver` 均可省略）：
 
 ```yaml
 # SQLite：框架自动附加 busy_timeout / WAL / synchronous=NORMAL
-dsn: data/keel.db
+dsn: data/tenon.db
 
 # MySQL：DSN 含 @tcp( 或 @unix( 即识别
-dsn: keel:Keel@123456@tcp(127.0.0.1:3306)/keel?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai
+dsn: tenon:Tenon@123456@tcp(127.0.0.1:3306)/tenon?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai
 
 # PostgreSQL：以 postgres:// 开头，或含 host= 与 dbname=
-dsn: postgres://keel:Keel@123456@127.0.0.1:5432/keel?sslmode=disable
+dsn: postgres://tenon:Tenon@123456@127.0.0.1:5432/tenon?sslmode=disable
 # 也支持 key=value 形式
-dsn: host=127.0.0.1 user=keel password=Keel@123456 dbname=keel port=5432 sslmode=disable TimeZone=Asia/Shanghai
+dsn: host=127.0.0.1 user=tenon password=Tenon@123456 dbname=tenon port=5432 sslmode=disable TimeZone=Asia/Shanghai
 ```
 
 推断规则：`mysql://`、`mysql:`、含 `@tcp(` / `@unix(` → MySQL；`postgres://`、
@@ -134,7 +134,7 @@ dsn: host=127.0.0.1 user=keel password=Keel@123456 dbname=keel port=5432 sslmode
 | `optional` | `false` | 连接失败时是否降级为进程内缓存；默认直接启动失败 |
 | `password` / `db` | 空 / `0` | 认证与库号 |
 | `pool_size` | `32` | 连接池（实际最小值 16） |
-| `prefix` | `keel` | 键前缀，便于多环境共用实例 |
+| `prefix` | `tenon` | 键前缀，便于多环境共用实例 |
 | `dial_timeout` / `read_timeout` | `3s` | 超时 |
 | `local_size` | `100000` | 本地缓存容量（未启用 Redis 时生效） |
 
@@ -149,7 +149,7 @@ dsn: host=127.0.0.1 user=keel password=Keel@123456 dbname=keel port=5432 sslmode
 | 键 | 默认值 | 说明 |
 | --- | --- | --- |
 | `secret` | 内置开发密钥 | **生产必须替换**，≥32 位随机串 |
-| `issuer` | `keel` | 签发者，解析时校验 |
+| `issuer` | `tenon` | 签发者，解析时校验 |
 | `access_ttl` | `2h` | 访问令牌有效期 |
 | `refresh_ttl` | `168h` | 刷新令牌有效期 |
 
@@ -194,7 +194,7 @@ storage:
   type: auto            # 填了 endpoint 与 bucket 就自动走对象存储
   s3:
     endpoint: "minio.internal:9000"
-    bucket: "keel"
+    bucket: "tenon"
     access_key: "..."
     secret_key: "..."
     use_ssl: false
@@ -261,8 +261,8 @@ storage:
 | `timeout` | `5s` | 网关转发与客户端超时 |
 | `retries` | `2` | 失败重试次数 |
 | `registry.type` | `static` | `static`（配置）/ `dns`（K8s Headless） |
-| `registry.endpoints` | `[]` | 形如 `keel-core=10.0.0.1:9000,10.0.0.2:9000` |
-| `registry.dns_suffix` | 空 | 形如 `keel.svc.cluster.local:9000` |
+| `registry.endpoints` | `[]` | 形如 `tenon-core=10.0.0.1:9000,10.0.0.2:9000` |
+| `registry.dns_suffix` | 空 | 形如 `tenon.svc.cluster.local:9000` |
 | `registry.interval` | `30s` | DNS 解析缓存时长 |
 | `routes` | `[]` | 网关转发规则：`prefix` / `service` / `targets` / `strip_prefix` |
 | `breaker.*` | `enabled=true, max_failed=10, interval=30, timeout=15` | 熔断参数 |
@@ -270,7 +270,7 @@ storage:
 网关路由也可以用环境变量简化：
 
 ```bash
-KEEL_GATEWAY_ROUTES="/api/v1=keel-core,/uploads=keel-file"
+TENON_GATEWAY_ROUTES="/api/v1=tenon-core,/uploads=tenon-file"
 ```
 
 ---
@@ -368,10 +368,24 @@ Go 里裁剪有两条独立路径，别混在一起：
 
 ```bash
 make dist-list                                    # 看有哪些模块、谁依赖谁；+ 为默认不装
+make dist-base                                    # Base：只要后台管理基础功能
 make dist MODULES="user configcenter cluster"     # 组装并编译
 make dist MODULES="user news"                     # 带资讯中心的系统
 make dist MODULES=all                             # 全量（含默认不装的模块）
 make dist-default                                 # 删掉定制清单，回到默认发行版
+```
+
+`make dist-base` 是预置组合，模块清单写在 Makefile 的 `BASE_MODULES` 里，
+产物为 `bin/tenon-base`，发行版名 `Base`（`internal/distribution/profile.go`
+里的 `const Name`）。它不含会员、资讯、充值、自助注册、开放密钥、集群协同，
+前端也以 `VITE_EDITION=base` 构建，可选模块页面不生成 chunk。
+
+发行版名不只是一个标签：启动横幅、`-version` 输出都会带上它，便于在机器上
+区分同时部署的多个版本：
+
+```bash
+$ ./bin/tenon-base -version
+Tenon Base 1.0.0 (b864f62 2026-11-25T13:40:14Z)
 ```
 
 生成器做三件事：补齐依赖、强制带上常驻模块、把模块名翻译成包导入清单，
@@ -547,33 +561,33 @@ JWT 密钥与节点地址，其余参数启动后在管理端设置。
 
 ```bash
 # 数据库
-KEEL_DB_DRIVER=mysql
-KEEL_DB_DSN="keel:pass@tcp(mysql:3306)/keel?charset=utf8mb4&parseTime=True"
-# 缓存（填地址即启用，无需 KEEL_REDIS_ENABLED）
-KEEL_REDIS_ADDR=redis:6379
+TENON_DB_DRIVER=mysql
+TENON_DB_DSN="tenon:pass@tcp(mysql:3306)/tenon?charset=utf8mb4&parseTime=True"
+# 缓存（填地址即启用，无需 TENON_REDIS_ENABLED）
+TENON_REDIS_ADDR=redis:6379
 # 文件存储（填了 endpoint 与 bucket 即启用）
-KEEL_STORAGE_TYPE=auto
-KEEL_STORAGE_S3_ENDPOINT=minio:9000
-KEEL_STORAGE_S3_BUCKET=keel
-KEEL_STORAGE_S3_ACCESS_KEY=...
-KEEL_STORAGE_S3_SECRET_KEY=...
+TENON_STORAGE_TYPE=auto
+TENON_STORAGE_S3_ENDPOINT=minio:9000
+TENON_STORAGE_S3_BUCKET=tenon
+TENON_STORAGE_S3_ACCESS_KEY=...
+TENON_STORAGE_S3_SECRET_KEY=...
 # 邮件（填 host 即启用）
-KEEL_MAIL_HOST=smtp.example.com
-KEEL_MAIL_USERNAME=...
-KEEL_MAIL_PASSWORD=...
+TENON_MAIL_HOST=smtp.example.com
+TENON_MAIL_USERNAME=...
+TENON_MAIL_PASSWORD=...
 # 多实例无状态校验
-KEEL_RUNTIME_STATELESS=strict
-KEEL_RUNTIME_INSTANCES=3
+TENON_RUNTIME_STATELESS=strict
+TENON_RUNTIME_INSTANCES=3
 # 安全
-KEEL_JWT_SECRET="$(openssl rand -base64 48)"
-KEEL_SECURITY_INTERNAL_TOKEN="$(openssl rand -hex 24)"
+TENON_JWT_SECRET="$(openssl rand -base64 48)"
+TENON_SECURITY_INTERNAL_TOKEN="$(openssl rand -hex 24)"
 # 形态
-KEEL_MICRO_MODE=service
-KEEL_MICRO_MODULES=user,role,dept
-KEEL_GATEWAY_ROUTES="/api/v1=keel-core"
+TENON_MICRO_MODE=service
+TENON_MICRO_MODULES=user,role,dept
+TENON_GATEWAY_ROUTES="/api/v1=tenon-core"
 # 注册发现
-KEEL_MICRO_REGISTRY_TYPE=dns
-KEEL_MICRO_REGISTRY_DNS_SUFFIX=keel.svc.cluster.local:9000
+TENON_MICRO_REGISTRY_TYPE=dns
+TENON_MICRO_REGISTRY_DNS_SUFFIX=tenon.svc.cluster.local:9000
 ```
 
 > 切片类型（`micro.modules`、`micro.registry.endpoints`、`cors.allow_origins`、`storage.allow_ext`）
@@ -583,19 +597,19 @@ KEEL_MICRO_REGISTRY_DNS_SUFFIX=keel.svc.cluster.local:9000
 
 ```bash
 # 迁移与备份
-KEEL_MIGRATION_MODE=versioned
-KEEL_MIGRATION_TABLE_NAME=keel_schema_migrations
-KEEL_BACKUP_ENABLED=true
-KEEL_BACKUP_DIR=/var/backups/keel
-KEEL_BACKUP_RETAIN=14
-KEEL_BACKUP_ALLOW_RESTORE=false
+TENON_MIGRATION_MODE=versioned
+TENON_MIGRATION_TABLE_NAME=tenon_schema_migrations
+TENON_BACKUP_ENABLED=true
+TENON_BACKUP_DIR=/var/backups/tenon
+TENON_BACKUP_RETAIN=14
+TENON_BACKUP_ALLOW_RESTORE=false
 # 接口文档（不配置时 dev 开 / prod 关）
-KEEL_DOCS_ENABLED=true
-KEEL_DOCS_PATH=/docs
+TENON_DOCS_ENABLED=true
+TENON_DOCS_PATH=/docs
 # OAuth 凭据（名称转大写、非字母数字转下划线）
-KEEL_OAUTH_GITHUB_CLIENT_ID=...
-KEEL_OAUTH_GITHUB_CLIENT_SECRET=...
-KEEL_OAUTH_ENABLED=true
+TENON_OAUTH_GITHUB_CLIENT_ID=...
+TENON_OAUTH_GITHUB_CLIENT_SECRET=...
+TENON_OAUTH_ENABLED=true
 ```
 
 ---
@@ -607,7 +621,7 @@ KEEL_OAUTH_ENABLED=true
 | 参数 | 默认 | 说明 |
 | --- | --- | --- |
 | `migration.mode` | `versioned` | `versioned` 按版本执行 / `auto` 沿用 AutoMigrate / `off` 不迁移 |
-| `migration.table_name` | `keel_schema_migrations` | 版本记录表 |
+| `migration.table_name` | `tenon_schema_migrations` | 版本记录表 |
 
 `db.auto_migrate`、`db.seed` 仅影响 `auto` 模式与种子数据。版本清单、回滚与 CLI
 用法见 `docs/deploy.md` 7.1。
@@ -627,7 +641,7 @@ KEEL_OAUTH_ENABLED=true
 | `backup.allow_restore` | `false` | 是否允许在线恢复（高危） |
 
 > **GFS 保留**：任一分档 >0 即启用；按槽位挑选而非时间窗，避免断档时误删窗口内唯一备份，
-> **最新一份永不删除**。演练命令 `keel -config ... backup-prune --dry-run`。
+> **最新一份永不删除**。演练命令 `tenon -config ... backup-prune --dry-run`。
 > 备份会一并纳入本地存储目录（`storage.local_dir`）的文件资产；对象存储模式跳过并在元信息标注。
 | `backup.mysql_dump` / `mysql_restore` | `mysqldump` / `mysql` | 外部工具路径 |
 | `backup.pg_dump` / `pg_restore` | `pg_dump` / `psql` | 外部工具路径 |
@@ -647,7 +661,7 @@ KEEL_OAUTH_ENABLED=true
 | 字段 | 说明 |
 | --- | --- |
 | `name` / `label` / `icon` / `enabled` | 唯一标识、按钮文案、图标 URL、开关 |
-| `client_id` / `client_secret` | 凭据，可用 `KEEL_OAUTH_<NAME>_CLIENT_*` 覆盖 |
+| `client_id` / `client_secret` | 凭据，可用 `TENON_OAUTH_<NAME>_CLIENT_*` 覆盖 |
 | `auth_url` / `token_url` / `user_info_url` / `email_url` | 端点 |
 | `scopes` | 授权范围 |
 | `field_map` | 用户信息字段映射，支持点路径、数组下标、逗号分隔多候选 |

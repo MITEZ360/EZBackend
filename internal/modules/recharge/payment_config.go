@@ -8,11 +8,11 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/crypto"
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/i18n"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/crypto"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/i18n"
 )
 
 // maskSecret 是管理端读回敏感字段时的占位符；保存时遇到该值表示保持原值。

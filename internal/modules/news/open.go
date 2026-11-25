@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/platform/httpx"
-	"github.com/keel-framework/keel/pkg/response"
+	"github.com/MITEZ360/tenon/internal/platform/httpx"
+	"github.com/MITEZ360/tenon/pkg/response"
 )
 
 // OpenHandler 开放接口，供爬虫与客户端调用。

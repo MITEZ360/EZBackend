@@ -9,12 +9,12 @@ package catalog
 
 import (
 	// 默认发行版的全部模块。
-	_ "github.com/keel-framework/keel/internal/distribution"
+	_ "github.com/MITEZ360/tenon/internal/distribution"
 
 	// 可选业务模块：默认发行版不含，按需组装时才进二进制。
-	_ "github.com/keel-framework/keel/internal/modules/cnauth"
-	_ "github.com/keel-framework/keel/internal/modules/news"
-	_ "github.com/keel-framework/keel/internal/modules/recharge"
+	_ "github.com/MITEZ360/tenon/internal/modules/cnauth"
+	_ "github.com/MITEZ360/tenon/internal/modules/news"
+	_ "github.com/MITEZ360/tenon/internal/modules/recharge"
 )
 
 // Optional 列出不属于默认发行版的模块名。

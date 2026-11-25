@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 // 测试进程不加载发行版清单（导入 distribution 会与本包形成循环），

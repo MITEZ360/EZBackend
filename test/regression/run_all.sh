@@ -7,8 +7,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-WORK="$(mktemp -d /tmp/keel-regression-XXXXXX)"
-BIN="$WORK/keel"
+WORK="$(mktemp -d /tmp/tenon-regression-XXXXXX)"
+BIN="$WORK/tenon"
 PIDS=""
 
 log() { echo "[regression] $*"; }
@@ -21,18 +21,18 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 log "编译二进制"
-GOTOOLCHAIN=local go build -o "$BIN" ./cmd/keel
+GOTOOLCHAIN=local go build -o "$BIN" ./cmd/tenon
 
 # 主服务配置（端口 9000，独立数据与上传目录，避免污染开发库）
 MAIN_CFG="$WORK/config-main.yaml"
-sed -e 's#dsn: data/keel.db#dsn: '"$WORK"'/main.db#' \
+sed -e 's#dsn: data/tenon.db#dsn: '"$WORK"'/main.db#' \
     -e 's#dir: data/backups#dir: '"$WORK"'/backups#' \
     -e 's#local_dir: data/uploads#local_dir: '"$WORK"'/uploads#' \
     configs/config.yaml > "$MAIN_CFG"
 
 # OAuth 演示配置（端口 9002，指向 mock provider 9101）
 OAUTH_CFG="$WORK/config-oauth.yaml"
-sed -e 's#dsn: data/keel-oauth-demo.db#dsn: '"$WORK"'/oauth.db#' \
+sed -e 's#dsn: data/tenon-oauth-demo.db#dsn: '"$WORK"'/oauth.db#' \
     -e 's#dir: data/backups-oauth-demo#dir: '"$WORK"'/backups-oauth#' \
     -e 's#local_dir: data/uploads-oauth-demo#local_dir: '"$WORK"'/uploads-oauth#' \
     configs/config.oauth.demo.yaml > "$OAUTH_CFG"
@@ -69,7 +69,7 @@ FAILED=0
 run() {
   local name="$1" base="$2" script="$3"
   log "===== $name ====="
-  if KEEL_BASE="$base" KEEL_NEWS_DB="$WORK/main.db" python3 "$ROOT/test/regression/$script"; then
+  if TENON_BASE="$base" TENON_NEWS_DB="$WORK/main.db" python3 "$ROOT/test/regression/$script"; then
     log "$name 通过"
   else
     log "$name 失败"

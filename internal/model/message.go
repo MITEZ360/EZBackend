@@ -5,7 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/platform/idgen"
+	"github.com/MITEZ360/tenon/internal/platform/idgen"
 )
 
 // 站内信类型。

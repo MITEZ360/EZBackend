@@ -3,11 +3,11 @@ package cnauth
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/modules/auth"
-	"github.com/keel-framework/keel/internal/platform/httpx"
-	"github.com/keel-framework/keel/pkg/response"
-	"github.com/keel-framework/keel/pkg/utils"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/modules/auth"
+	"github.com/MITEZ360/tenon/internal/platform/httpx"
+	"github.com/MITEZ360/tenon/pkg/response"
+	"github.com/MITEZ360/tenon/pkg/utils"
 )
 
 // Handler CN 认证接口。
@@ -28,7 +28,7 @@ func (h *Handler) meta(c *gin.Context) auth.ClientMeta {
 }
 
 func (h *Handler) setRefreshCookie(c *gin.Context, token string) {
-	c.SetCookie("keel_refresh", token, int(h.svc.authSvc.RefreshTTL().Seconds()), "/", "", c.Request.TLS != nil, true)
+	c.SetCookie("tenon_refresh", token, int(h.svc.authSvc.RefreshTTL().Seconds()), "/", "", c.Request.TLS != nil, true)
 }
 
 // PublicConfig 返回注册/短信登录开关，供前端登录页决定展示入口。

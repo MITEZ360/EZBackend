@@ -8,11 +8,11 @@ import (
 )
 
 func TestNewStaticParse(t *testing.T) {
-	reg, err := NewStatic([]string{"keel-core=127.0.0.1:9000,127.0.0.1:9002", " keel-auth=10.0.0.1:9001 "})
+	reg, err := NewStatic([]string{"tenon-core=127.0.0.1:9000,127.0.0.1:9002", " tenon-auth=10.0.0.1:9001 "})
 	if err != nil {
 		t.Fatalf("解析静态注册表失败: %v", err)
 	}
-	list, err := reg.Resolve(context.Background(), "keel-core")
+	list, err := reg.Resolve(context.Background(), "tenon-core")
 	if err != nil {
 		t.Fatalf("解析实例失败: %v", err)
 	}
@@ -29,9 +29,9 @@ func TestNewStaticParse(t *testing.T) {
 
 func TestNewStaticInvalid(t *testing.T) {
 	cases := [][]string{
-		{"keel-core"},           // 缺少等号
-		{"keel-core=127.0.0.1"}, // 缺少端口
-		{"keel-core="},          // 无实例
+		{"tenon-core"},           // 缺少等号
+		{"tenon-core=127.0.0.1"}, // 缺少端口
+		{"tenon-core="},          // 无实例
 	}
 	for _, c := range cases {
 		if _, err := NewStatic(c); err == nil {

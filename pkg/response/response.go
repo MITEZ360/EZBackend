@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/i18n"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/i18n"
 )
 
 // Body 是统一响应体。

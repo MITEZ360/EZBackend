@@ -74,9 +74,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/query"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/query"
 )
 
 type Service struct{ db *gorm.DB }
@@ -171,10 +171,10 @@ package customer
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/platform/httpx"
-	"github.com/keel-framework/keel/pkg/query"
-	"github.com/keel-framework/keel/pkg/response"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/platform/httpx"
+	"github.com/MITEZ360/tenon/pkg/query"
+	"github.com/MITEZ360/tenon/pkg/response"
 )
 
 type Handler struct{ svc *Service }
@@ -254,9 +254,9 @@ package customer
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
@@ -311,13 +311,13 @@ func setup(c *modulekit.Context) error {
 通用能力加进 `default.go`，一行空白导入：
 
 ```go
-_ "github.com/keel-framework/keel/internal/modules/customer"
+_ "github.com/MITEZ360/tenon/internal/modules/customer"
 ```
 
 独立模块只加进 `catalog/catalog.go` 的空白导入与 `Optional` 名单，默认构建不含它：
 
 ```go
-_ "github.com/keel-framework/keel/internal/modules/news"
+_ "github.com/MITEZ360/tenon/internal/modules/news"
 
 var Optional = []string{"news"}
 ```
@@ -400,15 +400,23 @@ Node 只用于**构建期**：`vite build` 产出 `web/dist`，再由 `//go:embe
 
 ```
 web/src/
-├── api/         # client.ts（axios + 401 单飞刷新）、按模块拆分的接口
+├── api/         # client.ts（axios + 401 单飞刷新）、跨模块共享的接口封装
 ├── components/  # TrendChart、MessageBell（铃铛未读预览）等通用组件
 ├── layouts/     # BasicLayout：侧边栏 + 顶栏 + 内容区
-├── pages/       # 按菜单路径组织，如 pages/system/user/index.vue
-├── router/      # 静态路由 + 登录守卫（未登录跳 login?redirect=）
+├── modules/     # 业务模块，与 internal/modules/<name> 一一对应
+│   ├── types.ts     # WebModule 契约（name / routes / publicRoutes / i18n）
+│   ├── registry.ts  # 自动发现 + 按 VITE_MODULES 过滤
+│   └── news/        # 单个模块：index.ts + pages/ + api.ts + i18n.ts
+├── pages/       # 应用壳：登录、第三方回调、个人中心、403/404
+├── router/      # 路由聚合 + 登录守卫 + 菜单校验（全局策略）
 ├── stores/      # Pinia：auth 管 token/user/perms，message 管未读数与最近消息
 ├── styles/      # tokens.scss 设计令牌 → element.scss 覆盖 → base.scss
 └── utils/       # 格式化、菜单图标映射
 ```
+
+业务页面在 `modules/` 下自包含，路由不再写在一张总表里。约定与增删步骤见
+[frontend-modules.md](frontend-modules.md)，要点：模块名必须等于后端
+`modulekit.Spec.Name`，否则 `make dist` 会裁错页面。
 
 ### 开发
 
@@ -445,7 +453,10 @@ make web-dev
 
 ### 新增一个页面
 
-**1. 建组件** `web/src/pages/biz/customer/index.vue`：
+页面属于某个业务模块，放到 `web/src/modules/<name>/pages/`，路由写在该模块的
+`index.ts`。**不要**改 `router/index.ts`——那是应用壳与全局守卫。
+
+**1. 建组件** `web/src/modules/biz/pages/customer.vue`：
 
 ```vue
 <script setup lang="ts">
@@ -517,19 +528,29 @@ onMounted(load)
 </template>
 ```
 
-**2. 注册路由** `web/src/router/index.ts`，加在 `BasicLayout` 的 `children` 里：
+**2. 模块入口** `web/src/modules/biz/index.ts`：
 
 ```ts
-{
-  path: 'biz/customer',
-  name: 'biz-customer',
-  component: () => import('@/pages/biz/customer/index.vue'),
-  meta: { title: '客户管理' },
-}
+import { defineWebModule } from '../types'
+
+export default defineWebModule({
+  name: 'biz', // 必须等于后端 modulekit.Spec.Name
+  routes: [
+    {
+      path: 'biz/customer',
+      name: 'biz-customer',
+      component: () => import('./pages/customer.vue'),
+      meta: { title: '客户管理' },
+    },
+  ],
+})
 ```
 
-**3. 后端菜单**：`path` 填 `/biz/customer`，与路由一致；`icon` 用 `utils/icons.ts` 里已有的键，
-没有就加一条映射（后端只存语义名，不依赖具体图标库）。
+`registry.ts` 用 `import.meta.glob` 自动发现，无需注册。`make dist MODULES="…"`
+时后端会算出实际装配集合传给前端，未选模块的页面 chunk 不进产物。
+
+**3. 后端菜单**：`path` 填 `/biz/customer`，与模块内 `routes[].path` 加前导斜杠后一致；
+`icon` 用 `utils/icons.ts` 里已有的键，没有就加一条映射（后端只存语义名，不依赖具体图标库）。
 
 ### 权限
 
@@ -622,8 +643,8 @@ make test-dialect       # 临时起 MySQL+PG 容器跑跨方言契约测试（�
 ```bash
 make test-dialect                    # 自动起/停临时容器（需 Docker，推荐）
 # 或手动指定已运行的数据库：
-KEEL_TEST_MYSQL_DSN='root:pwd@tcp(127.0.0.1:3306)/keel' \
-KEEL_TEST_PG_DSN='postgres://u:p@127.0.0.1:5432/keel?sslmode=disable' \
+TENON_TEST_MYSQL_DSN='root:pwd@tcp(127.0.0.1:3306)/tenon' \
+TENON_TEST_PG_DSN='postgres://u:p@127.0.0.1:5432/tenon?sslmode=disable' \
   go test ./test/ -run TestDialect -v
 ```
 

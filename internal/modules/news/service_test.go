@@ -13,10 +13,10 @@ import (
 
 	"github.com/glebarez/sqlite"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/cache"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/pkg/query"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/pkg/query"
 )
 
 func newTestService(t *testing.T) (*Service, *gorm.DB) {

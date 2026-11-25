@@ -10,7 +10,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 func TestDisabledWhenNoHost(t *testing.T) {
@@ -30,7 +30,7 @@ func TestDisabledWhenNoHost(t *testing.T) {
 }
 
 func TestSendToLocalSMTP(t *testing.T) {
-	addr := os.Getenv("KEEL_TEST_SMTP")
+	addr := os.Getenv("TENON_TEST_SMTP")
 	if addr == "" {
 		addr = "127.0.0.1:1025"
 	}
@@ -46,7 +46,7 @@ func TestSendToLocalSMTP(t *testing.T) {
 	}
 	port, _ := strconv.Atoi(portStr)
 
-	m, err := New(config.Mail{Host: host, Port: port, From: "keel@test.local", TLS: false}, zap.NewNop())
+	m, err := New(config.Mail{Host: host, Port: port, From: "tenon@test.local", TLS: false}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("创建邮件客户端失败: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestSendToLocalSMTP(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := m.Send(ctx, []string{"ops@test.local"}, "Keel 邮件通道自检", "hello keel\n第二行中文"); err != nil {
+	if err := m.Send(ctx, []string{"ops@test.local"}, "Tenon 邮件通道自检", "hello tenon\n第二行中文"); err != nil {
 		t.Fatalf("发送失败: %v", err)
 	}
 }

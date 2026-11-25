@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/keel-framework/keel/internal/platform/cache"
-	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
+	"github.com/MITEZ360/tenon/pkg/errs"
 )
 
 // Service 缓存管理业务。

@@ -22,7 +22,7 @@
 | 本地参考副本 | `/workspace/EZProject`（HTTPS 匿名克隆，只读，不属于本仓库） |
 | 本文范围 | **只借鉴工程约束与运维设计**，不移植代码、框架、运行时、前端组件 |
 
-**核心结论**：两套系统技术栈完全不同，却独立收敛到了同一批实践（第 3 节），说明 Keel 的基础方向是对的。
+**核心结论**：两套系统技术栈完全不同，却独立收敛到了同一批实践（第 3 节），说明 Tenon 的基础方向是对的。
 差距集中在三处：**备份完备性**、**恢复可演练性**、**架构约束是否由机器把关**。
 
 对方最值得读的三份材料：
@@ -37,7 +37,7 @@
 
 ## 2. 架构对照速览
 
-| 维度 | EZProject | Keel |
+| 维度 | EZProject | Tenon |
 | --- | --- | --- |
 | 定位 | 无头 CMS 平台（内容领域） | 企业服务端基础框架（通用后台） |
 | 分层 | 内核契约 / 能力模块 / 场景产品 | `internal/platform` / `internal/modules` / `internal/bootstrap` 装配 |
@@ -52,15 +52,15 @@
 
 ## 3. 已重合的实践（方向确认，无需改动）
 
-| 实践 | Keel | EZProject |
+| 实践 | Tenon | EZProject |
 | --- | --- | --- |
 | 在线一致性备份 | SQLite `VACUUM INTO`，不停服 | 同（`scripts/backup.mjs`） |
 | 备份完整性 | gzip + SHA-256 + `.meta.json` + `PRAGMA integrity_check` | `manifest.json` + 逐表真读 |
 | 恢复前留底 | `pre-restore-*.db` 安全副本 | 恢复前 `VACUUM INTO` 留底 |
-| 版本化迁移 | goose 版本账本，支持 up/down/up-to/down-to | Drizzle `migrate()`（弱于 Keel 的版本/回滚表达） |
+| 版本化迁移 | goose 版本账本，支持 up/down/up-to/down-to | Drizzle `migrate()`（弱于 Tenon 的版本/回滚表达） |
 | 事件总线解耦 | `pkg/event`，同步/异步/通配订阅 | 内核事件总线，模块间只发订事件 |
 | 策略化切换 | 缓存/存储/数据库按配置激活 | `StorageDriver` + 工厂 + 策略表 |
-| 自动接口文档 | swag 生成 OpenAPI 2.0，路由表脚本注入注解 | 无（对应能力弱于 Keel） |
+| 自动接口文档 | swag 生成 OpenAPI 2.0，路由表脚本注入注解 | 无（对应能力弱于 Tenon） |
 | 配置驱动扩展 | `oauth.providers` 新增渠道不改代码 | 模块注册表，新增模块不改内核 |
 
 > 这一节的意义是：**不要为了「借鉴」而重写已经做对的部分**。
@@ -95,7 +95,7 @@
   3. 演练只输出「将校验什么 / 将覆盖什么 / 将留哪份底 / 将还原哪些文件」，**不改动任何文件**；校验不通过时在演练阶段就拒绝；
   4. 真实恢复后，按 `.meta.json` 的 `Tables` 与用户数逐项比对，差异写入结果并返回给页面。
 - **涉及文件**：`backup.go`、`handler.go`、`internal/router/routes_maintenance.go`、`internal/bootstrap/cli.go`、运维前端页面、`docs/deploy.md` 7.2、`docs/api.md` 4.22。
-- **验收**：`dry_run=true` 前后 `data/keel.db` 的 SHA-256 不变、备份目录不变、无 `pre-restore-*` 产生；传入损坏备份时演练即拒绝；真实恢复后结果里能逐表列出「清单行数 / 实际行数」。
+- **验收**：`dry_run=true` 前后 `data/tenon.db` 的 SHA-256 不变、备份目录不变、无 `pre-restore-*` 产生；传入损坏备份时演练即拒绝；真实恢复后结果里能逐表列出「清单行数 / 实际行数」。
 
 ### P0-3　GFS 备份保留策略
 
@@ -162,7 +162,7 @@
 
 ### P2-2　内容中台能力参考（仅当业务需要）
 
-| 可借鉴设计 | 要点 | Keel 现状 |
+| 可借鉴设计 | 要点 | Tenon 现状 |
 | --- | --- | --- |
 | 动态内容类型 | `FieldDef` 11 种字段调色板，逻辑 Schema 存数据、不跑 DDL | 资讯是固定模型 `internal/model/news.go` |
 | 结构化富文本 | Portable Text；渲染 HTML 只是可再生缓存，不作数据源 | 无 |
@@ -172,7 +172,7 @@
 | 全文检索 | SQLite FTS5 / PG tsvector 策略 | 目前是 `LIKE` + 白名单筛选 |
 | Webhook 通知 | 内容变更通知外部系统 | 无（有事件总线可复用） |
 
-**结论**：短期不需要，Keel 的定位是企业后台框架而非 CMS。若将来要做通用内容中台，先读对方 `docs/engineering-spec.md` 第 4 章，重点借鉴「顶层物理列 + JSON 字段 + 物化字段」的查询效率策略，而不是照搬 JS 实现。
+**结论**：短期不需要，Tenon 的定位是企业后台框架而非 CMS。若将来要做通用内容中台，先读对方 `docs/engineering-spec.md` 第 4 章，重点借鉴「顶层物理列 + JSON 字段 + 物化字段」的查询效率策略，而不是照搬 JS 实现。
 
 ---
 
@@ -215,4 +215,4 @@
 | P1-3 | 测试分层与启动自检 | P1 | ✅ 已实现 | `test-unit`/`test-integration`/`verify`/`verify-full` 四档；`bootstrap.New` 关键依赖 fail-fast + 自检报告 |
 | P1-4 | 跨方言契约验证 | P1 | ✅ 已实现 | `test/dialect_test.go` 同套断言跑 MySQL/PG，`make test-dialect` 起停容器；已在真实 MySQL 8.0 + PG 16 实测通过 |
 | P2-1 | 决策日志与踩坑录 | P2 | ✅ 已实现 | `docs/decisions.md` 14 条 ADR + `development.md` 踩坑录 11 条 |
-| P2-2 | 内容中台能力参考 | P2 | ☐ 未实现 | 仅当业务需要，不排期（Keel 定位是通用后台框架，非 CMS） |
+| P2-2 | 内容中台能力参考 | P2 | ☐ 未实现 | 仅当业务需要，不排期（Tenon 定位是通用后台框架，非 CMS） |

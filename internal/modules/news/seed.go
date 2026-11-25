@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
+	"github.com/MITEZ360/tenon/internal/model"
 )
 
 // categorySeeds 内置资讯分类。分类是推送白名单，空库会导致所有推送被拒，

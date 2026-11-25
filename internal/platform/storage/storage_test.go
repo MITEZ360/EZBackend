@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 func newTestStore(t *testing.T) *Manager {
@@ -27,7 +27,7 @@ func TestLocalPutOpenDelete(t *testing.T) {
 	m := newTestStore(t)
 	ctx := context.Background()
 
-	url, err := m.Put(ctx, "2026/11/03/abc.txt", strings.NewReader("hello keel"), 10, "text/plain")
+	url, err := m.Put(ctx, "2026/11/03/abc.txt", strings.NewReader("hello tenon"), 10, "text/plain")
 	if err != nil {
 		t.Fatalf("写入失败: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestLocalPutOpenDelete(t *testing.T) {
 	}
 	body, _ := io.ReadAll(rc)
 	_ = rc.Close()
-	if string(body) != "hello keel" {
+	if string(body) != "hello tenon" {
 		t.Fatalf("内容不一致: %q", body)
 	}
 
@@ -86,14 +86,14 @@ func TestAutoSelect(t *testing.T) {
 		t.Fatalf("期望 local，实际 %s", got)
 	}
 	// 配置 endpoint 与 bucket 后自动使用对象存储
-	cfg := config.Storage{Type: "auto", S3: config.S3{Endpoint: "minio:9000", Bucket: "keel"}}
+	cfg := config.Storage{Type: "auto", S3: config.S3{Endpoint: "minio:9000", Bucket: "tenon"}}
 	if got := cfg.Kind(); got != "s3" {
 		t.Fatalf("期望 s3，实际 %s", got)
 	}
 }
 
 func TestS3RequiresEndpoint(t *testing.T) {
-	_, err := New(config.Storage{Type: "s3", S3: config.S3{Bucket: "keel"}}, nil)
+	_, err := New(config.Storage{Type: "s3", S3: config.S3{Bucket: "tenon"}}, nil)
 	if err == nil || !strings.Contains(err.Error(), "endpoint") {
 		t.Fatalf("缺少 endpoint 应报错，实际: %v", err)
 	}

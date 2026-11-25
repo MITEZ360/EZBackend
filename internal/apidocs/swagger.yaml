@@ -1,12 +1,12 @@
 basePath: /
 info:
   contact:
-    name: Keel Framework
+    name: Tenon Framework
   description: 统一响应体为 {code, message, data, traceId}；code=0 表示成功。登录后接口使用 Bearer 令牌，开放接口使用
     API Key。
   license:
     name: MIT
-  title: Keel 企业服务端框架 API
+  title: Tenon 企业服务端框架 API
   version: 1.0.0
 paths:
   /api/open/v1/news:

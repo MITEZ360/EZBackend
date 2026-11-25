@@ -8,15 +8,15 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/authn"
-	"github.com/keel-framework/keel/internal/platform/authz"
-	"github.com/keel-framework/keel/internal/platform/cache"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/mailer"
-	"github.com/keel-framework/keel/internal/platform/migrate"
-	"github.com/keel-framework/keel/internal/platform/storage"
-	"github.com/keel-framework/keel/pkg/event"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/authn"
+	"github.com/MITEZ360/tenon/internal/platform/authz"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/mailer"
+	"github.com/MITEZ360/tenon/internal/platform/migrate"
+	"github.com/MITEZ360/tenon/internal/platform/storage"
+	"github.com/MITEZ360/tenon/pkg/event"
 )
 
 // 下面几个接口是模块之间传递能力的最小契约。定义在这里而不是各自包内，

@@ -13,17 +13,17 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/modules/menu"
-	"github.com/keel-framework/keel/internal/platform/authn"
-	"github.com/keel-framework/keel/internal/platform/authz"
-	"github.com/keel-framework/keel/internal/platform/cache"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/crypto"
-	"github.com/keel-framework/keel/internal/platform/idgen"
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/i18n"
-	"github.com/keel-framework/keel/pkg/utils"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/modules/menu"
+	"github.com/MITEZ360/tenon/internal/platform/authn"
+	"github.com/MITEZ360/tenon/internal/platform/authz"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/crypto"
+	"github.com/MITEZ360/tenon/internal/platform/idgen"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/i18n"
+	"github.com/MITEZ360/tenon/pkg/utils"
 )
 
 // Service 认证业务逻辑。

@@ -14,7 +14,7 @@ import re
 
 ROOT = os.getcwd()
 ROUTER = os.path.join(ROOT, "internal", "router")
-PREFIX = "github.com/keel-framework/keel/"
+PREFIX = "github.com/MITEZ360/tenon/"
 
 TAGS = {
     "auth": "认证",

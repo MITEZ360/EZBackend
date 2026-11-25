@@ -3,7 +3,7 @@
 ## 1. 产物
 
 ```bash
-make build      # 前端 pnpm build → 编译 Go；bin/keel 约 35MB，静态链接
+make build      # 前端 pnpm build → 编译 Go；bin/tenon 约 35MB，静态链接
 make build-all  # 交叉编译 linux/arm64、darwin、windows（复用已有 web/dist）
 make build-go   # 只编译 Go，跳过前端（dist 已是最新时用）
 ```
@@ -15,7 +15,7 @@ make build-go   # 只编译 Go，跳过前端（dist 已是最新时用）
 部署只需要三样东西：
 
 ```
-keel              二进制
+tenon              二进制
 configs/config.yaml
 data/             数据目录（SQLite 与上传文件，可挂载）
 ```
@@ -28,16 +28,16 @@ data/             数据目录（SQLite 与上传文件，可挂载）
 
 ```bash
 # 1. 准备目录
-mkdir -p /opt/keel/{configs,data,logs} && cd /opt/keel
-cp keel configs/config.yaml .
+mkdir -p /opt/tenon/{configs,data,logs} && cd /opt/tenon
+cp tenon configs/config.yaml .
 
 # 2. 生产配置（示例）
-export KEEL_APP_ENV=prod
-export KEEL_JWT_SECRET="$(openssl rand -base64 48)"
-export KEEL_SECURITY_INTERNAL_TOKEN="$(openssl rand -hex 24)"
+export TENON_APP_ENV=prod
+export TENON_JWT_SECRET="$(openssl rand -base64 48)"
+export TENON_SECURITY_INTERNAL_TOKEN="$(openssl rand -hex 24)"
 
 # 3. 前台试跑
-./keel -config configs/config.yaml
+./tenon -config configs/config.yaml
 ```
 
 也可以从最小配置起步：`configs/config.min.yaml` 只包含监听端口、数据库、
@@ -52,17 +52,17 @@ Redis、JWT 密钥与节点地址，其余参数（验证码、锁定策略、�
 systemd 单元：
 
 ```ini
-# /etc/systemd/system/keel.service
+# /etc/systemd/system/tenon.service
 [Unit]
-Description=Keel Server
+Description=Tenon Server
 After=network-online.target
 
 [Service]
 Type=simple
-User=keel
-WorkingDirectory=/opt/keel
-EnvironmentFile=/opt/keel/.env
-ExecStart=/opt/keel/keel -config /opt/keel/configs/config.yaml
+User=tenon
+WorkingDirectory=/opt/tenon
+EnvironmentFile=/opt/tenon/.env
+ExecStart=/opt/tenon/tenon -config /opt/tenon/configs/config.yaml
 Restart=always
 RestartSec=3
 LimitNOFILE=65535
@@ -76,8 +76,8 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-systemctl daemon-reload && systemctl enable --now keel
-journalctl -u keel -f
+systemctl daemon-reload && systemctl enable --now tenon
+journalctl -u tenon -f
 ```
 
 ---
@@ -87,13 +87,13 @@ journalctl -u keel -f
 ```bash
 make docker
 # 或
-docker build -t keel:1.0.0 .
+docker build -t tenon:1.0.0 .
 
-docker run -d --name keel -p 9000:9000 \
-  -e KEEL_APP_ENV=prod \
-  -e KEEL_JWT_SECRET="$(openssl rand -base64 48)" \
+docker run -d --name tenon -p 9000:9000 \
+  -e TENON_APP_ENV=prod \
+  -e TENON_JWT_SECRET="$(openssl rand -base64 48)" \
   -v $PWD/data:/app/data -v $PWD/logs:/app/logs \
-  keel:1.0.0
+  tenon:1.0.0
 ```
 
 镜像特点：
@@ -103,7 +103,7 @@ docker run -d --name keel -p 9000:9000 \
 
 ---
 
-## 4. Compose（MySQL + Redis + Keel）
+## 4. Compose（MySQL + Redis + Tenon）
 
 ```bash
 make compose        # 等价于 docker compose -f deploy/docker-compose.yml up -d --build
@@ -113,13 +113,13 @@ make compose-down
 
 | 服务 | 端口 | 说明 |
 | --- | --- | --- |
-| `keel` | 9000 | 应用，等待 mysql/redis 健康后启动 |
+| `tenon` | 9000 | 应用，等待 mysql/redis 健康后启动 |
 | `mysql` | 3306（仅内网） | 数据持久化到 `mysql-data` 卷 |
 | `redis` | 6379（仅内网） | AOF 持久化，256MB 上限 + LRU |
 
 首次启动会自动建表并写入种子数据，访问 <http://localhost:9000>，账号 `admin / Admin@123456`。
 
-> 生产环境请修改 `deploy/docker-compose.yml` 中的 `KEEL_JWT_SECRET`、数据库密码，
+> 生产环境请修改 `deploy/docker-compose.yml` 中的 `TENON_JWT_SECRET`、数据库密码，
 > 并把 `docker-compose.override.yml` 用于本地覆盖。
 
 ---
@@ -129,22 +129,22 @@ make compose-down
 两套清单：
 
 ```bash
-kubectl apply -f deploy/k8s/keel-core.yaml       # 单体形态（推荐）
-kubectl apply -f deploy/k8s/keel-gateway.yaml    # 网关 + 领域服务形态
+kubectl apply -f deploy/k8s/tenon-core.yaml       # 单体形态（推荐）
+kubectl apply -f deploy/k8s/tenon-gateway.yaml    # 网关 + 领域服务形态
 ```
 
-`keel-core.yaml` 包含：
+`tenon-core.yaml` 包含：
 
 | 资源 | 要点 |
 | --- | --- |
-| Namespace | `keel` |
+| Namespace | `tenon` |
 | ConfigMap | 非敏感配置，环境变量注入 |
 | Secret | JWT 密钥、内部令牌、数据库 DSN |
 | Deployment | 2 副本，滚动更新 `maxUnavailable=0`，非 root，资源 100m/128Mi 起 |
 | PVC | `data` 目录 10Gi（上传文件、SQLite） |
 | Service | ClusterIP 9000 |
 | HPA | CPU 70% 触发，2 → 10 副本 |
-| Ingress | `keel.example.com`，body-size 32m |
+| Ingress | `tenon.example.com`，body-size 32m |
 
 探针：
 
@@ -159,33 +159,33 @@ readinessProbe: { httpGet: { path: /readyz,  port: http }, periodSeconds: 10 }
 
 **多副本注意**（`runtime.stateless=strict` 会在启动时直接拦截这些问题）：
 
-1. 配置 `KEEL_REDIS_ADDR=redis:6379` 即自动启用 Redis，验证码、登录失败计数、
-   权限缓存、限流配额、任务锁全部共享；无需再设 `KEEL_REDIS_ENABLED`。
-2. 文件改用对象存储（`KEEL_STORAGE_TYPE=auto` + `KEEL_STORAGE_S3_*`）。
+1. 配置 `TENON_REDIS_ADDR=redis:6379` 即自动启用 Redis，验证码、登录失败计数、
+   权限缓存、限流配额、任务锁全部共享；无需再设 `TENON_REDIS_ENABLED`。
+2. 文件改用对象存储（`TENON_STORAGE_TYPE=auto` + `TENON_STORAGE_S3_*`）。
    继续用 `storage.local_dir` 必须挂 RWX 共享卷（NFS / CephFS / 阿里云 NAS），
    且只适合小规模；`emptyDir` 会导致文件随机 404。
 3. SQLite 不适合多副本：并发写会锁库，改用 MySQL / PostgreSQL，并把
-   `KEEL_DB_AUTO_MIGRATE=false`，迁移放到发布流程的独立 Job 里执行一次。
+   `TENON_DB_AUTO_MIGRATE=false`，迁移放到发布流程的独立 Job 里执行一次。
 4. 定时任务已用 Redis 分布式锁抢占，多副本只会执行一份，不必再单独部署 `job` 服务。
-   若完全不用定时任务，可用 `KEEL_MICRO_MODULES` 排除。
+   若完全不用定时任务，可用 `TENON_MICRO_MODULES` 排除。
 
 最小多副本配置：
 
 ```yaml
 env:
-  - name: KEEL_DB_DSN
-    value: "keel:pass@tcp(mysql:3306)/keel?charset=utf8mb4&parseTime=True"
-  - name: KEEL_DB_AUTO_MIGRATE
+  - name: TENON_DB_DSN
+    value: "tenon:pass@tcp(mysql:3306)/tenon?charset=utf8mb4&parseTime=True"
+  - name: TENON_DB_AUTO_MIGRATE
     value: "false"
-  - name: KEEL_REDIS_ADDR
+  - name: TENON_REDIS_ADDR
     value: "redis:6379"
-  - name: KEEL_STORAGE_S3_ENDPOINT
+  - name: TENON_STORAGE_S3_ENDPOINT
     value: "minio:9000"
-  - name: KEEL_STORAGE_S3_BUCKET
-    value: "keel"
-  - name: KEEL_RUNTIME_INSTANCES
+  - name: TENON_STORAGE_S3_BUCKET
+    value: "tenon"
+  - name: TENON_RUNTIME_INSTANCES
     value: "3"
-  - name: KEEL_RUNTIME_STATELESS
+  - name: TENON_RUNTIME_STATELESS
     value: "strict"
 ```
 
@@ -211,10 +211,10 @@ curl -s localhost:9000/healthz | jq
 
 ```yaml
 scrape_configs:
-  - job_name: keel
+  - job_name: tenon
     metrics_path: /metrics
     static_configs:
-      - targets: ["keel:9000"]
+      - targets: ["tenon:9000"]
 ```
 
 指标：
@@ -237,7 +237,7 @@ sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total
 
 ### 6.3 日志
 
-- 默认 JSON 落 `logs/keel.log`，按 64MB 轮转、保留 14 天、gzip 压缩。
+- 默认 JSON 落 `logs/tenon.log`，按 64MB 轮转、保留 14 天、gzip 压缩。
 - 关键字段：`level / time / caller / msg / trace_id / method / path / route / status / cost_ms / ip / ua`。
 - 采集参考（Loki / Filebeat）：
 
@@ -251,7 +251,7 @@ logging:
 按 traceId 串一次请求：
 
 ```bash
-jq -c 'select(.trace_id=="0f3a1c9e-...")' logs/keel.log
+jq -c 'select(.trace_id=="0f3a1c9e-...")' logs/tenon.log
 ```
 
 ### 6.4 审计
@@ -268,24 +268,24 @@ jq -c 'select(.trace_id=="0f3a1c9e-...")' logs/keel.log
 
 ### 7.1 版本化迁移
 
-默认 `migration.mode: versioned`：启动时按版本号执行迁移，版本表 `keel_schema_migrations`
+默认 `migration.mode: versioned`：启动时按版本号执行迁移，版本表 `tenon_schema_migrations`
 记录已应用版本。迁移体用 GORM 编写，同一份代码覆盖 SQLite / MySQL / PostgreSQL；
 改列、删列、数据回填、回滚都由版本表达，不只是「加列」。
 
 ```yaml
 migration:
   mode: versioned                # versioned / auto / off
-  table_name: keel_schema_migrations
+  table_name: tenon_schema_migrations
 ```
 
 CLI 子命令与服务端共用同一份配置，适合放进发布流水线：
 
 ```bash
-keel -config configs/config.yaml migrate status     # 当前版本 / 待应用版本
-keel -config configs/config.yaml migrate up         # 升级到最新
-keel -config configs/config.yaml migrate up-to 2    # 升级到指定版本
-keel -config configs/config.yaml migrate down       # 回滚最近一个版本
-keel -config configs/config.yaml migrate down-to 1  # 回滚到指定版本
+tenon -config configs/config.yaml migrate status     # 当前版本 / 待应用版本
+tenon -config configs/config.yaml migrate up         # 升级到最新
+tenon -config configs/config.yaml migrate up-to 2    # 升级到指定版本
+tenon -config configs/config.yaml migrate down       # 回滚最近一个版本
+tenon -config configs/config.yaml migrate down-to 1  # 回滚到指定版本
 ```
 
 `mode: auto` 退回 GORM AutoMigrate（只增不减，适合本地快速迭代）；`mode: off`
@@ -297,7 +297,7 @@ keel -config configs/config.yaml migrate down-to 1  # 回滚到指定版本
 
 内置 `db.backup` 定时任务（默认每天 02:00）与「运维中心 → 备份与迁移」页面，无需手写脚本：
 
-- 产物：`data/backups/keel-<driver>-<时间戳>.tar.gz`（SQLite）或 `.sql.tar.gz`，是 **tar 容器**，内含：
+- 产物：`data/backups/tenon-<driver>-<时间戳>.tar.gz`（SQLite）或 `.sql.tar.gz`，是 **tar 容器**，内含：
   - `database.db`（或 `database.sql`）：数据库快照
   - `manifest.json`：归档内清单（数据库名 + 文件资产路径/大小/SHA-256）
   - `files/`：`storage.local_dir` 下的全部文件资产（资讯图标、上传附件等）
@@ -312,11 +312,11 @@ keel -config configs/config.yaml migrate down-to 1  # 回滚到指定版本
 
 ```bash
 # 手动备份（与页面等价）
-keel -config configs/config.yaml backup
+tenon -config configs/config.yaml backup
 # 保留策略演练（不删任何文件）
-keel -config configs/config.yaml backup-prune --dry-run
+tenon -config configs/config.yaml backup-prune --dry-run
 # 实际执行清理
-keel -config configs/config.yaml backup-prune
+tenon -config configs/config.yaml backup-prune
 ```
 
 SQLite 恢复必须停机后替换数据文件；恢复前会自动把当前库另存为 `pre-restore-*.db`、
@@ -324,10 +324,10 @@ SQLite 恢复必须停机后替换数据文件；恢复前会自动把当前库�
 
 ```bash
 # 先演练：只输出计划，不改动任何文件
-keel -config configs/config.yaml restore --dry-run keel-sqlite-20261122-020000.tar.gz
-systemctl stop keel
-keel -config configs/config.yaml restore keel-sqlite-20261122-020000.tar.gz
-systemctl start keel
+tenon -config configs/config.yaml restore --dry-run tenon-sqlite-20261122-020000.tar.gz
+systemctl stop tenon
+tenon -config configs/config.yaml restore tenon-sqlite-20261122-020000.tar.gz
+systemctl start tenon
 ```
 
 页面上的「演练」「恢复」按钮对 MySQL / PostgreSQL 同样有效（需 `backup.allow_restore: true`），
@@ -372,11 +372,11 @@ env:
 ## 9. 升级流程
 
 ```bash
-# 1. 备份：页面点「立即备份」，或 CLI 执行 keel -config ... backup
-# 2. 检查待应用版本：keel -config ... migrate status
-# 3. 停服 → 替换二进制 → keel -config ... migrate up → 启动
+# 1. 备份：页面点「立即备份」，或 CLI 执行 tenon -config ... backup
+# 2. 检查待应用版本：tenon -config ... migrate status
+# 3. 停服 → 替换二进制 → tenon -config ... migrate up → 启动
 # 4. 观察 /healthz、错误率、P99
-# 5. 回滚：停服 → keel restore <升级前的备份> → 换回旧二进制 → 启动
+# 5. 回滚：停服 → tenon restore <升级前的备份> → 换回旧二进制 → 启动
 ```
 
 多实例部署时，迁移与备份由 `SET NX` 任务锁保证只在一个实例执行。

@@ -3,7 +3,7 @@ package catalog
 import (
 	"testing"
 
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 // catalog 是生成器的数据源。可选模块必须在这里可见，否则

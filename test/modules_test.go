@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keel-framework/keel/internal/bootstrap"
+	"github.com/MITEZ360/tenon/internal/bootstrap"
 )
 
 func moduleTestConfig(dir string, modules string) string {
 	return fmt.Sprintf(`
 app:
-  name: Keel 模块裁剪测试
+  name: Tenon 模块裁剪测试
   env: test
 server:
   host: 127.0.0.1
@@ -45,7 +45,7 @@ modules:
   enabled: [%s]
 micro:
   mode: mono
-`, dir, filepath.Join(dir, "keel.db"), dir, modules)
+`, dir, filepath.Join(dir, "tenon.db"), dir, modules)
 }
 
 // TestModulePruning 验证按 modules.enabled 裁剪后：健康检查仍可用、被裁剪模块的路由消失。

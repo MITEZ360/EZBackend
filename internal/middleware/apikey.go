@@ -7,10 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/authn"
-	"github.com/keel-framework/keel/pkg/response"
-	"github.com/keel-framework/keel/pkg/utils"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/authn"
+	"github.com/MITEZ360/tenon/pkg/response"
+	"github.com/MITEZ360/tenon/pkg/utils"
 )
 
 // APIKeyAuthenticator 校验机器身份并判断配额，由 apikey.Service 实现。

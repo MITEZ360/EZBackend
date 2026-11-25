@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keel-framework/keel/internal/bootstrap"
+	"github.com/MITEZ360/tenon/internal/bootstrap"
 )
 
 // TestBootSelfCheckHealthy 验证正常装配时自检报告全绿，且关键项均为 OK。
@@ -16,7 +16,7 @@ func TestBootSelfCheckHealthy(t *testing.T) {
 	dir := t.TempDir()
 	cfg := fmt.Sprintf(`
 app:
-  name: Keel 自检测试
+  name: Tenon 自检测试
   env: test
 server:
   host: 127.0.0.1
@@ -42,7 +42,7 @@ storage:
   local_dir: %s/uploads
 micro:
   mode: mono
-`, dir, filepath.Join(dir, "keel.db"), dir)
+`, dir, filepath.Join(dir, "tenon.db"), dir)
 	cfgPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func TestBootSelfCheckFailFast(t *testing.T) {
 	dir := t.TempDir()
 	cfg := fmt.Sprintf(`
 app:
-  name: Keel 自检失败测试
+  name: Tenon 自检失败测试
   env: test
 server:
   host: 127.0.0.1
@@ -114,7 +114,7 @@ storage:
   local_dir: %s/uploads
 micro:
   mode: mono
-`, dir, filepath.Join(dir, "keel.db"), dir)
+`, dir, filepath.Join(dir, "tenon.db"), dir)
 	cfgPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)

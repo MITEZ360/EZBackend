@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from datetime import date, timedelta
 
-BASE = os.environ.get("KEEL_BASE", "http://127.0.0.1:9101/api/v1").rstrip("/")
+BASE = os.environ.get("TENON_BASE", "http://127.0.0.1:9101/api/v1").rstrip("/")
 PASS, FAIL = 0, 0
 
 
@@ -44,7 +44,7 @@ def login(username, password):
     return res["data"]["token"]["accessToken"]
 
 
-admin = login("admin", os.environ.get("KEEL_ADMIN_PASS", "Admin@123456"))
+admin = login("admin", os.environ.get("TENON_ADMIN_PASS", "Admin@123456"))
 demo = login("demo", "Demo@123456")
 print("== 等级目录 ==")
 st, res = call("GET", "/membership/catalog", admin)

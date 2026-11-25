@@ -1,10 +1,10 @@
 # ============================================================================
-# Keel 企业服务端框架 - 构建与运维入口
+# Tenon 企业服务端框架 - 构建与运维入口
 # 常用：make build / make run / make test / make docker / make compose
 # ============================================================================
 
-APP        := keel
-MODULE     := github.com/keel-framework/keel
+APP        := tenon
+MODULE     := github.com/MITEZ360/tenon
 VERSION    ?= 1.0.0
 COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -16,6 +16,11 @@ BIN_DIR    := bin
 CONFIG     ?= configs/config.yaml
 WEB_DIR    := web
 PNPM       ?= pnpm
+
+# Base 发行版：只含后台管理的基础能力——人员、权限、菜单、字典、参数、消息、运维。
+# 不含资讯中心、会员、充值、自助注册、开放密钥、集群协同，这些模块连代码都不进二进制。
+BASE_NAME    := Base
+BASE_MODULES := dashboard user role dept message audit monitor job file maintenance cacheadmin routemanage configcenter
 
 # 交叉编译目标
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
@@ -103,9 +108,15 @@ web-deps: ## 安装前端依赖
 	cd $(WEB_DIR) && $(PNPM) install
 
 .PHONY: web
-web: ## 构建前端产物到 web/dist
+# 前端裁剪清单：由 distgen 算出后端实际装配集合（含依赖补齐与常驻模块），
+# 前端不再维护第二份模块名单，两边不会错位。MODULES 为空表示全量。
+FRONT_MODULES = $(if $(strip $(MODULES)),$(shell go run ./cmd/distgen -modules "$(MODULES)" -print),)
+
+web: ## 构建前端产物到 web/dist（MODULES 非空时按后端装配结果裁剪页面）
 	@command -v $(PNPM) >/dev/null 2>&1 || { echo "缺少 pnpm：npm i -g pnpm"; exit 1; }
-	cd $(WEB_DIR) && $(PNPM) install --frozen-lockfile && $(PNPM) build
+	cd $(WEB_DIR) && $(PNPM) install --frozen-lockfile
+	@test -n "$(FRONT_MODULES)" && echo "前端按模块裁剪：$(FRONT_MODULES)" || echo "前端按全量构建"
+	cd $(WEB_DIR) && VITE_EDITION="$(VITE_EDITION)" VITE_MODULES="$(FRONT_MODULES)" $(PNPM) build
 
 .PHONY: web-dev
 web-dev: ## 启动前端开发服务器（另开终端 make run）
@@ -114,13 +125,13 @@ web-dev: ## 启动前端开发服务器（另开终端 make run）
 .PHONY: build-go
 build-go: ## 仅编译 Go（复用已有 web/dist）
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/keel
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/tenon
 	@echo "已生成 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
 
 .PHONY: build
 build: web ## 构建前端 + 编译当前平台二进制（默认发行版）
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/keel
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/tenon
 	@echo "已生成 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
 
 .PHONY: build-all
@@ -131,16 +142,17 @@ build-all: ## 交叉编译多平台
 		out=$(BIN_DIR)/$(APP)-$$os-$$arch; \
 		[ "$$os" = "windows" ] && out=$$out.exe; \
 		echo "编译 $$os/$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o $$out ./cmd/keel || exit 1; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o $$out ./cmd/tenon || exit 1; \
 	done
 	@ls -lh $(BIN_DIR)
 
 .PHONY: dist
-dist: ## 组装定制发行版（MODULES="user configcenter cluster"）
+dist: ## 组装定制发行版（MODULES="user configcenter cluster" NAME="Base"）
 	@test -n "$(MODULES)" || { echo '用法: make dist MODULES="user configcenter cluster"'; echo '查看可组合模块: make dist-list'; exit 1; }
 	@mkdir -p $(BIN_DIR)
-	go run ./cmd/distgen -modules "$(MODULES)"
-	CGO_ENABLED=0 go build -tags profile -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/keel
+	go run ./cmd/distgen -modules "$(MODULES)" -name "$(NAME)"
+	@$(MAKE) --no-print-directory web MODULES="$(MODULES)"
+	CGO_ENABLED=0 go build -tags profile -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/tenon
 	@echo "已生成定制发行版 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
 
 .PHONY: dist-list
@@ -151,31 +163,43 @@ dist-list: ## 列出可组合的模块与依赖
 dist-full: ## 组装全量发行版（含资讯中心等默认不装的模块）并编译
 	@mkdir -p $(BIN_DIR)
 	go run ./cmd/distgen -modules all
-	CGO_ENABLED=0 go build -tags profile -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/keel
+	@$(MAKE) --no-print-directory web
+	CGO_ENABLED=0 go build -tags profile -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/tenon
 	@echo "已生成全量发行版 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
+
+.PHONY: dist-base
+dist-base: ## 组装 Base 发行版（仅后台管理基础功能），产物 bin/tenon-base
+	@mkdir -p $(BIN_DIR)
+	go run ./cmd/distgen -modules "$(BASE_MODULES)" -name "$(BASE_NAME)"
+	@$(MAKE) --no-print-directory web MODULES="$(BASE_MODULES)" VITE_EDITION=base
+	CGO_ENABLED=0 go build -tags profile -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP)-base ./cmd/tenon
+	@echo "已生成 $(BASE_NAME) 发行版 $(BIN_DIR)/$(APP)-base（$$(du -h $(BIN_DIR)/$(APP)-base | cut -f1)）"
+	@# 前端产物目录是共用的：Base 的前端已随上面的 go build 打进二进制，
+	@# 这里再构建一次完整版，避免 web/dist 停留在 Base 状态、与 bin/tenon 不一致。
+	@$(MAKE) --no-print-directory web >/dev/null && echo "web/dist 已恢复为完整版前端"
 
 .PHONY: dist-default
 dist-default: ## 删除定制清单，回到默认发行版并重新编译
 	@go run ./cmd/distgen -modules default
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/keel
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) ./cmd/tenon
 	@echo "已回到默认发行版 $(BIN_DIR)/$(APP)（$$(du -h $(BIN_DIR)/$(APP) | cut -f1)）"
 
 .PHONY: run
 run: ## 本地运行（默认配置）
-	go run ./cmd/keel -config $(CONFIG)
+	go run ./cmd/tenon -config $(CONFIG)
 
 .PHONY: dev
 dev: ## 以 debug 模式运行
-	KEEL_SERVER_MODE=debug KEEL_LOG_LEVEL=debug go run ./cmd/keel -config $(CONFIG)
+	TENON_SERVER_MODE=debug TENON_LOG_LEVEL=debug go run ./cmd/tenon -config $(CONFIG)
 
 .PHONY: gateway
 gateway: ## 以网关形态运行
-	go run ./cmd/keel -config configs/config.gateway.yaml
+	go run ./cmd/tenon -config configs/config.gateway.yaml
 
 .PHONY: service
 service: ## 以领域服务形态运行
-	go run ./cmd/keel -config configs/config.service.yaml
+	go run ./cmd/tenon -config configs/config.service.yaml
 
 .PHONY: docker
 docker: ## 构建镜像
@@ -183,7 +207,7 @@ docker: ## 构建镜像
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_TIME=$(BUILD_TIME) .
 
 .PHONY: compose
-compose: ## 启动单机编排（MySQL + Redis + Keel）
+compose: ## 启动单机编排（MySQL + Redis + Tenon）
 	docker compose -f deploy/docker-compose.yml up -d --build
 
 .PHONY: compose-down
@@ -192,7 +216,7 @@ compose-down: ## 停止编排
 
 .PHONY: compose-logs
 compose-logs: ## 查看编排日志
-	docker compose -f deploy/docker-compose.yml logs -f keel
+	docker compose -f deploy/docker-compose.yml logs -f tenon
 
 .PHONY: verify
 verify: vet check-arch test-unit ## 快速校验：静态检查 + 架构约束 + 单元测试

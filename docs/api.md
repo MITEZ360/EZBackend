@@ -81,7 +81,7 @@ Content-Type: application/json
 }
 ```
 
-- 后续请求携带 `Authorization: Bearer <accessToken>`（也支持 `?token=` 与 `keel_token` Cookie，便于下载/预览场景）。
+- 后续请求携带 `Authorization: Bearer <accessToken>`（也支持 `?token=` 与 `tenon_token` Cookie，便于下载/预览场景）。
 - `POST /auth/refresh` 请求体 `{"refreshToken": "..."}`，返回同上（`refreshToken` 每次轮换）。
 - 验证码流程：`GET /auth/captcha` 返回 `{captchaId, imageBase64}`，登录时带上 `captchaId/captchaCode`。
 - 两步验证流程：账号开启 TOTP 后，首次提交不携带第二因子会返回 `401 + code 40104`，
@@ -617,7 +617,7 @@ X-API-Key: ak_c_...
 
 新增渠道只需在 `oauth.providers` 里加一段配置，代码无需改动；完整示例见
 `configs/config.oauth.example.yaml`。凭据建议用环境变量
-`KEEL_OAUTH_<NAME>_CLIENT_ID` / `_CLIENT_SECRET` 注入。
+`TENON_OAUTH_<NAME>_CLIENT_ID` / `_CLIENT_SECRET` 注入。
 
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
@@ -658,7 +658,7 @@ X-API-Key: ak_c_...
 | POST | `/maintenance/migrations/up` | `ops:backup:restore` | 升级到最新 |
 | POST | `/maintenance/migrations/down` | `ops:backup:restore` | 回滚最近一个版本 |
 
-备份产物是 **tar 容器**（`keel-<驱动>-<时间>.tar[.gz]`），内含 `database.db`（或 `database.sql`）、
+备份产物是 **tar 容器**（`tenon-<驱动>-<时间>.tar[.gz]`），内含 `database.db`（或 `database.sql`）、
 `manifest.json` 与 `files/` 本地文件资产目录；下载一份即拿到数据库 + 图标/附件。旧格式
 `*.db[.gz]` / `*.sql[.gz]` 仍可正常校验与恢复。对象存储模式下跳过文件资产并在元信息标注 `storageMode: s3`。
 
@@ -668,7 +668,7 @@ X-API-Key: ak_c_...
 备份定时执行器 `db.backup` 默认每天 02:00 运行，保留策略默认 GFS 分档
 （`retain_hourly=24` / `retain_daily=14` / `retain_weekly=8` / `retain_monthly=12`），
 四档全为 0 时退回 `retain` 保留最近 N 份，**最新一份永不删除**。
-SQLite 恢复需停机执行 `keel -config ... restore [--dry-run] <文件>`；MySQL / PostgreSQL
+SQLite 恢复需停机执行 `tenon -config ... restore [--dry-run] <文件>`；MySQL / PostgreSQL
 可在开启 `backup.allow_restore` 后在线导入。CLI 子命令见 `docs/deploy.md` 7.1 / 7.2。
 
 ### 4.23 自动接口文档

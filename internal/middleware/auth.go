@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/platform/authn"
-	"github.com/keel-framework/keel/internal/platform/authz"
-	"github.com/keel-framework/keel/pkg/response"
+	"github.com/MITEZ360/tenon/internal/platform/authn"
+	"github.com/MITEZ360/tenon/internal/platform/authz"
+	"github.com/MITEZ360/tenon/pkg/response"
 )
 
 // SessionValidator 校验会话是否仍然有效（支持登出、异地登录踢下线）。
@@ -97,7 +97,7 @@ func extractToken(c *gin.Context) string {
 		return strings.TrimSpace(h)
 	}
 	// 不接受 URL 查询参数中的令牌：URL 会进入访问日志、浏览器历史和 Referer。
-	if ck, err := c.Cookie("keel_token"); err == nil && ck != "" {
+	if ck, err := c.Cookie("tenon_token"); err == nil && ck != "" {
 		return ck
 	}
 	return ""

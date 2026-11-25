@@ -14,10 +14,10 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/crypto"
-	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/crypto"
+	"github.com/MITEZ360/tenon/pkg/errs"
 )
 
 // Service 运行时配置中心。
@@ -146,7 +146,7 @@ func (s *Service) deployView() *DeployView {
 			{Key: "server.host", Name: "监听地址", Value: s.cfg.Server.Host, Desc: "容器内通常为 0.0.0.0"},
 			{Key: "server.port", Name: "监听端口", Value: strconv.Itoa(s.cfg.Server.Port), Desc: "对外服务端口"},
 			{Key: "db.driver", Name: "数据库驱动", Value: s.cfg.DB.ResolveDriver(), Desc: "sqlite / mysql / postgres"},
-			{Key: "db.dsn", Name: "数据库连接", Value: mask(dsn), Desc: "建议用 KEEL_DB_DSN 环境变量注入"},
+			{Key: "db.dsn", Name: "数据库连接", Value: mask(dsn), Desc: "建议用 TENON_DB_DSN 环境变量注入"},
 			{Key: "redis.addr", Name: "Redis 地址", Value: mask(s.cfg.Redis.Addr), Desc: "留空时使用进程内缓存，多节点部署必须配置"},
 			{Key: "migration.mode", Name: "迁移模式", Value: s.cfg.Migration.ResolveMode(), Desc: "versioned / auto / off"},
 			{Key: "runtime.instances", Name: "计划实例数", Value: strconv.Itoa(s.cfg.Runtime.Instances), Desc: "大于 1 时启用无状态自检"},

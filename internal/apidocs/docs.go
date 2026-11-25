@@ -10,7 +10,7 @@ const docTemplate = `{
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
         "contact": {
-            "name": "Keel Framework"
+            "name": "Tenon Framework"
         },
         "license": {
             "name": "MIT"
@@ -14861,7 +14861,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
-	Title:            "Keel 企业服务端框架 API",
+	Title:            "Tenon 企业服务端框架 API",
 	Description:      "统一响应体为 {code, message, data, traceId}；code=0 表示成功。登录后接口使用 Bearer 令牌，开放接口使用 API Key。",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,

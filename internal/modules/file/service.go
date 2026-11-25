@@ -16,14 +16,14 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/idgen"
-	"github.com/keel-framework/keel/internal/platform/storage"
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/i18n"
-	"github.com/keel-framework/keel/pkg/query"
-	"github.com/keel-framework/keel/pkg/utils"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/idgen"
+	"github.com/MITEZ360/tenon/internal/platform/storage"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/i18n"
+	"github.com/MITEZ360/tenon/pkg/query"
+	"github.com/MITEZ360/tenon/pkg/utils"
 )
 
 var defaultAllowExt = []string{
@@ -84,7 +84,7 @@ func (s *Service) Upload(ctx context.Context, fh *multipart.FileHeader, uploader
 	}
 	defer src.Close()
 
-	tmp, err := os.CreateTemp("", "keel-upload-*")
+	tmp, err := os.CreateTemp("", "tenon-upload-*")
 	if err != nil {
 		return nil, errs.Internal("创建临时文件失败")
 	}

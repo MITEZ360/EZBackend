@@ -20,8 +20,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/pkg/errs"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/pkg/errs"
 )
 
 // Service 消息中心业务。

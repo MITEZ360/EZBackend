@@ -23,33 +23,38 @@ package distribution
 
 import (
 	// 常驻模块：公开接口依赖，不可裁剪。全部发行版都必须保留。
-	_ "github.com/keel-framework/keel/internal/modules/auth"
-	_ "github.com/keel-framework/keel/internal/modules/menu"
-	_ "github.com/keel-framework/keel/internal/modules/system"
+	_ "github.com/MITEZ360/tenon/internal/modules/auth"
+	_ "github.com/MITEZ360/tenon/internal/modules/menu"
+	_ "github.com/MITEZ360/tenon/internal/modules/system"
 
 	// 后台管理基础能力。
-	_ "github.com/keel-framework/keel/internal/modules/dashboard"
-	_ "github.com/keel-framework/keel/internal/modules/dept"
-	_ "github.com/keel-framework/keel/internal/modules/role"
-	_ "github.com/keel-framework/keel/internal/modules/user"
+	_ "github.com/MITEZ360/tenon/internal/modules/dashboard"
+	_ "github.com/MITEZ360/tenon/internal/modules/dept"
+	_ "github.com/MITEZ360/tenon/internal/modules/role"
+	_ "github.com/MITEZ360/tenon/internal/modules/user"
 
 	// 运维控制台。
-	_ "github.com/keel-framework/keel/internal/modules/audit"
-	_ "github.com/keel-framework/keel/internal/modules/cacheadmin"
-	_ "github.com/keel-framework/keel/internal/modules/configcenter"
-	_ "github.com/keel-framework/keel/internal/modules/file"
-	_ "github.com/keel-framework/keel/internal/modules/job"
-	_ "github.com/keel-framework/keel/internal/modules/maintenance"
-	_ "github.com/keel-framework/keel/internal/modules/monitor"
-	_ "github.com/keel-framework/keel/internal/modules/routemanage"
+	_ "github.com/MITEZ360/tenon/internal/modules/audit"
+	_ "github.com/MITEZ360/tenon/internal/modules/cacheadmin"
+	_ "github.com/MITEZ360/tenon/internal/modules/configcenter"
+	_ "github.com/MITEZ360/tenon/internal/modules/file"
+	_ "github.com/MITEZ360/tenon/internal/modules/job"
+	_ "github.com/MITEZ360/tenon/internal/modules/maintenance"
+	_ "github.com/MITEZ360/tenon/internal/modules/monitor"
+	_ "github.com/MITEZ360/tenon/internal/modules/routemanage"
 
 	// 集群协同，依赖配置中心。
-	_ "github.com/keel-framework/keel/internal/modules/cluster"
+	_ "github.com/MITEZ360/tenon/internal/modules/cluster"
 
 	// 通用业务能力：与具体行业无关，默认保留。
-	_ "github.com/keel-framework/keel/internal/modules/apikey"
-	_ "github.com/keel-framework/keel/internal/modules/membership"
-	_ "github.com/keel-framework/keel/internal/modules/message"
+	_ "github.com/MITEZ360/tenon/internal/modules/apikey"
+	_ "github.com/MITEZ360/tenon/internal/modules/membership"
+	_ "github.com/MITEZ360/tenon/internal/modules/message"
+	_ "github.com/MITEZ360/tenon/internal/modules/flow"
 	// 资讯中心（news）是独立模块，不在默认发行版；需要时
 	// make dist MODULES="user news"，或在本文件加一行导入。
 )
+
+// Name 是当前发行版的名称。默认发行版（make build）叫 Default，
+// 定制发行版由 distgen -name 写进 profile.go，二者构建标签互斥。
+const Name = "Default"

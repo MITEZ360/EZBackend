@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keel-framework/keel/internal/bootstrap"
+	"github.com/MITEZ360/tenon/internal/bootstrap"
 )
 
 type env struct {
@@ -29,7 +29,7 @@ func newEnv(t testing.TB) *env {
 	dir := t.TempDir()
 	cfg := fmt.Sprintf(`
 app:
-  name: Keel 测试
+  name: Tenon 测试
   env: test
 server:
   host: 127.0.0.1
@@ -62,7 +62,7 @@ storage:
   max_size: 1048576
 micro:
   mode: mono
-`, dir, filepath.Join(dir, "keel.db"), dir)
+`, dir, filepath.Join(dir, "tenon.db"), dir)
 
 	cfgPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {

@@ -5,14 +5,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:   "github.com/keel-framework/keel/internal/modules/routemanage",
+		Pkg:   "github.com/MITEZ360/tenon/internal/modules/routemanage",
 		Name:  "routemanage",
 		Label: "路由管理",
 		Desc:  "已注册路由清单，用于核对权限点是否漏配",

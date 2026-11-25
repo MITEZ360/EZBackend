@@ -6,12 +6,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 TARGET="${1:-all}"
 
-MYSQL_CONTAINER="keel-dialect-mysql"
-PG_CONTAINER="keel-dialect-pg"
-MYSQL_PORT="${KEEL_TEST_MYSQL_PORT:-13306}"
-PG_PORT="${KEEL_TEST_PG_PORT:-15432}"
-MYSQL_PASS="keeltest"
-PG_PASS="keeltest"
+MYSQL_CONTAINER="tenon-dialect-mysql"
+PG_CONTAINER="tenon-dialect-pg"
+MYSQL_PORT="${TENON_TEST_MYSQL_PORT:-13306}"
+PG_PORT="${TENON_TEST_PG_PORT:-15432}"
+MYSQL_PASS="tenontest"
+PG_PASS="tenontest"
 
 cleanup() {
   echo "==> 清理测试容器"
@@ -32,7 +32,7 @@ wait_mysql() {
 
 wait_pg() {
   for i in $(seq 1 60); do
-    if docker exec "$PG_CONTAINER" pg_isready -U postgres -d keel >/dev/null 2>&1; then
+    if docker exec "$PG_CONTAINER" pg_isready -U postgres -d tenon >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
@@ -47,20 +47,20 @@ if [[ "$TARGET" == "mysql" || "$TARGET" == "all" ]]; then
   echo "==> 启动 MySQL 8.0 (host $MYSQL_PORT)"
   docker rm -f "$MYSQL_CONTAINER" >/dev/null 2>&1 || true
   docker run -d --name "$MYSQL_CONTAINER" \
-    -e MYSQL_ROOT_PASSWORD="$MYSQL_PASS" -e MYSQL_DATABASE=keel \
+    -e MYSQL_ROOT_PASSWORD="$MYSQL_PASS" -e MYSQL_DATABASE=tenon \
     -p "$MYSQL_PORT:3306" mysql:8.0 >/dev/null
   wait_mysql
-  ENVS+=("KEEL_TEST_MYSQL_DSN=root:${MYSQL_PASS}@tcp(127.0.0.1:${MYSQL_PORT})/keel")
+  ENVS+=("TENON_TEST_MYSQL_DSN=root:${MYSQL_PASS}@tcp(127.0.0.1:${MYSQL_PORT})/tenon")
 fi
 
 if [[ "$TARGET" == "postgres" || "$TARGET" == "all" ]]; then
   echo "==> 启动 PostgreSQL 16 (host $PG_PORT)"
   docker rm -f "$PG_CONTAINER" >/dev/null 2>&1 || true
   docker run -d --name "$PG_CONTAINER" \
-    -e POSTGRES_PASSWORD="$PG_PASS" -e POSTGRES_DB=keel \
+    -e POSTGRES_PASSWORD="$PG_PASS" -e POSTGRES_DB=tenon \
     -p "$PG_PORT:5432" postgres:16-alpine >/dev/null
   wait_pg
-  ENVS+=("KEEL_TEST_PG_DSN=postgres://postgres:${PG_PASS}@127.0.0.1:${PG_PORT}/keel?sslmode=disable")
+  ENVS+=("TENON_TEST_PG_DSN=postgres://postgres:${PG_PASS}@127.0.0.1:${PG_PORT}/tenon?sslmode=disable")
 fi
 
 echo "==> 运行跨方言契约测试: ${ENVS[*]}"

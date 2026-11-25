@@ -19,9 +19,9 @@ import (
 	entrans "github.com/go-playground/validator/v10/translations/en"
 	zhtrans "github.com/go-playground/validator/v10/translations/zh"
 
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/i18n"
-	"github.com/keel-framework/keel/pkg/response"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/i18n"
+	"github.com/MITEZ360/tenon/pkg/response"
 )
 
 var (

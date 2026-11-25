@@ -18,7 +18,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/zap"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 // Storage 是对象存储的最小接口，只覆盖上传、读取、删除与健康检查。
@@ -202,7 +202,7 @@ func (l *localStore) Delete(_ context.Context, key string) error {
 }
 
 func (l *localStore) Health(_ context.Context) error {
-	probe := filepath.Join(l.root, ".keel-health")
+	probe := filepath.Join(l.root, ".tenon-health")
 	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("上传目录不可写: %w", err)

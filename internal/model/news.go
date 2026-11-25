@@ -5,7 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/platform/idgen"
+	"github.com/MITEZ360/tenon/internal/platform/idgen"
 )
 
 // 资讯数据源类型。目前由外部爬虫推送，类型只用于展示与统计。

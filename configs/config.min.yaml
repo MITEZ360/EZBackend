@@ -1,4 +1,4 @@
-# Keel 最小部署配置
+# Tenon 最小部署配置
 #
 # 只保留"进程启动必需"的参数：监听地址、数据库、Redis（可选）与签发密钥。
 # 其余参数（登录策略、限流、存储、邮件、备份、集群心跳等）启动后到
@@ -6,12 +6,12 @@
 # 会提示，并可在「危险操作」页统一下发重启。
 #
 # 敏感值建议用环境变量注入，优先级高于本文件：
-#   KEEL_DB_DSN、KEEL_REDIS_ADDR、KEEL_REDIS_PASSWORD、KEEL_JWT_SECRET
+#   TENON_DB_DSN、TENON_REDIS_ADDR、TENON_REDIS_PASSWORD、TENON_JWT_SECRET
 #
-# 启动：./bin/keel -config configs/config.min.yaml
+# 启动：./bin/tenon -config configs/config.min.yaml
 
 app:
-  name: Keel 企业管理平台
+  name: Tenon 企业管理平台
   env: prod
 
 server:
@@ -21,7 +21,7 @@ server:
 db:
   # driver 留空时按 DSN 自动推断；MySQL 用下面的标准 DSN 格式
   driver: mysql
-  dsn: "keel:password@tcp(127.0.0.1:3306)/keel?charset=utf8mb4&parseTime=True&loc=Local"
+  dsn: "tenon:password@tcp(127.0.0.1:3306)/tenon?charset=utf8mb4&parseTime=True&loc=Local"
   seed: true
 
 # 多节点部署必须配置 Redis，否则每个实例的会话与限流各自独立。

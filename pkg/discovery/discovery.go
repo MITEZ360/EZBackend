@@ -59,7 +59,7 @@ type Static struct {
 	services map[string][]Instance
 }
 
-// NewStatic 解析形如 ["keel-core=127.0.0.1:9000", "keel-auth=10.0.0.1:9001,10.0.0.2:9001"] 的条目。
+// NewStatic 解析形如 ["tenon-core=127.0.0.1:9000", "tenon-auth=10.0.0.1:9001,10.0.0.2:9001"] 的条目。
 func NewStatic(entries []string) (*Static, error) {
 	s := &Static{services: make(map[string][]Instance)}
 	for _, e := range entries {

@@ -36,25 +36,25 @@ COPY --from=web /web/dist ./web/dist
 
 RUN go build -trimpath \
     -ldflags "-s -w \
-      -X github.com/keel-framework/keel/pkg/version.Version=${VERSION} \
-      -X github.com/keel-framework/keel/pkg/version.Commit=${COMMIT} \
-      -X github.com/keel-framework/keel/pkg/version.BuildTime=${BUILD_TIME}" \
-    -o /out/keel ./cmd/keel
+      -X github.com/MITEZ360/tenon/pkg/version.Version=${VERSION} \
+      -X github.com/MITEZ360/tenon/pkg/version.Commit=${COMMIT} \
+      -X github.com/MITEZ360/tenon/pkg/version.BuildTime=${BUILD_TIME}" \
+    -o /out/tenon ./cmd/tenon
 
 # ---------------------------------------------------------------------------
 FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates tzdata wget && \
-    addgroup -g 10001 -S keel && adduser -u 10001 -S keel -G keel
+    addgroup -g 10001 -S tenon && adduser -u 10001 -S tenon -G tenon
 
 ENV TZ=Asia/Shanghai
 
 WORKDIR /app
-COPY --from=builder /out/keel /app/keel
+COPY --from=builder /out/tenon /app/tenon
 COPY configs/config.yaml /app/configs/config.yaml
 
-RUN mkdir -p /app/data /app/logs /app/data/uploads && chown -R keel:keel /app
-USER keel
+RUN mkdir -p /app/data /app/logs /app/data/uploads && chown -R tenon:tenon /app
+USER tenon
 
 EXPOSE 9000
 VOLUME ["/app/data", "/app/logs"]
@@ -62,5 +62,5 @@ VOLUME ["/app/data", "/app/logs"]
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD wget -qO- http://127.0.0.1:9000/healthz || exit 1
 
-ENTRYPOINT ["/app/keel"]
+ENTRYPOINT ["/app/tenon"]
 CMD ["-config", "/app/configs/config.yaml"]

@@ -12,7 +12,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 // dialectRow 是跨方言契约测试用的最小模型，字段覆盖本框架最易出方言差异的几类：
@@ -36,12 +36,12 @@ type dialectCase struct {
 
 func dialectTargets() []dialectCase {
 	out := []dialectCase{}
-	if dsn := os.Getenv("KEEL_TEST_MYSQL_DSN"); dsn != "" {
+	if dsn := os.Getenv("TENON_TEST_MYSQL_DSN"); dsn != "" {
 		out = append(out, dialectCase{"mysql", dsn, func(s string) (gorm.Dialector, error) {
 			return mysql.Open(s + "?parseTime=True&charset=utf8mb4"), nil
 		}})
 	}
-	if dsn := os.Getenv("KEEL_TEST_PG_DSN"); dsn != "" {
+	if dsn := os.Getenv("TENON_TEST_PG_DSN"); dsn != "" {
 		out = append(out, dialectCase{"postgres", dsn, func(s string) (gorm.Dialector, error) {
 			return postgres.Open(s), nil
 		}})
@@ -54,7 +54,7 @@ func dialectTargets() []dialectCase {
 func TestDialectContract(t *testing.T) {
 	targets := dialectTargets()
 	if len(targets) == 0 {
-		t.Skip("未设置 KEEL_TEST_MYSQL_DSN / KEEL_TEST_PG_DSN，跳过跨方言契约测试")
+		t.Skip("未设置 TENON_TEST_MYSQL_DSN / TENON_TEST_PG_DSN，跳过跨方言契约测试")
 	}
 	for _, tc := range targets {
 		t.Run(tc.name, func(t *testing.T) {
@@ -76,7 +76,7 @@ func TestDialectContract(t *testing.T) {
 			}
 			// 用唯一表名避免并发/重跑互相污染；每次操作新建句柄，避免 GORM
 			// Statement 复用导致上一次失败 SQL 污染下一次查询。
-			table := fmt.Sprintf("keel_dialect_%d", time.Now().UnixNano())
+			table := fmt.Sprintf("tenon_dialect_%d", time.Now().UnixNano())
 			q := func() *gorm.DB { return db.Table(table) }
 			if err := q().AutoMigrate(&dialectRow{}); err != nil {
 				t.Fatalf("AutoMigrate 失败: %v", err)
@@ -139,9 +139,9 @@ func TestDialectDriverResolution(t *testing.T) {
 		dsn    string
 		want   string
 	}{
-		{"", "data/keel.db", "sqlite"},
-		{"mysql", "user:pass@tcp(127.0.0.1:3306)/keel", "mysql"},
-		{"postgres", "postgres://u:p@127.0.0.1:5432/keel", "postgres"},
+		{"", "data/tenon.db", "sqlite"},
+		{"mysql", "user:pass@tcp(127.0.0.1:3306)/tenon", "mysql"},
+		{"postgres", "postgres://u:p@127.0.0.1:5432/tenon", "postgres"},
 	}
 	for _, c := range cases {
 		cfg := config.DB{Driver: c.driver, DSN: c.dsn}

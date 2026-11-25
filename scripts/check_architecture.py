@@ -49,7 +49,7 @@ DIALECT_BRANCH = re.compile(
     r'|strings\.Contains\([^)]*"'  # strings.Contains(driver, "mysql")
 )
 
-IMPORT_MODULES = re.compile(r'"github\.com/keel-framework/keel/internal/modules(?:/[^"]*)?"')
+IMPORT_MODULES = re.compile(r'"github\.com/MITEZ360/tenon/internal/modules(?:/[^"]*)?"')
 
 
 def go_files(base: Path) -> list[Path]:

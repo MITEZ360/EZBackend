@@ -1,58 +1,58 @@
 # ============================================================================
-# Keel 单体形态 K8s 部署清单
-# 应用：kubectl apply -f deploy/k8s/keel-core.yaml
+# Tenon 单体形态 K8s 部署清单
+# 应用：kubectl apply -f deploy/k8s/tenon-core.yaml
 # 前置：集群已具备 StorageClass（默认 default），镜像已推送至私有仓库
 # ============================================================================
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: keel
+  name: tenon
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: keel-config
-  namespace: keel
+  name: tenon-config
+  namespace: tenon
 data:
-  KEEL_APP_ENV: "prod"
-  KEEL_SERVER_PORT: "9000"
-  KEEL_DB_DRIVER: "mysql"
-  KEEL_DB_MAX_OPEN_CONNS: "100"
-  KEEL_DB_MAX_IDLE_CONNS: "20"
-  KEEL_REDIS_ADDR: "keel-redis:6379"
+  TENON_APP_ENV: "prod"
+  TENON_SERVER_PORT: "9000"
+  TENON_DB_DRIVER: "mysql"
+  TENON_DB_MAX_OPEN_CONNS: "100"
+  TENON_DB_MAX_IDLE_CONNS: "20"
+  TENON_REDIS_ADDR: "tenon-redis:6379"
   # 多副本必须使用对象存储：本地磁盘只有当前 Pod 可见
-  KEEL_STORAGE_TYPE: "auto"
-  KEEL_STORAGE_S3_ENDPOINT: "keel-minio:9000"
-  KEEL_STORAGE_S3_BUCKET: "keel"
-  KEEL_STORAGE_S3_USE_SSL: "false"
-  KEEL_RUNTIME_INSTANCES: "2"
-  KEEL_LOG_LEVEL: "info"
-  KEEL_LOG_CONSOLE: "false"
-  KEEL_MICRO_MODE: "mono"
-  KEEL_METRICS_ENABLED: "true"
+  TENON_STORAGE_TYPE: "auto"
+  TENON_STORAGE_S3_ENDPOINT: "tenon-minio:9000"
+  TENON_STORAGE_S3_BUCKET: "tenon"
+  TENON_STORAGE_S3_USE_SSL: "false"
+  TENON_RUNTIME_INSTANCES: "2"
+  TENON_LOG_LEVEL: "info"
+  TENON_LOG_CONSOLE: "false"
+  TENON_MICRO_MODE: "mono"
+  TENON_METRICS_ENABLED: "true"
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: keel-secret
-  namespace: keel
+  name: tenon-secret
+  namespace: tenon
 type: Opaque
 stringData:
   # 生产环境请用 openssl rand -base64 48 生成后替换
-  KEEL_JWT_SECRET: "please-change-this-to-a-random-48-chars-secret-key"
-  KEEL_SECURITY_INTERNAL_TOKEN: "please-change-this-internal-token"
-  KEEL_DB_DSN: "keel:Keel@123456@tcp(keel-mysql:3306)/keel?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai"
+  TENON_JWT_SECRET: "please-change-this-to-a-random-48-chars-secret-key"
+  TENON_SECURITY_INTERNAL_TOKEN: "please-change-this-internal-token"
+  TENON_DB_DSN: "tenon:Tenon@123456@tcp(tenon-mysql:3306)/tenon?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai"
   # 对象存储密钥，替换为真实值
-  KEEL_STORAGE_S3_ACCESS_KEY: "keel"
-  KEEL_STORAGE_S3_SECRET_KEY: "keel-secret"
+  TENON_STORAGE_S3_ACCESS_KEY: "tenon"
+  TENON_STORAGE_S3_SECRET_KEY: "tenon-secret"
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: keel-core
-  namespace: keel
+  name: tenon-core
+  namespace: tenon
   labels:
-    app.kubernetes.io/name: keel
+    app.kubernetes.io/name: tenon
     app.kubernetes.io/component: core
 spec:
   replicas: 2
@@ -64,12 +64,12 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app.kubernetes.io/name: keel
+      app.kubernetes.io/name: tenon
       app.kubernetes.io/component: core
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: keel
+        app.kubernetes.io/name: tenon
         app.kubernetes.io/component: core
       annotations:
         prometheus.io/scrape: "true"
@@ -81,8 +81,8 @@ spec:
         runAsUser: 10001
         fsGroup: 10001
       containers:
-        - name: keel
-          image: registry.example.com/keel:1.0.0
+        - name: tenon
+          image: registry.example.com/tenon:1.0.0
           imagePullPolicy: IfNotPresent
           args: ["-config", "/app/configs/config.yaml"]
           ports:
@@ -90,9 +90,9 @@ spec:
               containerPort: 9000
           envFrom:
             - configMapRef:
-                name: keel-config
+                name: tenon-config
             - secretRef:
-                name: keel-secret
+                name: tenon-secret
           resources:
             requests:
               cpu: 100m
@@ -141,12 +141,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: keel-core
-  namespace: keel
+  name: tenon-core
+  namespace: tenon
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: keel
+    app.kubernetes.io/name: tenon
     app.kubernetes.io/component: core
   ports:
     - name: http
@@ -156,13 +156,13 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: keel-core
-  namespace: keel
+  name: tenon-core
+  namespace: tenon
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: keel-core
+    name: tenon-core
   minReplicas: 2
   maxReplicas: 10
   metrics:
@@ -176,21 +176,21 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: keel
-  namespace: keel
+  name: tenon
+  namespace: tenon
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "32m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
 spec:
   ingressClassName: nginx
   rules:
-    - host: keel.example.com
+    - host: tenon.example.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: keel-core
+                name: tenon-core
                 port:
                   number: 9000

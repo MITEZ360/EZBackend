@@ -18,7 +18,7 @@
 ## 2. 分层
 
 ```
-cmd/keel                进程入口：解析参数 → bootstrap.New → Run
+cmd/tenon                进程入口：解析参数 → bootstrap.New → Run
   └─ internal/bootstrap 装配与生命周期（唯一的"上帝对象"，集中管理依赖顺序）
        ├─ internal/router        引擎与中间件；路由由各模块自行声明，本包不认识具体模块
        │    ├─ internal/middleware   通用中间件
@@ -246,7 +246,7 @@ bus.Subscribe("audit.operation", func(ctx context.Context, e event.Event) {
 控制台是独立的 Vue 3 单页应用，但**交付形态与后端强绑定**：
 
 ```
-web/src  ──vite build──▶  web/dist  ──go:embed──▶  bin/keel  ──▶  浏览器
+web/src  ──vite build──▶  web/dist  ──go:embed──▶  bin/tenon  ──▶  浏览器
    ↑                                                        ↑
  开发期（Node）                                        运行期（无 Node）
 ```
@@ -255,10 +255,16 @@ web/src  ──vite build──▶  web/dist  ──go:embed──▶  bin/keel 
 | --- | --- | --- |
 | 交付 | 产物嵌进二进制 | 单文件部署，不用 nginx、不用担心静态资源版本错配 |
 | 认证 | accessToken 放 localStorage，401 时单飞刷新 | 并发 401 只发一次 refresh，其余请求排队重放，避免刷新风暴 |
-| 路由 | 静态路由表 + 后端菜单驱动导航 | 页面组件与权限解耦：菜单决定"能看到什么"，`v-perm` 决定"能点什么" |
+| 路由 | 模块自注册 + 后端菜单驱动导航 | 页面组件与权限解耦：菜单决定"能看到什么"，`v-perm` 决定"能点什么" |
+| 模块 | `web/src/modules/<name>/` 自包含页面、路由、i18n | 与后端模块同名，删目录即删页面；路由表不再手写 |
+| 裁剪 | `VITE_MODULES` 来自 `distgen -print` | 前后端同一份清单，未选模块的页面 chunk 不进产物 |
 | 权限 | 后端下发 `perms`，前端缓存为 Set | 超管（`*`）短路判断，O(1) 查询 |
 | 主题 | CSS 变量（`--brand-*` / `--ink-*`） | 换肤只改变量，不需要重建样式 |
 | 分包 | vendor / element / 按页面懒加载 | 首屏只加载登录或仪表盘所需 chunk |
+
+模块的目录布局、入口契约、增删步骤与已知边界见 [frontend-modules.md](frontend-modules.md)。
+要点：模块名必须等于后端 `modulekit.Spec.Name`；路由守卫与菜单校验留在
+`router/index.ts`，不下放到模块。
 
 前端**不做**服务端渲染，也不需要：控制台在内网、无 SEO 需求，
 SSR 只会把 Node 重新塞回运行时。
@@ -288,7 +294,7 @@ SSR 只会把 Node 重新塞回运行时。
 就用进程内缓存。装配结果写入启动日志：
 
 ```json
-{"msg":"依赖组件已装配","mode":"mono","instance":"keel-1","db":"sqlite",
+{"msg":"依赖组件已装配","mode":"mono","instance":"tenon-1","db":"sqlite",
  "cache":"local","ratelimit":"local","storage":"local","mailer":"disabled"}
 ```
 

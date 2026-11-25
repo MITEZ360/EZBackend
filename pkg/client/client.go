@@ -16,7 +16,7 @@ import (
 	"github.com/sony/gobreaker"
 	"go.uber.org/zap"
 
-	"github.com/keel-framework/keel/pkg/discovery"
+	"github.com/MITEZ360/tenon/pkg/discovery"
 )
 
 // Options 客户端参数。

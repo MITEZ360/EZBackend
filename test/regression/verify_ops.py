@@ -5,7 +5,7 @@ import urllib.error
 import urllib.parse
 import sys
 
-BASE = os.environ.get("KEEL_BASE", "http://127.0.0.1:9000").rstrip("/")
+BASE = os.environ.get("TENON_BASE", "http://127.0.0.1:9000").rstrip("/")
 PASS = []
 FAIL = []
 
@@ -35,7 +35,7 @@ def check(name, cond, detail=""):
 
 
 st, r = req("POST", "/api/v1/auth/login", {
-    "username": "admin", "password": os.environ.get("KEEL_ADMIN_PASS", "Admin@123456"),
+    "username": "admin", "password": os.environ.get("TENON_ADMIN_PASS", "Admin@123456"),
     "captchaId": "", "captchaCode": "", "totpCode": "",
 })
 token = r["data"]["token"]["accessToken"]
@@ -43,7 +43,7 @@ check("管理员登录", st == 200 and bool(token))
 
 print("\n--- 备份恢复 ---")
 st, r = req("POST", "/api/v1/maintenance/backups", {}, token=token)
-check("立即备份", st == 200 and r.get("data", {}).get("name", "").startswith("keel-"), r.get("data"))
+check("立即备份", st == 200 and r.get("data", {}).get("name", "").startswith("tenon-"), r.get("data"))
 name = r.get("data", {}).get("name", "")
 meta = r.get("data", {})
 check("备份元信息含校验和", bool(meta.get("sha256")) and len(meta.get("sha256", "")) == 64)

@@ -1,6 +1,6 @@
 # 中国大陆能力（可选模块）
 
-中国大陆常用的身份接入、短信、支付与会员充值，在 Keel 里是两个**可选模块**：
+中国大陆常用的身份接入、短信、支付与会员充值，在 Tenon 里是两个**可选模块**：
 
 | 模块 | 内容 | 依赖 |
 |---|---|---|
@@ -37,21 +37,21 @@ make dist MODULES="user configcenter cnauth recharge" # 再加配置中心
 
 ```bash
 make dist MODULES="user cnauth recharge"
-./bin/keel -config configs/config.cn.yaml
+./bin/tenon -config configs/config.cn.yaml
 ```
 
 敏感凭据建议用环境变量注入，避免写入配置文件：
 
 | 环境变量 | 说明 |
 |---|---|
-| `KEEL_CN_REGISTER_ENABLED` | 开放自助注册 |
-| `KEEL_CN_SMS_LOGIN_ENABLED` | 开放短信验证码登录 |
-| `KEEL_SMS_ACCESS_KEY_ID` | 短信厂商 AccessKeyId / SecretId |
-| `KEEL_SMS_ACCESS_KEY_SECRET` | 短信厂商 AccessKeySecret / SecretKey |
-| `KEEL_OAUTH_WECHAT_CLIENT_ID` / `_CLIENT_SECRET` | 微信开放平台凭据 |
-| `KEEL_OAUTH_QQ_CLIENT_ID` / `_CLIENT_SECRET` | QQ 互联凭据 |
-| `KEEL_PAYMENT_WECHAT_API_KEY` | 微信支付 V2 API 密钥 |
-| `KEEL_PAYMENT_ALIPAY_PRIVATE_KEY` / `_PUBLIC_KEY` | 支付宝应用私钥与支付宝公钥（PEM） |
+| `TENON_CN_REGISTER_ENABLED` | 开放自助注册 |
+| `TENON_CN_SMS_LOGIN_ENABLED` | 开放短信验证码登录 |
+| `TENON_SMS_ACCESS_KEY_ID` | 短信厂商 AccessKeyId / SecretId |
+| `TENON_SMS_ACCESS_KEY_SECRET` | 短信厂商 AccessKeySecret / SecretKey |
+| `TENON_OAUTH_WECHAT_CLIENT_ID` / `_CLIENT_SECRET` | 微信开放平台凭据 |
+| `TENON_OAUTH_QQ_CLIENT_ID` / `_CLIENT_SECRET` | QQ 互联凭据 |
+| `TENON_PAYMENT_WECHAT_API_KEY` | 微信支付 V2 API 密钥 |
+| `TENON_PAYMENT_ALIPAY_PRIVATE_KEY` / `_PUBLIC_KEY` | 支付宝应用私钥与支付宝公钥（PEM） |
 
 配置段说明见 `configs/config.cn.yaml` 内注释。支付参数也可以直接在管理端配置并立即生效，见下方章节；启动配置仅在管理端尚未保存过时作为默认值。
 

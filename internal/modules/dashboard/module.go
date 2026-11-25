@@ -3,14 +3,14 @@ package dashboard
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:   "github.com/keel-framework/keel/internal/modules/dashboard",
+		Pkg:   "github.com/MITEZ360/tenon/internal/modules/dashboard",
 		Name:  "dashboard",
 		Label: "工作台",
 		Desc:  "首页看板：统计卡片与趋势图",

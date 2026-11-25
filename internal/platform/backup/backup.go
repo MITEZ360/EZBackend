@@ -1,7 +1,7 @@
 // Package backup 提供数据库与文件资产的备份、恢复、校验与保留策略。
 //
 // 放在 platform 而不是某个业务模块：备份是任何发行版都要有的底座能力，
-// 运维子命令（keel backup / restore）在精简发行版里也必须可用。
+// 运维子命令（tenon backup / restore）在精简发行版里也必须可用。
 package backup
 
 import (
@@ -28,7 +28,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 // FileEntry 归档内单个文件资产的校验信息。
@@ -103,7 +103,7 @@ func (s *Service) ensureDir() error {
 func (s *Service) DBPath() string {
 	p := strings.TrimPrefix(strings.TrimSpace(s.dbCfg.DSN), "file:")
 	if p == "" {
-		p = "data/keel.db"
+		p = "data/tenon.db"
 	}
 	if i := strings.IndexByte(p, '?'); i >= 0 {
 		p = p[:i]
@@ -138,7 +138,7 @@ func (s *Service) Backup(ctx context.Context) (*Meta, error) {
 	if s.driver != "sqlite" {
 		ext = ".sql.tar"
 	}
-	name := fmt.Sprintf("keel-%s-%s%s", s.driver, stamp, ext)
+	name := fmt.Sprintf("tenon-%s-%s%s", s.driver, stamp, ext)
 	if s.cfg.Compress {
 		name += ".gz"
 	}
@@ -460,7 +460,7 @@ func openArchive(p string) (*archive, error) {
 		defer gz.Close()
 		r = gz
 	}
-	dir, err := os.MkdirTemp("", "keel-archive-*")
+	dir, err := os.MkdirTemp("", "tenon-archive-*")
 	if err != nil {
 		return nil, err
 	}
@@ -750,7 +750,7 @@ func (s *Service) RestoreOnline(ctx context.Context, name string) (*RestoreResul
 		return nil, fmt.Errorf("在线恢复未启用：请设置 backup.allow_restore=true")
 	}
 	if s.driver == "sqlite" {
-		return nil, fmt.Errorf("SQLite 需要替换数据文件，请在停止服务后执行：keel restore %s", name)
+		return nil, fmt.Errorf("SQLite 需要替换数据文件，请在停止服务后执行：tenon restore %s", name)
 	}
 	p, err := s.Path(name)
 	if err != nil {
@@ -912,7 +912,7 @@ func (s *Service) restoreFiles(filesDir string) (restored, skipped int) {
 		return 0, countFiles(filesDir)
 	}
 	parent := filepath.Dir(root)
-	stage, err := os.MkdirTemp(parent, ".keel-files-restore-*")
+	stage, err := os.MkdirTemp(parent, ".tenon-files-restore-*")
 	if err != nil {
 		return 0, countFiles(filesDir)
 	}
@@ -923,7 +923,7 @@ func (s *Service) restoreFiles(filesDir string) (restored, skipped int) {
 	}
 	restored = countFiles(stage)
 	// 安全副本：把旧目录改名保留，再把 stage 原子替换到 root
-	backup := filepath.Join(parent, ".keel-files-pre-restore-"+time.Now().Format("20060102-150405"))
+	backup := filepath.Join(parent, ".tenon-files-pre-restore-"+time.Now().Format("20060102-150405"))
 	if _, e := os.Stat(root); e == nil {
 		if e := os.Rename(root, backup); e != nil {
 			cleanup()
@@ -1086,7 +1086,7 @@ func backupTime(name string) (time.Time, error) {
 			}
 		}
 	}
-	// 形如 keel-sqlite-20261122-221900.tar.gz
+	// 形如 tenon-sqlite-20261122-221900.tar.gz
 	if i := strings.Index(name, "-20"); i > 0 {
 		rest := name[i+1:]
 		if len(rest) >= 15 {
@@ -1104,7 +1104,7 @@ func isBackupName(name string) bool {
 	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "pre-restore-") {
 		return false
 	}
-	if !strings.HasPrefix(name, "keel-") {
+	if !strings.HasPrefix(name, "tenon-") {
 		return false
 	}
 	return strings.HasSuffix(name, ".db") || strings.HasSuffix(name, ".db.gz") ||
@@ -1185,7 +1185,7 @@ func decompressToTemp(p string, compressed bool) (string, func(), error) {
 		return "", nil, err
 	}
 	defer f.Close()
-	tmp, err := os.CreateTemp("", "keel-restore-*.db")
+	tmp, err := os.CreateTemp("", "tenon-restore-*.db")
 	if err != nil {
 		return "", nil, err
 	}

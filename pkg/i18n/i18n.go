@@ -18,7 +18,7 @@ const (
 	// DefaultLocale 是未协商到语言时的兜底，与项目历史文案一致。
 	DefaultLocale = "zh-CN"
 	// LocaleKey 是 gin.Context 上存放协商结果的键。
-	LocaleKey = "keel.locale"
+	LocaleKey = "tenon.locale"
 	// LocaleHeader 允许客户端显式指定语言，优先于 Accept-Language。
 	LocaleHeader = "X-Locale"
 )

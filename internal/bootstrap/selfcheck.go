@@ -9,9 +9,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/platform/cache"
-	"github.com/keel-framework/keel/internal/platform/migrate"
-	"github.com/keel-framework/keel/internal/platform/storage"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
+	"github.com/MITEZ360/tenon/internal/platform/migrate"
+	"github.com/MITEZ360/tenon/internal/platform/storage"
 )
 
 // SelfCheckItem 单个启动自检项。
@@ -138,7 +138,7 @@ func runSelfChecks(ctx context.Context, deps selfCheckDeps, lg *zap.Logger) (*Se
 
 // probeCache 用独立的探针键做一次写-读-删，避免污染业务数据。
 func probeCache(ctx context.Context, c cache.Cache) error {
-	const key = "keel:boot:probe"
+	const key = "tenon:boot:probe"
 	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	if err := c.Set(probeCtx, key, []byte("1"), 10*time.Second); err != nil {

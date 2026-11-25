@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/pkg/i18n"
+	"github.com/MITEZ360/tenon/pkg/i18n"
 )
 
 func TestOKTranslatesDataMessage(t *testing.T) {

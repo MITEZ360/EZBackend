@@ -38,7 +38,7 @@ func Init(nodeID int64) error {
 func NodeFromHost() int64 {
 	host, err := os.Hostname()
 	if err != nil || host == "" {
-		host = "keel"
+		host = "tenon"
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(host))

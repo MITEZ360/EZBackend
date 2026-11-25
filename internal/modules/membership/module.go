@@ -3,14 +3,14 @@ package membership
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:       "github.com/keel-framework/keel/internal/modules/membership",
+		Pkg:       "github.com/MITEZ360/tenon/internal/modules/membership",
 		Name:      "membership",
 		Label:     "会员等级",
 		Desc:      "演示业务：会员等级与用户等级关联",

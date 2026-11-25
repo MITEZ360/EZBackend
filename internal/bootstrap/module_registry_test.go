@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 
 	// 测试进程同样需要发行版清单，否则注册表为空。
-	_ "github.com/keel-framework/keel/internal/distribution"
+	_ "github.com/MITEZ360/tenon/internal/distribution"
 )
 
 func TestResolveModulesAll(t *testing.T) {

@@ -1,56 +1,56 @@
 # ============================================================================
-# Keel 微服务形态：网关 + 领域服务
-# 应用：kubectl apply -f deploy/k8s/keel-gateway.yaml
+# Tenon 微服务形态：网关 + 领域服务
+# 应用：kubectl apply -f deploy/k8s/tenon-gateway.yaml
 # 说明：网关不连数据库、不加载业务模块，可独立扩容；领域服务按模块拆分，
 #      通过 micro.modules 控制本进程暴露的接口，服务间用 DNS 发现。
 # ============================================================================
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: keel-gateway-config
-  namespace: keel
+  name: tenon-gateway-config
+  namespace: tenon
 data:
-  KEEL_APP_ENV: "prod"
-  KEEL_SERVER_PORT: "9100"
-  KEEL_LOG_LEVEL: "info"
-  KEEL_LOG_CONSOLE: "false"
-  KEEL_MICRO_MODE: "gateway"
-  KEEL_MICRO_REGISTRY_TYPE: "dns"
-  KEEL_MICRO_REGISTRY_DNS_SUFFIX: "keel.svc.cluster.local:9000"
+  TENON_APP_ENV: "prod"
+  TENON_SERVER_PORT: "9100"
+  TENON_LOG_LEVEL: "info"
+  TENON_LOG_CONSOLE: "false"
+  TENON_MICRO_MODE: "gateway"
+  TENON_MICRO_REGISTRY_TYPE: "dns"
+  TENON_MICRO_REGISTRY_DNS_SUFFIX: "tenon.svc.cluster.local:9000"
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: keel-gateway
-  namespace: keel
+  name: tenon-gateway
+  namespace: tenon
   labels:
-    app.kubernetes.io/name: keel
+    app.kubernetes.io/name: tenon
     app.kubernetes.io/component: gateway
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: keel
+      app.kubernetes.io/name: tenon
       app.kubernetes.io/component: gateway
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: keel
+        app.kubernetes.io/name: tenon
         app.kubernetes.io/component: gateway
     spec:
       containers:
         - name: gateway
-          image: registry.example.com/keel:1.0.0
+          image: registry.example.com/tenon:1.0.0
           ports:
             - name: http
               containerPort: 9100
           envFrom:
             - configMapRef:
-                name: keel-gateway-config
+                name: tenon-gateway-config
           env:
             # 网关模式下转发规则可通过挂载配置文件提供，保持与 configs/config.gateway.yaml 一致
-            - name: KEEL_GATEWAY_ROUTES
-              value: "/api/v1=keel-core"
+            - name: TENON_GATEWAY_ROUTES
+              value: "/api/v1=tenon-core"
           resources:
             requests:
               cpu: 50m
@@ -68,12 +68,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: keel-gateway
-  namespace: keel
+  name: tenon-gateway
+  namespace: tenon
 spec:
   type: LoadBalancer
   selector:
-    app.kubernetes.io/name: keel
+    app.kubernetes.io/name: tenon
     app.kubernetes.io/component: gateway
   ports:
     - name: http
@@ -86,35 +86,35 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: keel-user
-  namespace: keel
+  name: tenon-user
+  namespace: tenon
   labels:
-    app.kubernetes.io/name: keel
+    app.kubernetes.io/name: tenon
     app.kubernetes.io/component: user
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: keel
+      app.kubernetes.io/name: tenon
       app.kubernetes.io/component: user
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: keel
+        app.kubernetes.io/name: tenon
         app.kubernetes.io/component: user
     spec:
       containers:
         - name: user
-          image: registry.example.com/keel:1.0.0
+          image: registry.example.com/tenon:1.0.0
           envFrom:
             - configMapRef:
-                name: keel-config
+                name: tenon-config
             - secretRef:
-                name: keel-secret
+                name: tenon-secret
           env:
-            - name: KEEL_MICRO_MODE
+            - name: TENON_MICRO_MODE
               value: "service"
-            - name: KEEL_MICRO_MODULES
+            - name: TENON_MICRO_MODULES
               value: "user,role,dept"
           ports:
             - name: http
@@ -136,12 +136,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: keel-user
-  namespace: keel
+  name: tenon-user
+  namespace: tenon
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: keel
+    app.kubernetes.io/name: tenon
     app.kubernetes.io/component: user
   ports:
     - name: http

@@ -6,14 +6,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:    "github.com/keel-framework/keel/internal/modules/audit",
+		Pkg:    "github.com/MITEZ360/tenon/internal/modules/audit",
 		Name:   "audit",
 		Label:  "审计日志",
 		Desc:   "操作日志与登录日志查询",

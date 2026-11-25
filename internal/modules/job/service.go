@@ -12,13 +12,13 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/cache"
-	"github.com/keel-framework/keel/internal/platform/idgen"
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/i18n"
-	"github.com/keel-framework/keel/pkg/query"
-	"github.com/keel-framework/keel/pkg/utils"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
+	"github.com/MITEZ360/tenon/internal/platform/idgen"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/i18n"
+	"github.com/MITEZ360/tenon/pkg/query"
+	"github.com/MITEZ360/tenon/pkg/utils"
 )
 
 // HandlerFunc 任务处理函数，返回执行摘要。
@@ -71,7 +71,7 @@ func (s *Service) Handlers() []string {
 // （会话表由它维护清理逻辑）、清理消息在消息模块。调度器不认识这些模块。
 func (s *Service) registerBuiltins() {
 	s.Register("demo.hello", func(ctx context.Context, p map[string]any) (string, error) {
-		msg := "Hello from Keel"
+		msg := "Hello from Tenon"
 		if v, ok := p["message"].(string); ok && v != "" {
 			msg = v
 		}

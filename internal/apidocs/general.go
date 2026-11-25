@@ -3,10 +3,10 @@
 // 生成命令见 Makefile 的 docs 目标：swag init -g internal/apidocs/general.go ...
 // 生成物（docs.go / swagger.json / swagger.yaml）不要手工编辑。
 //
-// @title                       Keel 企业服务端框架 API
+// @title                       Tenon 企业服务端框架 API
 // @version                     1.0.0
 // @description                 统一响应体为 {code, message, data, traceId}；code=0 表示成功。登录后接口使用 Bearer 令牌，开放接口使用 API Key。
-// @contact.name                Keel Framework
+// @contact.name                Tenon Framework
 // @license.name                MIT
 // @BasePath                    /
 // @schemes                     http https

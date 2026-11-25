@@ -1,6 +1,6 @@
 package configcenter
 
-import "github.com/keel-framework/keel/internal/platform/modulekit"
+import "github.com/MITEZ360/tenon/internal/platform/modulekit"
 
 // Item 描述一个可在管理端调整的运行时配置项。
 //

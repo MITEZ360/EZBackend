@@ -3,7 +3,7 @@ import json
 import urllib.request
 import urllib.error
 
-BASE = os.environ.get("KEEL_BASE", "http://127.0.0.1:9102").rstrip("/")
+BASE = os.environ.get("TENON_BASE", "http://127.0.0.1:9102").rstrip("/")
 ok_count = 0
 fail_count = 0
 
@@ -45,7 +45,7 @@ def login(u, p):
 
 
 print("== 登录与列表 ==")
-admin = login("admin", os.environ.get("KEEL_ADMIN_PASS", "Admin@123456"))
+admin = login("admin", os.environ.get("TENON_ADMIN_PASS", "Admin@123456"))
 st, r = call("GET", "/api/v1/api-keys", admin)
 check("初始列表为空", st == 200 and r["data"]["total"] == 0, r)
 

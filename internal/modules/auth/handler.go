@@ -7,11 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/platform/httpx"
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/response"
-	"github.com/keel-framework/keel/pkg/utils"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/platform/httpx"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/response"
+	"github.com/MITEZ360/tenon/pkg/utils"
 )
 
 // Handler 认证接口。
@@ -24,7 +24,7 @@ type Handler struct {
 
 // NewHandler 创建认证处理器。
 func NewHandler(svc *Service, captchaEnabled, trustProxy bool) *Handler {
-	return &Handler{svc: svc, captchaEnabled: captchaEnabled, trustProxy: trustProxy, refreshCookie: "keel_refresh"}
+	return &Handler{svc: svc, captchaEnabled: captchaEnabled, trustProxy: trustProxy, refreshCookie: "tenon_refresh"}
 }
 
 func metaFrom(c *gin.Context, trustProxy bool) ClientMeta {

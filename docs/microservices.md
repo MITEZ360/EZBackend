@@ -49,12 +49,12 @@ micro:
   registry:
     type: static
     endpoints:
-      - "keel-core=10.0.0.11:9000,10.0.0.12:9000"
+      - "tenon-core=10.0.0.11:9000,10.0.0.12:9000"
   routes:
     - prefix: /api/v1/auth        # 认证单独指向 auth 服务
-      service: keel-auth
+      service: tenon-auth
     - prefix: /api/v1             # 其余走核心服务
-      service: keel-core
+      service: tenon-core
       strip_prefix: false
 ```
 
@@ -70,13 +70,13 @@ micro:
 启动：
 
 ```bash
-./keel -config configs/config.gateway.yaml
+./tenon -config configs/config.gateway.yaml
 # 或纯环境变量（容器友好）
-KEEL_MICRO_MODE=gateway \
-KEEL_SERVER_PORT=9100 \
-KEEL_GATEWAY_ROUTES="/api/v1=keel-core,/uploads=keel-file" \
-KEEL_MICRO_REGISTRY_ENDPOINTS="keel-core=127.0.0.1:9000" \
-./keel
+TENON_MICRO_MODE=gateway \
+TENON_SERVER_PORT=9100 \
+TENON_GATEWAY_ROUTES="/api/v1=tenon-core,/uploads=tenon-file" \
+TENON_MICRO_REGISTRY_ENDPOINTS="tenon-core=127.0.0.1:9000" \
+./tenon
 ```
 
 > 网关形态下 `/healthz` 会返回 `database: disabled`、`cache: disabled`，这是预期行为。
@@ -110,11 +110,11 @@ auth  user  role  menu  dept  dict  config  notice  audit  job  file  dashboard 
 
 | 服务 | modules | 说明 |
 | --- | --- | --- |
-| keel-auth | `[auth, menu]` | 登录、令牌、导航树 |
-| keel-user | `[user, role, dept, membership]` | 组织、账号与会员等级 |
-| keel-content | `[news]` | 资讯聚合，写入量大，建议独立部署并单独限流 |
-| keel-ops | `[audit, job, file, monitor]` | 运维能力，可单独限流 |
-| keel-core | 全部 | 兜底，未拆分部分 |
+| tenon-auth | `[auth, menu]` | 登录、令牌、导航树 |
+| tenon-user | `[user, role, dept, membership]` | 组织、账号与会员等级 |
+| tenon-content | `[news]` | 资讯聚合，写入量大，建议独立部署并单独限流 |
+| tenon-ops | `[audit, job, file, monitor]` | 运维能力，可单独限流 |
+| tenon-core | 全部 | 兜底，未拆分部分 |
 
 ---
 
@@ -123,7 +123,7 @@ auth  user  role  menu  dept  dict  config  notice  audit  job  file  dashboard 
 | 类型 | 配置 | 适用 |
 | --- | --- | --- |
 | `static` | `registry.endpoints: ["svc=ip1:port,ip2:port"]` | 物理机、小集群、Compose |
-| `dns` | `registry.dns_suffix: "keel.svc.cluster.local:9000"` | K8s Headless Service、内网 DNS |
+| `dns` | `registry.dns_suffix: "tenon.svc.cluster.local:9000"` | K8s Headless Service、内网 DNS |
 
 `dns` 模式解析 `服务名 + "." + suffix` 的 A 记录，结果缓存 `registry.interval`（默认 30s），
 实例增减自动生效，无需重启网关。
@@ -148,14 +148,14 @@ type Registry interface {
 
 ```go
 import (
-    "github.com/keel-framework/keel/pkg/client"
-    "github.com/keel-framework/keel/pkg/discovery"
+    "github.com/MITEZ360/tenon/pkg/client"
+    "github.com/MITEZ360/tenon/pkg/discovery"
 )
 
-reg, _ := discovery.New("static", []string{"keel-user=10.0.0.21:9000"}, "", 0)
+reg, _ := discovery.New("static", []string{"tenon-user=10.0.0.21:9000"}, "", 0)
 
 userCli := client.New(client.Options{
-    Service:        "keel-user",
+    Service:        "tenon-user",
     Registry:       reg,
     Timeout:        2 * time.Second,
     Retries:        2,

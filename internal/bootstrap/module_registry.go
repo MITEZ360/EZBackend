@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 // 模块清单由各模块在 init() 中自注册，发行版通过 internal/distribution

@@ -3,8 +3,8 @@ package bootstrap
 import (
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 // 本文件只剩「底座表」：任何发行版都必须存在的表。

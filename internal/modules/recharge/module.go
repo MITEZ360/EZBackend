@@ -6,15 +6,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/modules/membership"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/modules/membership"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:       "github.com/keel-framework/keel/internal/modules/recharge",
+		Pkg:       "github.com/MITEZ360/tenon/internal/modules/recharge",
 		Name:      "recharge",
 		Label:     "会员充值",
 		Desc:      "会员等级售价、充值下单、微信/支付宝支付回调与订单管理",

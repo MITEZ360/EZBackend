@@ -20,23 +20,23 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/micro"
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/platform/authn"
-	"github.com/keel-framework/keel/internal/platform/authz"
-	"github.com/keel-framework/keel/internal/platform/cache"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/database"
-	"github.com/keel-framework/keel/internal/platform/datetime"
-	"github.com/keel-framework/keel/internal/platform/idgen"
-	"github.com/keel-framework/keel/internal/platform/logger"
-	"github.com/keel-framework/keel/internal/platform/mailer"
-	"github.com/keel-framework/keel/internal/platform/migrate"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
-	"github.com/keel-framework/keel/internal/platform/storage"
-	"github.com/keel-framework/keel/internal/router"
-	"github.com/keel-framework/keel/pkg/discovery"
-	"github.com/keel-framework/keel/pkg/event"
+	"github.com/MITEZ360/tenon/internal/micro"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/platform/authn"
+	"github.com/MITEZ360/tenon/internal/platform/authz"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/database"
+	"github.com/MITEZ360/tenon/internal/platform/datetime"
+	"github.com/MITEZ360/tenon/internal/platform/idgen"
+	"github.com/MITEZ360/tenon/internal/platform/logger"
+	"github.com/MITEZ360/tenon/internal/platform/mailer"
+	"github.com/MITEZ360/tenon/internal/platform/migrate"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/platform/storage"
+	"github.com/MITEZ360/tenon/internal/router"
+	"github.com/MITEZ360/tenon/pkg/discovery"
+	"github.com/MITEZ360/tenon/pkg/event"
 )
 
 // App 是应用容器。
@@ -317,7 +317,7 @@ func resolveInstanceID(cfg *config.Config) string {
 	}
 	host, err := os.Hostname()
 	if err != nil || host == "" {
-		host = "keel"
+		host = "tenon"
 	}
 	return fmt.Sprintf("%s-%d", host, os.Getpid())
 }

@@ -3,14 +3,14 @@ package role
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:       "github.com/keel-framework/keel/internal/modules/role",
+		Pkg:       "github.com/MITEZ360/tenon/internal/modules/role",
 		Name:      "role",
 		Label:     "角色权限",
 		Desc:      "角色与菜单授权关系",

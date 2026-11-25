@@ -3,14 +3,14 @@ package job
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/middleware"
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/middleware"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:    "github.com/keel-framework/keel/internal/modules/job",
+		Pkg:    "github.com/MITEZ360/tenon/internal/modules/job",
 		Name:   "job",
 		Label:  "定时任务",
 		Desc:   "任务配置、手动触发与执行记录；关闭后不再启动调度器",

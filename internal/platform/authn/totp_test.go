@@ -10,7 +10,7 @@ import (
 )
 
 func TestTOTPGenerateAndValidate(t *testing.T) {
-	secret, url, err := GenerateTOTP("Keel 管理平台", "admin")
+	secret, url, err := GenerateTOTP("Tenon 管理平台", "admin")
 	if err != nil {
 		t.Fatalf("生成失败: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestTOTPGenerateAndValidate(t *testing.T) {
 }
 
 func TestQRCodeDataURI(t *testing.T) {
-	_, url, err := GenerateTOTP("Keel", "admin")
+	_, url, err := GenerateTOTP("Tenon", "admin")
 	if err != nil {
 		t.Fatalf("生成失败: %v", err)
 	}

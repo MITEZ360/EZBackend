@@ -16,8 +16,8 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/internal/platform/logger"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/logger"
 )
 
 // Open 根据配置创建数据库连接。默认使用纯 Go 的 SQLite 驱动，零外部依赖即可启动；
@@ -81,7 +81,7 @@ func dialectorFor(cfg config.DB) (gorm.Dialector, error) {
 	case "sqlite", "":
 		path := strings.TrimPrefix(cfg.DSN, "file:")
 		if path == "" {
-			path = "data/keel.db"
+			path = "data/tenon.db"
 		}
 		if dir := filepath.Dir(path); dir != "" && dir != "." {
 			if err := os.MkdirAll(dir, 0o755); err != nil {

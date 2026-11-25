@@ -8,13 +8,13 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 // redisForTest 连接测试用 Redis；不可用时跳过，保证无外部依赖也能跑单测。
 func redisForTest(t *testing.T, prefix string) Cache {
 	t.Helper()
-	addr := os.Getenv("KEEL_TEST_REDIS")
+	addr := os.Getenv("TENON_TEST_REDIS")
 	if addr == "" {
 		addr = "127.0.0.1:6379"
 	}
@@ -36,8 +36,8 @@ func redisForTest(t *testing.T, prefix string) Cache {
 
 // 两个"实例"各自建立连接，验证分布式锁互斥。
 func TestRedisLockAcrossInstances(t *testing.T) {
-	a := redisForTest(t, "keeltest:lock")
-	b := redisForTest(t, "keeltest:lock")
+	a := redisForTest(t, "tenontest:lock")
+	b := redisForTest(t, "tenontest:lock")
 	ctx := context.Background()
 
 	release, ok := Lock(ctx, a, "job:1", time.Minute)
@@ -58,8 +58,8 @@ func TestRedisLockAcrossInstances(t *testing.T) {
 
 // 两个实例共享同一份限流配额。
 func TestRedisLimiterSharedAcrossInstances(t *testing.T) {
-	a := redisForTest(t, "keeltest:rl")
-	b := redisForTest(t, "keeltest:rl")
+	a := redisForTest(t, "tenontest:rl")
+	b := redisForTest(t, "tenontest:rl")
 	ctx := context.Background()
 
 	la := NewLimiter(a, 1, 1)

@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 func newManager() *Manager {
 	return NewManager(config.JWT{
-		Secret: "test-secret-key-for-unit-test-only-32bytes", Issuer: "keel-test",
+		Secret: "test-secret-key-for-unit-test-only-32bytes", Issuer: "tenon-test",
 		AccessTTL: time.Minute, RefreshTTL: time.Hour,
 	})
 }
@@ -33,7 +33,7 @@ func TestJWTIssueAndParse(t *testing.T) {
 }
 
 func TestJWTExpired(t *testing.T) {
-	m := NewManager(config.JWT{Secret: "test-secret-key-for-unit-test-only-32bytes", Issuer: "keel-test",
+	m := NewManager(config.JWT{Secret: "test-secret-key-for-unit-test-only-32bytes", Issuer: "tenon-test",
 		AccessTTL: -time.Minute, RefreshTTL: time.Hour})
 	token, _, err := m.Issue(Claims{UserID: "u1"})
 	if err != nil {
@@ -47,7 +47,7 @@ func TestJWTExpired(t *testing.T) {
 func TestJWTWrongSignature(t *testing.T) {
 	m := newManager()
 	token, _, _ := m.Issue(Claims{UserID: "u1"})
-	other := NewManager(config.JWT{Secret: "another-secret-key-another-secret-key", Issuer: "keel-test",
+	other := NewManager(config.JWT{Secret: "another-secret-key-another-secret-key", Issuer: "tenon-test",
 		AccessTTL: time.Minute, RefreshTTL: time.Hour})
 	if _, err := other.Parse(token); err == nil {
 		t.Fatal("不同密钥应校验失败")
@@ -93,7 +93,7 @@ func TestValidatePasswordPolicy(t *testing.T) {
 }
 
 func TestTOTP(t *testing.T) {
-	secret, url, err := GenerateTOTP("keel", "admin")
+	secret, url, err := GenerateTOTP("tenon", "admin")
 	if err != nil {
 		t.Fatalf("生成 TOTP 失败: %v", err)
 	}

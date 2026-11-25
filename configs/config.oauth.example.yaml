@@ -5,9 +5,9 @@
 # 新增渠道只需增加一个 providers 项，代码无需改动；启用/停用改 enabled 即可。
 #
 # 凭据强烈建议用环境变量注入，避免明文落盘：
-#   KEEL_OAUTH_GITHUB_CLIENT_ID / KEEL_OAUTH_GITHUB_CLIENT_SECRET
+#   TENON_OAUTH_GITHUB_CLIENT_ID / TENON_OAUTH_GITHUB_CLIENT_SECRET
 #   规则：名称转大写、非字母数字转下划线；只有一个渠道时也可用
-#         KEEL_OAUTH_CLIENT_ID / KEEL_OAUTH_CLIENT_SECRET
+#         TENON_OAUTH_CLIENT_ID / TENON_OAUTH_CLIENT_SECRET
 #
 # 回调地址固定为：{oauth.callback_base 或请求 Host}/api/v1/oauth/callback/{name}
 # 在 GitHub / 身份提供商后台登记的 Authorization callback URL 必须与此一致。
@@ -26,8 +26,8 @@ oauth:
       label: GitHub 登录
       icon: ""                       # 可选：按钮图标 URL，建议 20~32px 方形 PNG
       enabled: true
-      client_id: ""                  # 用 KEEL_OAUTH_GITHUB_CLIENT_ID 注入
-      client_secret: ""              # 用 KEEL_OAUTH_GITHUB_CLIENT_SECRET 注入
+      client_id: ""                  # 用 TENON_OAUTH_GITHUB_CLIENT_ID 注入
+      client_secret: ""              # 用 TENON_OAUTH_GITHUB_CLIENT_SECRET 注入
       auth_url: https://github.com/login/oauth/authorize
       token_url: https://github.com/login/oauth/access_token
       user_info_url: https://api.github.com/user

@@ -3,14 +3,14 @@ package auth
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/modules/menu"
-	"github.com/keel-framework/keel/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/modules/menu"
+	"github.com/MITEZ360/tenon/internal/platform/modulekit"
 )
 
 func init() {
 	modulekit.Register(modulekit.Spec{
-		Pkg:   "github.com/keel-framework/keel/internal/modules/auth",
+		Pkg:   "github.com/MITEZ360/tenon/internal/modules/auth",
 		Name:  "auth",
 		Label: "登录认证",
 		Desc:  "登录、令牌刷新与在线会话，公开接口依赖，不可关闭",

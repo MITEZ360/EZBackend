@@ -5,7 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
+	"github.com/MITEZ360/tenon/internal/model"
 )
 
 type definition struct {
@@ -181,9 +181,15 @@ func (r *Runner) definitions() []definition {
 			Version: 9,
 			Name:    "membership_price_col",
 			// 会员等级增加充值售价列（单位：分）。
-			// 只加列：充值订单、短信验证码、支付配置这些表属于可选模块，
-			// 由 Spec.Models 在装配模块时建；默认发行版不装它们，也不该建空表。
+			// 只给"已存在的"会员表补列，不建表：会员表由 membership 模块的
+			// Spec.Models 在装配时创建，不含该模块的发行版（如 Base）不该因为
+			// 一条历史迁移就多出一张永远为空的 sys_membership_level。
+			// 全新库走不到补列分支：模块建表时 Price 列已经在模型里。
 			Up: func(ctx context.Context, db *gorm.DB) error {
+				m := db.WithContext(ctx).Migrator()
+				if !m.HasTable(&model.MembershipLevel{}) {
+					return nil
+				}
 				return db.WithContext(ctx).AutoMigrate(&model.MembershipLevel{})
 			},
 			Down: func(ctx context.Context, db *gorm.DB) error {
@@ -192,6 +198,26 @@ func (r *Runner) definitions() []definition {
 					return m.DropColumn(&model.MembershipLevel{}, "Price")
 				}
 				return nil
+			},
+		},
+		{
+			Version: 10,
+			Name:    "workflow_tables",
+			// 流程引擎五张表：模板、实例、任务、轨迹、委托。
+			// 与 v9 同理，只为已存在的 flow 模块补建；全新库由 Spec.Models 建。
+			Up: func(ctx context.Context, db *gorm.DB) error {
+				m := db.WithContext(ctx).Migrator()
+				if !m.HasTable(&model.Flow{}) {
+					return nil
+				}
+				return db.WithContext(ctx).AutoMigrate(
+					&model.Flow{}, &model.FlowInstance{}, &model.FlowTask{},
+					&model.FlowRecord{}, &model.FlowDelegate{})
+			},
+			Down: func(ctx context.Context, db *gorm.DB) error {
+				return db.WithContext(ctx).Migrator().DropTable(
+					&model.FlowDelegate{}, &model.FlowRecord{}, &model.FlowTask{},
+					&model.FlowInstance{}, &model.Flow{})
 			},
 		},
 	}

@@ -1,4 +1,4 @@
-# Keel · 企业服务端基础框架
+# Tenon · 企业服务端基础框架
 
 面向中小企业的 Go 服务端底座：**一套代码，三种形态**（单体 / 网关 / 领域服务）。
 内置 RBAC 权限、数据权限、审计日志、定时任务、文件、字典、参数、公告、在线用户、系统监控，
@@ -45,35 +45,35 @@
 
 ```bash
 # 依赖：Go 1.21+，以及 pnpm（仅构建前端时用，运行时不需要 Node）
-make build            # 先 pnpm build 产出 web/dist，再编译；产物 bin/keel 约 35MB
-./bin/keel            # 默认读取 configs/config.yaml
+make build            # 先 pnpm build 产出 web/dist，再编译；产物 bin/tenon 约 35MB
+./bin/tenon            # 默认读取 configs/config.yaml
 ```
 
 打开 <http://localhost:9000>，默认账号 **admin / Admin@123456**（首次启动自动建表并写入演示数据）。
 
 ```bash
 # 或直接运行（需先 make web 产出 dist，否则界面 404）
-go run ./cmd/keel -config configs/config.yaml
+go run ./cmd/tenon -config configs/config.yaml
 
 # 三种形态
-./bin/keel -mode mono       # 单体（默认）：一个进程装下全部
-./bin/keel -mode gateway    # 网关：只转发，不连数据库
-./bin/keel -mode service    # 领域服务：按 modules 裁剪接口
+./bin/tenon -mode mono       # 单体（默认）：一个进程装下全部
+./bin/tenon -mode gateway    # 网关：只转发，不连数据库
+./bin/tenon -mode service    # 领域服务：按 modules 裁剪接口
 ```
 
 运维与扩展能力开箱可用：
 
 ```bash
 # 版本化迁移（默认启动自动执行；生产可设为 migration.mode: off 后由流水线执行）
-./bin/keel -config configs/config.yaml migrate status
-./bin/keel -config configs/config.yaml migrate up
-./bin/keel -config configs/config.yaml migrate down      # 回滚一个版本
+./bin/tenon -config configs/config.yaml migrate status
+./bin/tenon -config configs/config.yaml migrate up
+./bin/tenon -config configs/config.yaml migrate down      # 回滚一个版本
 
 # 备份与恢复（另有定时任务 db.backup 与「运维中心 → 备份与迁移」页面）
-./bin/keel -config configs/config.yaml backup                        # tar 容器：数据库 + files/ 文件资产
-./bin/keel -config configs/config.yaml restore --dry-run <备份文件>  # 只看计划，不改文件
-./bin/keel -config configs/config.yaml restore <备份文件>            # SQLite 需先停服
-./bin/keel -config configs/config.yaml backup-prune --dry-run        # GFS 保留策略演练
+./bin/tenon -config configs/config.yaml backup                        # tar 容器：数据库 + files/ 文件资产
+./bin/tenon -config configs/config.yaml restore --dry-run <备份文件>  # 只看计划，不改文件
+./bin/tenon -config configs/config.yaml restore <备份文件>            # SQLite 需先停服
+./bin/tenon -config configs/config.yaml backup-prune --dry-run        # GFS 保留策略演练
 
 # 自动接口文档：dev 环境默认开启，打开 http://localhost:9000/docs/
 make swag-install && make docs                              # 重新生成 OpenAPI 描述
@@ -120,7 +120,7 @@ make swag-install && make docs                              # 重新生成 OpenA
 
 ```
 .
-├── cmd/keel/                # 入口：-config / -mode / -version
+├── cmd/tenon/                # 入口：-config / -mode / -version
 ├── configs/                 # mono / gateway / service 三套配置样例
 ├── internal/
 │   ├── bootstrap/           # 装配：配置 → 日志 → 数据库 → 缓存 → 模块 → 路由 → 生命周期
@@ -168,12 +168,40 @@ make test       # 全量测试（含 -race）
 make bench      # 基准测试
 make dev        # debug 模式运行
 make docker     # 构建镜像
-make compose    # MySQL + Redis + Keel 一键编排
+make compose    # MySQL + Redis + Tenon 一键编排
 make dist-list  # 列出可组装的模块与依赖（+ 表示默认发行版不含）
+make dist-base             # Base 发行版：只要后台管理基础功能，产物 bin/tenon-base
 make dist MODULES="user configcenter cluster"  # 只编入这些模块
 make dist MODULES=all      # 全量：含默认不装的资讯、注册/短信、充值模块
 make dist-default          # 回到默认发行版
 make help       # 查看全部目标
+```
+
+### Base 发行版
+
+`make dist-base` 产出 `bin/tenon-base`，只含后台管理基础能力：
+
+| 范围 | 模块 |
+| --- | --- |
+| 人员与权限 | `auth` `user` `role` `dept` `menu` |
+| 字典与参数 | `dict` `config` `configcenter` |
+| 消息 | `message` `notice` |
+| 基础运维 | `audit` `monitor` `job` `file` `maintenance` `cacheadmin` `routemanage` |
+| 工作台 | `dashboard` |
+
+共 18 个模块、136 条路由（默认发行版 21 个模块、155 条路由）。不进二进制的模块：
+`news`（资讯）、`membership`（会员）、`recharge`（充值）、`cnauth`（自助注册与短信登录）、
+`apikey`（开放密钥）、`cluster`（集群协同）。
+
+前端同步裁剪：`make dist-base` 以 `VITE_EDITION=base` 构建前端，会员、充值、资讯、
+开放密钥、集群的页面不会生成 chunk，直接访问这些路径落到 404。构建结束后脚本会把
+`web/dist` 恢复成完整版前端，避免与 `bin/tenon` 不一致。
+
+运行 Base 用独立配置与独立库，避免和默认发行版互相改写菜单状态：
+
+```bash
+./bin/tenon-base -config configs/config.base.yaml   # 端口 9010，库 data/base.db
+./bin/tenon-base -version                           # Tenon Base 1.0.0 (dev ...)
 ```
 
 ---

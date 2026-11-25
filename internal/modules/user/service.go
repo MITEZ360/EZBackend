@@ -11,13 +11,13 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/internal/platform/authn"
-	"github.com/keel-framework/keel/internal/platform/authz"
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/i18n"
-	"github.com/keel-framework/keel/pkg/query"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/internal/platform/authn"
+	"github.com/MITEZ360/tenon/internal/platform/authz"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/i18n"
+	"github.com/MITEZ360/tenon/pkg/query"
 )
 
 // Service 用户业务逻辑。
@@ -141,7 +141,11 @@ func (s *Service) List(ctx context.Context, p *query.Params, sc Scope, deptFilte
 		}
 	}
 	db := p.Filter(base, allowed)
-	db = applyMembershipFilter(db, p.Filters["membershipState"])
+	// 会员模块没编进当前发行版时（mem == nil），会员状态筛选无意义：
+	// 表不存在，照原样拼 SQL 会直接报错。
+	if s.mem != nil {
+		db = applyMembershipFilter(db, p.Filters["membershipState"])
+	}
 	db = query.Search(db, p.Keyword, "username", "nickname", "phone", "email")
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
@@ -566,7 +570,11 @@ func (s *Service) Export(ctx context.Context, p *query.Params, sc Scope, deptFil
 	index, _ := f.NewSheet(sheet)
 	f.SetActiveSheet(index)
 	f.DeleteSheet("Sheet1")
-	headers := []string{"ID", "用户名", "昵称", "姓名", "手机号", "邮箱", "部门", "角色", "会员等级", "会员到期", "状态", "最后登录", "创建时间"}
+	headers := []string{"ID", "用户名", "昵称", "姓名", "手机号", "邮箱", "部门", "角色"}
+	if s.mem != nil {
+		headers = append(headers, "会员等级", "会员到期")
+	}
+	headers = append(headers, "状态", "最后登录", "创建时间")
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f.SetCellValue(sheet, cell, h)
@@ -606,7 +614,11 @@ func (s *Service) Export(ctx context.Context, p *query.Params, sc Scope, deptFil
 			last = u.LastLoginAt.Format("2006-01-02 15:04:05")
 		}
 		values := []any{u.ID, u.Username, u.Nickname, u.RealName, u.Phone, u.Email, dept,
-			strings.Join(roleNames, "/"), level, expire, status, last, u.CreatedAt.Format("2006-01-02 15:04:05")}
+			strings.Join(roleNames, "/")}
+		if s.mem != nil {
+			values = append(values, level, expire)
+		}
+		values = append(values, status, last, u.CreatedAt.Format("2006-01-02 15:04:05"))
 		for j, v := range values {
 			cell, _ := excelize.CoordinatesToCellName(j+1, row)
 			f.SetCellValue(sheet, cell, v)
@@ -615,7 +627,9 @@ func (s *Service) Export(ctx context.Context, p *query.Params, sc Scope, deptFil
 	f.SetColWidth(sheet, "A", "A", 22)
 	f.SetColWidth(sheet, "B", "D", 16)
 	f.SetColWidth(sheet, "G", "H", 18)
-	f.SetColWidth(sheet, "I", "J", 14)
+	if s.mem != nil {
+		f.SetColWidth(sheet, "I", "J", 14)
+	}
 	return f, nil
 }
 

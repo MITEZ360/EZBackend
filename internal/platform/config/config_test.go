@@ -73,8 +73,8 @@ micro:
 }
 
 func TestEnvOverride(t *testing.T) {
-	t.Setenv("KEEL_SERVER_PORT", "19000")
-	t.Setenv("KEEL_APP_ENV", "test")
+	t.Setenv("TENON_SERVER_PORT", "19000")
+	t.Setenv("TENON_APP_ENV", "test")
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("加载失败: %v", err)
@@ -123,8 +123,8 @@ func TestGetAndOnChange(t *testing.T) {
 }
 
 func TestMicroRoutesFromEnv(t *testing.T) {
-	t.Setenv("KEEL_MICRO_MODE", "gateway")
-	t.Setenv("KEEL_GATEWAY_ROUTES", "/api/v1=keel-core, /uploads=keel-file")
+	t.Setenv("TENON_MICRO_MODE", "gateway")
+	t.Setenv("TENON_GATEWAY_ROUTES", "/api/v1=tenon-core, /uploads=tenon-file")
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("加载失败: %v", err)
@@ -135,14 +135,14 @@ func TestMicroRoutesFromEnv(t *testing.T) {
 	if len(cfg.Micro.Routes) != 2 {
 		t.Fatalf("路由解析失败: %+v", cfg.Micro.Routes)
 	}
-	if cfg.Micro.Routes[1].Prefix != "/uploads" || cfg.Micro.Routes[1].Service != "keel-file" {
+	if cfg.Micro.Routes[1].Prefix != "/uploads" || cfg.Micro.Routes[1].Service != "tenon-file" {
 		t.Fatalf("路由内容错误: %+v", cfg.Micro.Routes[1])
 	}
 }
 
 func TestMicroModulesFromEnv(t *testing.T) {
-	t.Setenv("KEEL_MICRO_MODE", "service")
-	t.Setenv("KEEL_MICRO_MODULES", "user,role,dept")
+	t.Setenv("TENON_MICRO_MODE", "service")
+	t.Setenv("TENON_MICRO_MODULES", "user,role,dept")
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("加载失败: %v", err)
@@ -156,17 +156,17 @@ func TestAutoDetectDependencies(t *testing.T) {
 	p := writeConfig(t, `
 db:
   driver: ""
-  dsn: "keel:pass@tcp(10.0.0.5:3306)/keel?charset=utf8mb4"
+  dsn: "tenon:pass@tcp(10.0.0.5:3306)/tenon?charset=utf8mb4"
 redis:
   addr: "10.0.0.6:6379"
 storage:
   type: auto
   s3:
     endpoint: "minio.internal:9000"
-    bucket: "keel"
+    bucket: "tenon"
 mail:
   host: "smtp.internal"
-  from: "keel@internal"
+  from: "tenon@internal"
 `)
 	cfg, err := Load(p)
 	if err != nil {
@@ -209,10 +209,10 @@ mail:
 
 func TestResolveDriverFromDSN(t *testing.T) {
 	cases := []struct{ driver, dsn, want string }{
-		{"", "data/keel.db", "sqlite"},
-		{"", "postgres://u:p@db:5432/keel", "postgres"},
-		{"", "host=db user=u dbname=keel port=5432", "postgres"},
-		{"", "u:p@tcp(db:3306)/keel", "mysql"},
+		{"", "data/tenon.db", "sqlite"},
+		{"", "postgres://u:p@db:5432/tenon", "postgres"},
+		{"", "host=db user=u dbname=tenon port=5432", "postgres"},
+		{"", "u:p@tcp(db:3306)/tenon", "mysql"},
 		{"mysql", "anything", "mysql"},
 	}
 	for _, c := range cases {

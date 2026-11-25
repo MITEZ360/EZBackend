@@ -1,6 +1,6 @@
 # 网关形态：只做转发，不连数据库，单进程约 20MB 内存
 app:
-  name: Keel 网关
+  name: Tenon 网关
   env: prod
 server:
   port: 9100
@@ -8,10 +8,10 @@ server:
 log:
   level: info
   dir: logs
-  filename: keel-gateway.log
+  filename: tenon-gateway.log
 # 网关不连数据库、不加载业务模块，只做转发。
 security:
-  internal_token: "keel-internal-token-change-me"
+  internal_token: "tenon-internal-token-change-me"
 micro:
   mode: gateway
   timeout: 5s
@@ -19,7 +19,7 @@ micro:
   registry:
     type: static
     endpoints:
-      - "keel-core=127.0.0.1:9000"
+      - "tenon-core=127.0.0.1:9000"
   routes:
     - prefix: /api/v1
-      service: keel-core
+      service: tenon-core

@@ -12,26 +12,26 @@ import (
 
 var (
 	httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "keel",
+		Namespace: "tenon",
 		Name:      "http_requests_total",
 		Help:      "HTTP 请求总数",
 	}, []string{"method", "route", "status"})
 
 	httpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "keel",
+		Namespace: "tenon",
 		Name:      "http_request_duration_seconds",
 		Help:      "HTTP 请求耗时分布",
 		Buckets:   []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 	}, []string{"method", "route"})
 
 	httpInflight = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "keel",
+		Namespace: "tenon",
 		Name:      "http_inflight_requests",
 		Help:      "当前处理中的请求数",
 	})
 
 	businessOps = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "keel",
+		Namespace: "tenon",
 		Name:      "business_operations_total",
 		Help:      "业务操作计数（按模块与结果）",
 	}, []string{"module", "result"})

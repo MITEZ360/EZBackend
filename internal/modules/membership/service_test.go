@@ -12,8 +12,8 @@ import (
 
 	"github.com/glebarez/sqlite"
 
-	"github.com/keel-framework/keel/internal/model"
-	"github.com/keel-framework/keel/pkg/query"
+	"github.com/MITEZ360/tenon/internal/model"
+	"github.com/MITEZ360/tenon/pkg/query"
 )
 
 func int8p(v int8) *int8 { return &v }

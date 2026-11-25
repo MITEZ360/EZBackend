@@ -1,6 +1,6 @@
 # 服务形态：只暴露指定业务模块，可横向扩展成独立服务
 app:
-  name: Keel 用户服务
+  name: Tenon 用户服务
   env: dev
 server:
   port: 9001
@@ -8,14 +8,14 @@ server:
 log:
   level: info
   dir: logs
-  filename: keel-user.log
+  filename: tenon-user.log
 jwt:
-  secret: "请务必在生产环境替换为至少32位的随机字符串-keel-default-secret"
-  issuer: keel
+  secret: "请务必在生产环境替换为至少32位的随机字符串-tenon-default-secret"
+  issuer: tenon
 db:
   # 留空按 dsn 推断；多实例部署请改用 MySQL / PostgreSQL
   driver: ""
-  dsn: data/keel.db
+  dsn: data/tenon.db
 redis:
   # 服务形态通常多副本，建议填写地址启用 Redis；留空则为单实例本地缓存
   addr: ""
@@ -31,4 +31,4 @@ micro:
   registry:
     type: static
     endpoints:
-      - "keel-core=127.0.0.1:9000"
+      - "tenon-core=127.0.0.1:9000"

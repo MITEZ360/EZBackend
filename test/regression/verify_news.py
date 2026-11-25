@@ -6,7 +6,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
-BASE = os.environ.get("KEEL_BASE", "http://127.0.0.1:9103").rstrip("/")
+BASE = os.environ.get("TENON_BASE", "http://127.0.0.1:9103").rstrip("/")
 ok_count = 0
 fail_count = 0
 
@@ -50,7 +50,7 @@ def login(u, p):
 now = datetime.now(timezone.utc)
 
 print("== 准备数据源与分类（白名单，需先配置）==")
-admin = login("admin", os.environ.get("KEEL_ADMIN_PASS", "Admin@123456"))
+admin = login("admin", os.environ.get("TENON_ADMIN_PASS", "Admin@123456"))
 # 幂等：已存在则跳过（409/重复）
 st, r = call("GET", "/api/v1/news-sources", admin)
 existing_sources = {s["code"] for s in (r.get("data", {}).get("list", []) if isinstance(r.get("data"), dict) else [])}
@@ -179,7 +179,7 @@ st, r = call("DELETE", f"/api/v1/news-sources/{src_id}", admin)
 check("删除空数据源", st == 200, r)
 
 print("== 过期清理 ==")
-con = sqlite3.connect(os.environ.get("KEEL_NEWS_DB", "/tmp/keel-news.db"))
+con = sqlite3.connect(os.environ.get("TENON_NEWS_DB", "/tmp/tenon-news.db"))
 con.execute("update news_article set published_at=? where title in ('测试资讯-18','测试资讯-19')",
             ((now - timedelta(days=8)).strftime("%Y-%m-%d %H:%M:%S"),))
 con.commit()

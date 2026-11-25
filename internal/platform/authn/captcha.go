@@ -6,7 +6,7 @@ import (
 
 	"github.com/mojocn/base64Captcha"
 
-	"github.com/keel-framework/keel/internal/platform/cache"
+	"github.com/MITEZ360/tenon/internal/platform/cache"
 )
 
 // captchaTTL 图形验证码有效期。

@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/keel-framework/keel/internal/model"
+	"github.com/MITEZ360/tenon/internal/model"
 )
 
 // levelSeeds 内置会员等级示例。权益标识是业务侧判断的依据，

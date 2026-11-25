@@ -16,10 +16,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/keel-framework/keel/internal/platform/config"
-	"github.com/keel-framework/keel/pkg/discovery"
-	"github.com/keel-framework/keel/pkg/errs"
-	"github.com/keel-framework/keel/pkg/response"
+	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/pkg/discovery"
+	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/response"
 )
 
 // Route 是一条编译后的转发规则。
@@ -192,7 +192,7 @@ func (g *Gateway) newProxy(rt *Route, target string) *httputil.ReverseProxy {
 				req.URL.RawPath = ""
 			}
 			if _, ok := req.Header["User-Agent"]; !ok {
-				req.Header.Set("User-Agent", "keel-gateway")
+				req.Header.Set("User-Agent", "tenon-gateway")
 			}
 			if g.token != "" {
 				req.Header.Set("X-Internal-Token", g.token)

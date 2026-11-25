@@ -1,9 +1,9 @@
 # ============================================================================
-# Keel 企业服务端框架 - 主配置文件
-# 优先级：默认值 < 本文件 < 环境变量（KEEL_SERVER_PORT 对应 server.port）
+# Tenon 企业服务端框架 - 主配置文件
+# 优先级：默认值 < 本文件 < 环境变量（TENON_SERVER_PORT 对应 server.port）
 # ============================================================================
 app:
-  name: Keel 企业管理平台
+  name: Tenon 企业管理平台
   env: dev                 # dev / test / prod
   version: 1.0.0
   # IANA 时区名，影响 GORM 时间戳、定时任务、备份文件名等所有时间语义
@@ -30,7 +30,7 @@ log:
   level: info              # debug / info / warn / error
   format: json             # json（便于采集）/ console
   dir: logs
-  filename: keel.log
+  filename: tenon.log
   max_size_mb: 64
   max_age_days: 14
   max_backups: 30
@@ -41,11 +41,11 @@ log:
 db:
   # driver 留空时按 dsn 自动推断：sqlite / mysql / postgres
   driver: ""
-  dsn: data/keel.db
+  dsn: data/tenon.db
   # MySQL 示例（driver 可省略，DSN 含 @tcp( 即识别为 mysql）：
-  # dsn: keel:Keel@123456@tcp(127.0.0.1:3306)/keel?charset=utf8mb4
+  # dsn: tenon:Tenon@123456@tcp(127.0.0.1:3306)/tenon?charset=utf8mb4
   # PostgreSQL 示例（driver 可省略，DSN 以 postgres:// 或含 host= 即识别）：
-  # dsn: host=127.0.0.1 user=keel password=Keel@123456 dbname=keel port=5432 sslmode=disable TimeZone=Asia/Shanghai
+  # dsn: host=127.0.0.1 user=tenon password=Tenon@123456 dbname=tenon port=5432 sslmode=disable TimeZone=Asia/Shanghai
   max_open_conns: 50
   max_idle_conns: 10
   conn_max_lifetime: 1h
@@ -63,14 +63,14 @@ redis:
   password: ""
   db: 0
   pool_size: 32
-  prefix: keel
+  prefix: tenon
   dial_timeout: 3s
   read_timeout: 3s
   local_size: 100000
 
 jwt:
-  secret: "请务必在生产环境替换为至少32位的随机字符串-keel-default-secret"
-  issuer: keel
+  secret: "请务必在生产环境替换为至少32位的随机字符串-tenon-default-secret"
+  issuer: tenon
   access_ttl: 2h
   refresh_ttl: 168h
 
@@ -82,7 +82,7 @@ security:
   password_strength: 2     # 1 长度 / 2 字母+数字 / 3 四类字符
   data_encrypt_key: ""     # 为空则复用 jwt.secret，用于加密 TOTP 密钥与敏感配置
   session_single: false    # 是否只允许单处登录
-  internal_token: "keel-internal-token-change-me"
+  internal_token: "tenon-internal-token-change-me"
 
 storage:
   # auto：配置了 s3.bucket 与 endpoint 就用对象存储，否则本地磁盘
@@ -170,11 +170,11 @@ news:
 
 # ---------------------------------------------------------------- 数据库结构变更
 migration:
-  # versioned（默认）：按版本号执行迁移，支持回滚与数据回填，版本表 keel_schema_migrations
+  # versioned（默认）：按版本号执行迁移，支持回滚与数据回填，版本表 tenon_schema_migrations
   # auto：沿用 GORM AutoMigrate（只增不减，适合本地快速迭代）
-  # off：启动时不动表结构，由 CI / DBA 执行 `keel migrate up`
+  # off：启动时不动表结构，由 CI / DBA 执行 `tenon migrate up`
   mode: versioned
-  table_name: keel_schema_migrations
+  table_name: tenon_schema_migrations
 
 # ---------------------------------------------------------------- 数据库备份与恢复
 backup:
@@ -189,7 +189,7 @@ backup:
   retain_monthly: 12
   compress: true         # gzip 压缩（备份为 tar 容器，含数据库快照与 files/ 文件资产）
   # 在线恢复默认关闭：恢复会覆盖当前数据，MySQL/PostgreSQL 需显式开启；
-  # SQLite 必须停机后用 `keel restore <文件>` 替换数据文件。
+  # SQLite 必须停机后用 `tenon restore <文件>` 替换数据文件。
   allow_restore: false
   mysql_dump: mysqldump
   mysql_restore: mysql
@@ -209,8 +209,8 @@ oauth:
     - name: wechat
       label: 微信扫码登录
       enabled: true
-      client_id: ""             # 开放平台 AppID，建议用 KEEL_OAUTH_WECHAT_CLIENT_ID
-      client_secret: ""         # AppSecret，建议用 KEEL_OAUTH_WECHAT_CLIENT_SECRET
+      client_id: ""             # 开放平台 AppID，建议用 TENON_OAUTH_WECHAT_CLIENT_ID
+      client_secret: ""         # AppSecret，建议用 TENON_OAUTH_WECHAT_CLIENT_SECRET
       auth_url: https://open.weixin.qq.com/connect/qrconnect
       token_url: https://api.weixin.qq.com/sns/oauth2/access_token
       user_info_url: https://api.weixin.qq.com/sns/userinfo
@@ -253,7 +253,7 @@ oauth:
       auto_register: true
       default_roles: []
   # 新增渠道只需在下面加一段，代码无需改动。凭据建议用环境变量注入，避免落盘：
-  #   KEEL_OAUTH_GITHUB_CLIENT_ID / KEEL_OAUTH_GITHUB_CLIENT_SECRET
+  #   TENON_OAUTH_GITHUB_CLIENT_ID / TENON_OAUTH_GITHUB_CLIENT_SECRET
   # providers:
   #   - name: github
   #     label: GitHub 登录
@@ -314,7 +314,7 @@ payment:
     enabled: false
     app_id: ""
     mch_id: ""
-    api_key: ""           # 微信支付 V2 API 密钥，建议用 KEEL_PAYMENT_WECHAT_API_KEY
+    api_key: ""           # 微信支付 V2 API 密钥，建议用 TENON_PAYMENT_WECHAT_API_KEY
     notify_url: ""        # 必须为公网可访问的 /api/v1/pay/notify/wechat
     sign_type: MD5        # MD5 / HMAC-SHA256
     sandbox: false

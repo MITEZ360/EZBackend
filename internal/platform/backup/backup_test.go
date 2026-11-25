@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/keel-framework/keel/internal/platform/config"
+	"github.com/MITEZ360/tenon/internal/platform/config"
 )
 
 func TestIsBackupNameAndDriver(t *testing.T) {
@@ -17,10 +17,10 @@ func TestIsBackupNameAndDriver(t *testing.T) {
 		valid  bool
 		driver string
 	}{
-		{"keel-sqlite-20261122-222506.tar.gz", true, "sqlite"},
-		{"keel-mysql-20261122-222506.sql.tar", true, "mysql"},
-		{"keel-postgres-20261122-222506.tar.gz", true, "postgres"},
-		{"keel-sqlite-20261122-222506.db.gz", true, "sqlite"}, // 旧格式兼容
+		{"tenon-sqlite-20261122-222506.tar.gz", true, "sqlite"},
+		{"tenon-mysql-20261122-222506.sql.tar", true, "mysql"},
+		{"tenon-postgres-20261122-222506.tar.gz", true, "postgres"},
+		{"tenon-sqlite-20261122-222506.db.gz", true, "sqlite"}, // 旧格式兼容
 		{"pre-restore-20261122.db", false, ""},
 		{"random.txt", false, ""},
 	}
@@ -34,15 +34,15 @@ func TestIsBackupNameAndDriver(t *testing.T) {
 			}
 		}
 	}
-	if err := validName("../keel-sqlite-x.tar.gz"); err == nil {
+	if err := validName("../tenon-sqlite-x.tar.gz"); err == nil {
 		t.Error("validName should reject path separator")
 	}
 }
 
 func TestBackupTime(t *testing.T) {
 	for _, name := range []string{
-		"keel-sqlite-20261122-222506.tar.gz",
-		"keel-mysql-20260102-030405.sql.tar.gz",
+		"tenon-sqlite-20261122-222506.tar.gz",
+		"tenon-mysql-20260102-030405.sql.tar.gz",
 	} {
 		if _, err := backupTime(name); err != nil {
 			t.Errorf("backupTime(%q) failed: %v", name, err)
@@ -119,7 +119,7 @@ func TestPrunePlanGFS(t *testing.T) {
 	// 5 天 × 8 小时 = 40 份
 	for d := 1; d <= 5; d++ {
 		for h := 0; h < 8; h++ {
-			name := filepath.Join(dir, "keel-sqlite-202611")
+			name := filepath.Join(dir, "tenon-sqlite-202611")
 			name += twoDigits(d) + "-" + twoDigits(h) + "0000.tar.gz"
 			if err := os.WriteFile(name, []byte("x"), 0o640); err != nil {
 				t.Fatal(err)
@@ -143,7 +143,7 @@ func TestPrunePlanGFS(t *testing.T) {
 	if plan.Slots["daily"] != 3 {
 		t.Fatalf("daily slots = %d, want 3", plan.Slots["daily"])
 	}
-	if len(plan.Keep) == 0 || plan.Keep[0] != "keel-sqlite-20261105-070000.tar.gz" {
+	if len(plan.Keep) == 0 || plan.Keep[0] != "tenon-sqlite-20261105-070000.tar.gz" {
 		t.Fatalf("latest not kept: %v", plan.Keep)
 	}
 	if len(plan.Keep)+len(plan.Remove) != 40 {
@@ -154,7 +154,7 @@ func TestPrunePlanGFS(t *testing.T) {
 func TestPrunePlanKeepsLatestWhenAllZero(t *testing.T) {
 	dir := t.TempDir()
 	for d := 1; d <= 3; d++ {
-		name := filepath.Join(dir, "keel-sqlite-202611"+twoDigits(d)+"-010000.tar.gz")
+		name := filepath.Join(dir, "tenon-sqlite-202611"+twoDigits(d)+"-010000.tar.gz")
 		if err := os.WriteFile(name, []byte("x"), 0o640); err != nil {
 			t.Fatal(err)
 		}
@@ -165,7 +165,7 @@ func TestPrunePlanKeepsLatestWhenAllZero(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Keep) != 1 || plan.Keep[0] != "keel-sqlite-20261103-010000.tar.gz" {
+	if len(plan.Keep) != 1 || plan.Keep[0] != "tenon-sqlite-20261103-010000.tar.gz" {
 		t.Fatalf("want only latest kept, got %v", plan.Keep)
 	}
 }
