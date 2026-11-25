@@ -3,7 +3,7 @@
 export default {
   '6 位动态码，或 10 位恢复码': '6-digit code or 10-digit recovery code',
   '8-64 位，含大小写与数字': '8-64 characters, including uppercase, lowercase and a number',
-  'Keel 两步验证恢复码': 'Keel two-factor authentication recovery codes',
+  'Tenon 两步验证恢复码': 'Tenon two-factor authentication recovery codes',
   'RBAC 与数据权限': 'RBAC and data permissions',
   '{date} 到期': 'Expires on {date}',
   '{date} 已过期': 'Expired on {date}',

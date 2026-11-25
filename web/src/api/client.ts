@@ -43,8 +43,8 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
   silent?: boolean
 }
 
-const ACCESS_KEY = 'keel.access.token'
-const REFRESH_KEY = 'keel.refresh.token'
+const ACCESS_KEY = 'tenon.access.token'
+const REFRESH_KEY = 'tenon.refresh.token'
 
 export const tokenStore = {
   access: () => localStorage.getItem(ACCESS_KEY) ?? '',

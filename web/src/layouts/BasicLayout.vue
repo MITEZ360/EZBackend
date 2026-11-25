@@ -8,6 +8,7 @@ import SideMenuItem from '@/components/SideMenuItem.vue'
 import MessageBell from '@/components/MessageBell.vue'
 import { useAuthStore } from '@/stores/auth'
 import { membershipApi } from '@/api/membership'
+import { IS_BASE } from '@/utils/edition'
 import { currentLocale, normalizeLocale, setLocale, SUPPORTED_LOCALES, type AppLocale } from '@/i18n'
 import type { MembershipSnapshot, MenuNode } from '@/api/types'
 
@@ -27,11 +28,12 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-const mini = ref(localStorage.getItem('keel.side.mini') === '1')
+const mini = ref(localStorage.getItem('tenon.side.mini') === '1')
 
-// 会员徽章：会员模块未启用时静默忽略，不影响其余功能。
+// 会员徽章：Base 发行版不含会员模块，不请求；完整版下模块未启用时也静默忽略。
 const membership = ref<MembershipSnapshot | null>(null)
 onMounted(async () => {
+  if (IS_BASE) return
   try {
     membership.value = await membershipApi.me()
   } catch {
@@ -64,7 +66,7 @@ const breadcrumbs = computed<string[]>(() => {
 
 function toggleMini() {
   mini.value = !mini.value
-  localStorage.setItem('keel.side.mini', mini.value ? '1' : '0')
+  localStorage.setItem('tenon.side.mini', mini.value ? '1' : '0')
 }
 
 async function onCommand(cmd: string) {
@@ -112,9 +114,9 @@ watch(
   <div class="shell">
     <aside class="side" :class="{ mini }">
       <div class="brand">
-        <div class="logo">K</div>
+        <div class="logo">T</div>
         <div v-show="!mini" class="brand-text">
-          <span class="brand-name">Keel</span>
+          <span class="brand-name">Tenon</span>
           <span class="brand-sub">Admin Console</span>
         </div>
       </div>

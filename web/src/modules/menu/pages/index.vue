@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Translation, useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, Refresh } from '@element-plus/icons-vue'
+import {
+  ElMessage,
+  ElMessageBox,
+  type FormInstance,
+  type FormRules,
+  type TableInstance,
+} from 'element-plus'
+import { ArrowDown, ArrowUp, Plus, Refresh } from '@element-plus/icons-vue'
 import { menuApi, type MenuPayload } from '@/api/system'
 import type { MenuNode } from '@/api/types'
 import { menuIcons, resolveIcon } from '@/utils/icons'
@@ -26,9 +32,63 @@ async function load() {
   loading.value = true
   try {
     tree.value = (await menuApi.tree()) ?? []
+    // 表格以 default-expand-all 打开，加载后即全展开
+    expandedKeys.value = new Set(expandableIds(tree.value))
   } finally {
     loading.value = false
   }
+}
+
+/* ------------------------------------------------------------ 展开 / 折叠 */
+const tableRef = ref<TableInstance>()
+/** 只有存在层级时才需要批量展开，纯平铺列表给出无意义的按钮 */
+const hasChildren = computed(() => tree.value.some((n) => (n.children?.length ?? 0) > 0))
+
+/** 可展开节点（有子项的节点）的 id */
+function expandableIds(nodes: MenuNode[]): string[] {
+  const out: string[] = []
+  const walk = (list: MenuNode[]) => {
+    for (const n of list) {
+      if (n.children?.length) {
+        out.push(n.id)
+        walk(n.children)
+      }
+    }
+  }
+  walk(nodes)
+  return out
+}
+
+/** 表格内部按行维护展开状态，自己记一份，用来判断当前是「全展开」还是「有折叠」 */
+const expandedKeys = ref<Set<string>>(new Set(expandableIds(tree.value)))
+
+const allExpanded = computed(() => {
+  const ids = expandableIds(tree.value)
+  return ids.length > 0 && ids.every((id) => expandedKeys.value.has(id))
+})
+
+/** 树表没有一键接口，只能逐节点下发；父节点也展开才看得到深层子项 */
+function toggleAll() {
+  const expand = !allExpanded.value
+  const walk = (nodes: MenuNode[]) => {
+    for (const n of nodes) {
+      if (n.children?.length) {
+        tableRef.value?.toggleRowExpansion(n, expand)
+        walk(n.children)
+      }
+    }
+  }
+  walk(tree.value)
+  expandedKeys.value = new Set(expand ? expandableIds(tree.value) : [])
+}
+
+/** 手动点行内箭头时同步状态，保证按钮文案与实际一致 */
+function onExpandChange(row: MenuNode, expanded: boolean | MenuNode[]) {
+  if (typeof expanded !== 'boolean') return
+  const next = new Set(expandedKeys.value)
+  if (expanded) next.add(row.id)
+  else next.delete(row.id)
+  expandedKeys.value = next
 }
 
 /* -------------------------------------------------------------- 上级选项 */
@@ -238,17 +298,26 @@ onMounted(load)
           </span>
         </div>
         <div class="toolbar-right">
+          <el-button
+            :icon="allExpanded ? ArrowUp : ArrowDown"
+            :disabled="!hasChildren"
+            @click="toggleAll"
+          >
+            {{ allExpanded ? $t('全部折叠') : $t('全部展开') }}
+          </el-button>
           <el-button :icon="Refresh" circle :title="$t('刷新')" @click="load" />
         </div>
       </div>
 
       <el-table
+        ref="tableRef"
         v-loading="loading"
         :data="tree"
         row-key="id"
         default-expand-all
         :tree-props="{ children: 'children' }"
         :indent="18"
+        @expand-change="onExpandChange"
       >
         <el-table-column :label="$t('名称')" min-width="230">
           <template #default="{ row }">

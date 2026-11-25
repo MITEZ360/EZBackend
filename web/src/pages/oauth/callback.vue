@@ -49,7 +49,7 @@ onMounted(async () => {
 <template>
   <div class="callback">
     <div class="card">
-      <div class="logo">K</div>
+      <div class="logo">T</div>
       <div v-if="!failed" class="spinner" />
       <div v-else class="failed">!</div>
       <h2>{{ failed ? $t('登录未完成') : $t('正在登录') }}</h2>

@@ -2,10 +2,13 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
+import { moduleFilter } from './plugins/module-filter'
 
 // 开发期把 /api 代理到本地 Go 服务，生产期由 Go 直接托管 dist 产物。
 export default defineConfig({
   plugins: [
+    // 必须排在 vue 之前：先把未启用模块的入口换成空模块，再交给后续编译。
+    moduleFilter(),
     vue(),
     AutoImport({
       imports: ['vue', 'vue-router', 'pinia'],

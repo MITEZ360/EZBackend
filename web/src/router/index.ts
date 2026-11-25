@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { translate } from '@/i18n'
 import type { MenuNode } from '@/api/types'
+import { MODULE_PUBLIC_ROUTES, MODULE_ROUTES } from '@/modules/registry'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -13,6 +14,13 @@ declare module 'vue-router' {
   }
 }
 
+/**
+ * 路由表由两段拼成：
+ *
+ *  1. 应用壳：登录、第三方回调、个人中心、错误页。任何发行版都有；
+ *  2. 业务页面：来自 web/src/modules/<name>/index.ts，registry 自动发现，
+ *     按 VITE_MODULES 裁剪。加页面只改模块目录，不改这里。
+ */
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
@@ -20,12 +28,8 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/login/index.vue'),
     meta: { title: '登录', public: true, hidden: true },
   },
-  {
-    path: '/register',
-    name: 'register',
-    component: () => import('@/pages/register/index.vue'),
-    meta: { title: '用户注册', public: true, hidden: true },
-  },
+  // 布局之外的模块页面（当前只有 cnauth 的自助注册）
+  ...MODULE_PUBLIC_ROUTES,
   {
     path: '/oauth/callback',
     name: 'oauth-callback',
@@ -37,168 +41,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/BasicLayout.vue'),
     redirect: '/dashboard',
     children: [
-      {
-        path: 'dashboard',
-        name: 'dashboard',
-        component: () => import('@/pages/dashboard/index.vue'),
-        meta: { title: '仪表盘' },
-      },
-      {
-        path: 'system/user',
-        name: 'system-user',
-        component: () => import('@/pages/system/user/index.vue'),
-        meta: { title: '用户管理' },
-      },
-      {
-        path: 'system/role',
-        name: 'system-role',
-        component: () => import('@/pages/system/role/index.vue'),
-        meta: { title: '角色管理' },
-      },
-      {
-        path: 'system/menu',
-        name: 'system-menu',
-        component: () => import('@/pages/system/menu/index.vue'),
-        meta: { title: '菜单管理' },
-      },
-      {
-        path: 'recharge',
-        name: 'recharge',
-        component: () => import('@/pages/recharge/index.vue'),
-        meta: { title: '会员充值' },
-      },
-      {
-        path: 'system/membership',
-        name: 'system-membership',
-        component: () => import('@/pages/system/membership/index.vue'),
-        meta: { title: '会员等级' },
-      },
-      {
-        path: 'system/message',
-        name: 'system-message',
-        component: () => import('@/pages/system/message/index.vue'),
-        meta: { title: '消息中心' },
-      },
-      {
-        path: 'system/apikey',
-        name: 'system-apikey',
-        component: () => import('@/pages/system/apikey/index.vue'),
-        meta: { title: 'API 密钥' },
-      },
-      {
-        path: 'content/news',
-        name: 'content-news',
-        component: () => import('@/pages/content/news/index.vue'),
-        meta: { title: '资讯列表' },
-      },
-      {
-        path: 'content/source',
-        name: 'content-source',
-        component: () => import('@/pages/content/source/index.vue'),
-        meta: { title: '数据源' },
-      },
-      {
-        path: 'content/category',
-        name: 'content-category',
-        component: () => import('@/pages/content/category/index.vue'),
-        meta: { title: '资讯分类' },
-      },
-      {
-        path: 'system/dept',
-        name: 'system-dept',
-        component: () => import('@/pages/system/dept/index.vue'),
-        meta: { title: '部门管理' },
-      },
-      {
-        path: 'system/dict',
-        name: 'system-dict',
-        component: () => import('@/pages/system/dict/index.vue'),
-        meta: { title: '字典管理' },
-      },
-      {
-        path: 'system/config',
-        name: 'system-config',
-        component: () => import('@/pages/system/config/index.vue'),
-        meta: { title: '参数配置' },
-      },
-      {
-        path: 'system/notice',
-        name: 'system-notice',
-        component: () => import('@/pages/system/notice/index.vue'),
-        meta: { title: '通知公告' },
-      },
-      {
-        path: 'ops/job',
-        name: 'ops-job',
-        component: () => import('@/pages/ops/job/index.vue'),
-        meta: { title: '定时任务' },
-      },
-      {
-        path: 'ops/file',
-        name: 'ops-file',
-        component: () => import('@/pages/ops/file/index.vue'),
-        meta: { title: '文件管理' },
-      },
-      {
-        path: 'ops/login-log',
-        name: 'ops-login-log',
-        component: () => import('@/pages/ops/login-log/index.vue'),
-        meta: { title: '登录日志' },
-      },
-      {
-        path: 'ops/operation-log',
-        name: 'ops-operation-log',
-        component: () => import('@/pages/ops/operation-log/index.vue'),
-        meta: { title: '操作日志' },
-      },
-      {
-        path: 'ops/online',
-        name: 'ops-online',
-        component: () => import('@/pages/ops/online/index.vue'),
-        meta: { title: '在线用户' },
-      },
-      {
-        path: 'ops/monitor',
-        name: 'ops-monitor',
-        component: () => import('@/pages/ops/monitor/index.vue'),
-        meta: { title: '服务监控' },
-      },
-      {
-        path: 'ops/maintenance',
-        name: 'ops-maintenance',
-        component: () => import('@/pages/ops/maintenance/index.vue'),
-        meta: { title: '备份与迁移' },
-      },
-      {
-        path: 'ops/routes',
-        name: 'ops-routes',
-        component: () => import('@/pages/ops/routes/index.vue'),
-        meta: { title: '路由管理' },
-      },
-      {
-        path: 'ops/cache',
-        name: 'ops-cache',
-        component: () => import('@/pages/ops/cache/index.vue'),
-        meta: { title: '缓存管理' },
-      },
-      {
-        path: 'ops/config',
-        name: 'ops-config-center',
-        component: () => import('@/pages/ops/config/index.vue'),
-        meta: { title: '配置中心' },
-      },
-      {
-        path: 'ops/cluster',
-        name: 'ops-cluster',
-        component: () => import('@/pages/ops/cluster/index.vue'),
-        meta: { title: '集群管理' },
-      },
-      {
-        path: 'ops/danger',
-        name: 'ops-danger',
-        component: () => import('@/pages/ops/danger/index.vue'),
-        meta: { title: '危险操作' },
-      },
+      ...MODULE_ROUTES,
       {
         path: 'profile',
         name: 'profile',
@@ -229,7 +72,7 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
-  const hasToken = Boolean(localStorage.getItem('keel.access.token'))
+  const hasToken = Boolean(localStorage.getItem('tenon.access.token'))
 
   if (to.meta.public) {
     // 已登录再访问登录页，直接进控制台
@@ -299,7 +142,7 @@ function inMenus(path: string, nodes = useAuthStore().menus): boolean {
 
 /** 页面标题以中文原文作为翻译 key，切换语言时由 App.vue 重新调用 */
 export function applyDocumentTitle(title?: string) {
-  const base = translate('Keel 管理控制台')
+  const base = translate('Tenon 管理控制台')
   document.title = title ? `${translate(title)} · ${base}` : base
 }
 

@@ -94,7 +94,7 @@ const base = {
   '登录已过期，请重新登录': 'Session expired. Please sign in again.',
   '请求失败（{status}）': 'Request failed ({status})',
   '网络异常，请检查服务是否可用': 'Network error. Check whether the service is available.',
-  'Keel 管理控制台': 'Keel Admin Console',
+  'Tenon 管理控制台': 'Tenon Admin Console',
 
   // 默认菜单树节点名：服务端数据作为 key 尝试翻译，自定义名称自动回退原文
   '仪表盘': 'Dashboard',

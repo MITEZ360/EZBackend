@@ -347,8 +347,8 @@ async function migrateDown() {
         <div class="tip">
           <div class="tip-title"><el-icon><Upload /></el-icon> {{ $t('离线恢复（SQLite）') }}</div>
           <p v-html="$t('每份备份是 tar 容器，内含数据库快照与 <code>files/</code> 文件资产。SQLite 需要替换数据文件，必须在服务停止后执行，恢复前会自动把当前库另存为 <code>pre-restore-*.db</code>、把旧文件目录改名保留：')"></p>
-          <pre>keel -config configs/config.yaml restore &lt;{{ $t('备份文件名') }}&gt;
-keel -config configs/config.yaml restore --dry-run &lt;{{ $t('备份文件名') }}&gt;   # {{ $t('只看计划，不改文件') }}</pre>
+          <pre>tenon -config configs/config.yaml restore &lt;{{ $t('备份文件名') }}&gt;
+tenon -config configs/config.yaml restore --dry-run &lt;{{ $t('备份文件名') }}&gt;   # {{ $t('只看计划，不改文件') }}</pre>
           <p class="dim" v-html="$t('恢复后会自动逐表比对行数；MySQL / PostgreSQL 可在开启 <code>backup.allow_restore</code> 后使用页面上的「恢复」按钮在线导入。')"></p>
         </div>
       </el-tab-pane>
@@ -385,8 +385,8 @@ keel -config configs/config.yaml restore --dry-run &lt;{{ $t('备份文件名') 
         </div>
         <div class="tip">
           <div class="tip-title">{{ $t('命令行演练与执行') }}</div>
-          <pre>keel -config configs/config.yaml backup-prune --dry-run
-keel -config configs/config.yaml backup-prune</pre>
+          <pre>tenon -config configs/config.yaml backup-prune --dry-run
+tenon -config configs/config.yaml backup-prune</pre>
           <p class="dim" v-html="$t('配置见 <code>backup.retain_hourly / retain_daily / retain_weekly / retain_monthly</code>；四档全为 0 时退回按 <code>retain</code> 保留最近 N 份。')"></p>
         </div>
       </el-tab-pane>
@@ -429,8 +429,8 @@ keel -config configs/config.yaml backup-prune</pre>
           <div class="tip">
             <div class="tip-title">{{ $t('命令行方式') }}</div>
             <p>{{ $t('生产环境建议关闭启动时自动迁移，由发布流水线显式执行：') }}</p>
-            <pre>keel -config configs/config.yaml migrate status
-keel -config configs/config.yaml migrate up</pre>
+            <pre>tenon -config configs/config.yaml migrate status
+tenon -config configs/config.yaml migrate up</pre>
           </div>
         </template>
       </el-tab-pane>

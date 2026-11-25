@@ -485,7 +485,7 @@ export default {
   '对外服务端口': "Public service port.",
   '数据库驱动': "Database driver",
   '数据库连接': "Database DSN",
-  '建议用 KEEL_DB_DSN 环境变量注入': "Inject with the KEEL_DB_DSN environment variable.",
+  '建议用 TENON_DB_DSN 环境变量注入': "Inject with the TENON_DB_DSN environment variable.",
   'Redis 地址': "Redis address",
   '留空时使用进程内缓存，多节点部署必须配置': "Empty uses the in-process cache; required for multi-node deployments.",
   '迁移模式': "Migration mode",

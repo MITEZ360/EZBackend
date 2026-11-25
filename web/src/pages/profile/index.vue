@@ -8,6 +8,7 @@ import { authApi, oauthApi, totpApi, type OAuthBinding, type OAuthProvider } fro
 import { membershipApi } from '@/api/membership'
 import type { MembershipSnapshot } from '@/api/types'
 import { fmtDate, fmtTime } from '@/utils/format'
+import { IS_BASE } from '@/utils/edition'
 import { useAuthStore } from '@/stores/auth'
 import { SUPPORTED_LOCALES, normalizeLocale } from '@/i18n'
 
@@ -86,10 +87,12 @@ async function unbind(provider: string, who: string) {
 
 onMounted(async () => {
   initPrefs()
-  try {
-    membership.value = await membershipApi.me()
-  } catch {
-    // 会员模块可能未在当前服务进程启用，个人中心其余功能不受影响
+  if (!IS_BASE) {
+    try {
+      membership.value = await membershipApi.me()
+    } catch {
+      // 会员模块可能未在当前服务进程启用，个人中心其余功能不受影响
+    }
   }
   try {
     const [pv, bd] = await Promise.all([oauthApi.providers(), oauthApi.bindings()])
@@ -260,7 +263,7 @@ async function copyRecoveryCodes() {
 
 function downloadRecoveryCodes() {
   const content = [
-    t('Keel 两步验证恢复码'),
+    t('Tenon 两步验证恢复码'),
     t('账号：{name}', { name: auth.user?.username ?? '' }),
     t('生成时间：{time}', { time: new Date().toLocaleString() }),
     '',
@@ -272,7 +275,7 @@ function downloadRecoveryCodes() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `keel-recovery-${auth.user?.username ?? 'codes'}.txt`
+  a.download = `tenon-recovery-${auth.user?.username ?? 'codes'}.txt`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -352,6 +355,7 @@ async function changePassword() {
 
       <div class="side-col">
         <section
+          v-if="!IS_BASE"
           class="card member-card"
           :style="{ '--lv-color': membership?.level?.color || 'var(--brand-500)' }"
         >

@@ -31,6 +31,8 @@ export default {
   '停用确认': 'Disable confirmation',
   '停用账号': 'Disable account',
   '全选': 'Select all',
+  '全部展开': 'Expand all',
+  '全部折叠': 'Collapse all',
   '全部数据': 'All data',
   '全部状态': 'All statuses',
   '全部账号导入成功，可立即登录。': 'All accounts were imported successfully and can sign in right away.',

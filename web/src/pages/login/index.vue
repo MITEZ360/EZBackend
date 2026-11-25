@@ -8,6 +8,7 @@ import OtpInput from '@/components/OtpInput.vue'
 import { authApi, oauthApi, type OAuthProvider } from '@/api/auth'
 import { cnApi } from '@/api/cn'
 import { ApiError } from '@/api/client'
+import { IS_BASE } from '@/utils/edition'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -187,8 +188,10 @@ async function goOAuth(p: OAuthProvider) {
 onMounted(() => {
   loadCaptcha()
   loadProviders()
-  // 未装配 cnauth 模块时接口 404，注册入口保持隐藏
-  cnApi.publicConfig().then((cfg) => { registerEnabled.value = cfg.registerEnabled }).catch(() => {})
+  // 未装配 cnauth 模块时接口 404，注册入口保持隐藏；Base 发行版直接不探测
+  if (!IS_BASE) {
+    cnApi.publicConfig().then((cfg) => { registerEnabled.value = cfg.registerEnabled }).catch(() => {})
+  }
   const err = route.query.oauth_error
   if (typeof err === 'string' && err) errorMsg.value = err
 })
@@ -200,8 +203,8 @@ onMounted(() => {
     <section class="brand-side">
       <div class="brand-inner">
         <div class="brand-top">
-          <div class="logo">K</div>
-          <span class="logo-text">Keel</span>
+          <div class="logo">T</div>
+          <span class="logo-text">Tenon</span>
         </div>
 
         <div class="brand-copy">
@@ -236,7 +239,7 @@ onMounted(() => {
         </div>
 
         <div class="brand-foot">
-          <span>© 2026 Keel Framework</span>
+          <span>© 2026 Tenon Framework</span>
           <span class="ver">v1.0.0</span>
         </div>
       </div>

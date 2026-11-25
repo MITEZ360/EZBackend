@@ -4,7 +4,7 @@ import { translate } from '@/i18n'
 /** 当前用户时区；空值或非法值回退浏览器本地时区 */
 function zone(): string | undefined {
   try {
-    const tz = (window as unknown as { __keelTz?: string }).__keelTz
+    const tz = (window as unknown as { __tenonTz?: string }).__tenonTz
     if (!tz) return undefined
     new Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date())
     return tz
@@ -15,7 +15,7 @@ function zone(): string | undefined {
 
 /** 由偏好模块设置展示时区，格式化工具不直接依赖 store，避免循环引用 */
 export function setDisplayTimezone(tz?: string) {
-  ;(window as unknown as { __keelTz?: string }).__keelTz = tz || undefined
+  ;(window as unknown as { __tenonTz?: string }).__tenonTz = tz || undefined
 }
 
 function parts(d: Date) {

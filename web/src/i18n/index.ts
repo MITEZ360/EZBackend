@@ -3,9 +3,10 @@ import en from 'element-plus/es/locale/lang/en'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import zhMessages from './locales/zh-CN'
 import enMessages from './locales/en'
+import { MODULE_I18N } from '@/modules/registry'
 
 export type AppLocale = 'zh-CN' | 'en'
-export const LOCALE_KEY = 'keel.locale'
+export const LOCALE_KEY = 'tenon.locale'
 export const SUPPORTED_LOCALES: { value: AppLocale; label: string }[] = [
   { value: 'zh-CN', label: '简体中文' },
   { value: 'en', label: 'English' },
@@ -25,12 +26,14 @@ function initialLocale(): AppLocale {
 }
 
 // Composition API 模式 + 全局注入，模板里可直接用 $t 而不用逐页 useI18n。
+// 模块自带的词条覆盖全局同名 key：模块最了解自己的文案，
+// 共享词（确定/取消/共 {count} 条这类）仍集中在 locales 下。
 export const i18n = createI18n({
   legacy: false,
   globalInjection: true,
   locale: initialLocale(),
   fallbackLocale: 'zh-CN',
-  messages: { 'zh-CN': zhMessages, en: enMessages },
+  messages: { 'zh-CN': zhMessages, en: { ...enMessages, ...MODULE_I18N } },
   missingWarn: false,
   fallbackWarn: false,
 })

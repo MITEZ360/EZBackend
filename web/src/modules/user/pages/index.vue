@@ -8,6 +8,7 @@ import { membershipApi, type GrantMembershipPayload } from '@/api/membership'
 import { deptApi, roleApi } from '@/api/system'
 import type { DeptNode, MembershipLevel, RoleBrief, UserRow } from '@/api/types'
 import { fmtDate, fmtTime, fromNow, saveBlob } from '@/utils/format'
+import { IS_BASE } from '@/utils/edition'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -481,7 +482,10 @@ onMounted(async () => {
     load(),
     deptApi.options().then((d) => (deptTree.value = d ?? [])).catch(() => undefined),
     roleApi.options().then((r) => (roles.value = r ?? [])).catch(() => undefined),
-    membershipApi.catalog().then((l) => (memberLevels.value = l ?? [])).catch(() => undefined),
+    // Base 发行版不含会员模块，不必发这个必然 404 的请求
+    IS_BASE
+      ? Promise.resolve()
+      : membershipApi.catalog().then((l) => (memberLevels.value = l ?? [])).catch(() => undefined),
   ])
 })
 </script>
@@ -553,6 +557,7 @@ onMounted(async () => {
             <el-option :label="$t('停用')" :value="0" />
           </el-select>
           <el-select
+            v-if="!IS_BASE"
             v-model="query.membershipState"
             :placeholder="$t('会员状态')"
             clearable
@@ -621,7 +626,7 @@ onMounted(async () => {
           </template>
         </el-table-column>
 
-        <el-table-column :label="$t('会员')" width="136">
+        <el-table-column v-if="!IS_BASE" :label="$t('会员')" width="136">
           <template #default="{ row }">
             <div
               v-if="row.membership"
@@ -688,6 +693,7 @@ onMounted(async () => {
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item
+                    v-if="!IS_BASE"
                     command="member"
                     :disabled="!auth.can('system:user:grant-membership')"
                   >
@@ -858,8 +864,9 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <!-- 设置会员 -->
+    <!-- 设置会员：Base 发行版不含会员模块，整个对话框不挂载 -->
     <el-dialog
+      v-if="!IS_BASE"
       v-model="memberVisible"
       :title="$t('设置会员')"
       width="540px"

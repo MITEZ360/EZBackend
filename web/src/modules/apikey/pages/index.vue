@@ -526,8 +526,8 @@ function expireText(row: APIKeyRow) {
       </div>
       <div class="usage-hint">
         <p>{{ $t('把密钥放进环境变量后调用：') }}</p>
-        <pre>export KEEL_API_KEY={{ issued?.plain }}
-curl -H "X-API-Key: $KEEL_API_KEY" \
+        <pre>export TENON_API_KEY={{ issued?.plain }}
+curl -H "X-API-Key: $TENON_API_KEY" \
   {{ origin }}/api/open/v1/whoami</pre>
       </div>
       <template #footer>
