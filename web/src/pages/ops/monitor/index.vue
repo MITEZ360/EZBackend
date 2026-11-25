@@ -15,7 +15,6 @@ const routes = ref<RouteInfo[]>([])
 const loading = ref(false)
 const autoRefresh = ref(true)
 const lastUpdated = ref<Date | null>(null)
-const routeKeyword = ref('')
 
 let timer: number | undefined
 
@@ -76,14 +75,6 @@ const poolRatio = computed(() => {
   return Math.min(100, Math.round((p.open / p.max_open) * 100))
 })
 
-const filteredRoutes = computed(() => {
-  const kw = routeKeyword.value.trim().toLowerCase()
-  if (!kw) return routes.value
-  return routes.value.filter(
-    (r) => r.path.toLowerCase().includes(kw) || (r.name ?? '').toLowerCase().includes(kw),
-  )
-})
-
 const methodGroups = computed(() => {
   const map: Record<string, number> = {}
   for (const r of routes.value) {
@@ -99,17 +90,6 @@ const methodSummary = computed(() => {
   const rest = list.slice(1).reduce((s, [, n]) => s + n, 0)
   return t('{method} {count} · 其余 {rest}', { method: list[0][0], count: list[0][1], rest })
 })
-
-function methodTone(m: string) {
-  const map: Record<string, string> = {
-    GET: 'is-get',
-    POST: 'is-post',
-    PUT: 'is-put',
-    DELETE: 'is-del',
-    PATCH: 'is-put',
-  }
-  return map[m] ?? 'is-get'
-}
 
 onMounted(async () => {
   await load()
@@ -238,29 +218,11 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="card routes-card">
-      <div class="card-head">
-        <h3>{{ $t('路由清单') }}</h3>
-        <div class="rh-right">
-          <el-input
-            v-model="routeKeyword"
-            :placeholder="$t('筛选路径')"
-            size="small"
-            clearable
-            style="width: 200px"
-          />
-          <span class="rh-count">{{ filteredRoutes.length }} / {{ routes.length }}</span>
-        </div>
-      </div>
-
-      <div class="route-grid">
-        <div v-for="r in filteredRoutes" :key="`${r.method}-${r.path}`" class="route-item">
-          <span class="method" :class="methodTone(r.method)">{{ r.method }}</span>
-          <span class="rpath mono">{{ r.path }}</span>
-        </div>
-      </div>
-
-      <div v-if="!filteredRoutes.length" class="route-empty">{{ $t('没有匹配的路由') }}</div>
+    <div class="routes-link">
+      <span>{{ $t('接口清单已迁移到独立菜单，支持分页、筛选与完整请求示例') }}</span>
+      <router-link v-if="auth.can('ops:route:list')" to="/ops/routes" class="link">
+        {{ $t('前往路由管理') }}
+      </router-link>
     </div>
   </div>
 </template>
@@ -445,86 +407,26 @@ onUnmounted(() => {
   }
 }
 
-/* ------------------------------------------------------------ 路由清单 */
-.routes-card {
-  margin-bottom: 8px;
-}
-
-.rh-right {
+.routes-link {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.rh-count {
-  font-size: 11.5px;
-  color: var(--ink-400);
-  font-variant-numeric: tabular-nums;
-}
-
-.route-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1px;
-  max-height: 420px;
-  overflow-y: auto;
-  background: var(--line-soft);
-}
-
-.route-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
+  margin: 4px 0 8px;
+  padding: 11px 16px;
+  font-size: 12px;
+  color: var(--ink-500);
   background: var(--bg-card);
-  min-width: 0;
-}
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
 
-.method {
-  flex-shrink: 0;
-  width: 52px;
-  padding: 0 5px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 17px;
-  text-align: center;
-
-  &.is-get {
-    color: #0f766e;
-    background: #e6f6f4;
-  }
-
-  &.is-post {
+  .link {
     color: var(--brand-700);
-    background: var(--brand-50);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
   }
-
-  &.is-put {
-    color: #b45309;
-    background: #fef7e6;
-  }
-
-  &.is-del {
-    color: var(--danger-deep);
-    background: var(--danger-bg);
-  }
-}
-
-.rpath {
-  font-size: 11.5px;
-  color: var(--ink-600);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.route-empty {
-  padding: 32px;
-  text-align: center;
-  font-size: 12.5px;
-  color: var(--ink-400);
 }
 
 @media (max-width: 1100px) {

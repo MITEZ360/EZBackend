@@ -139,17 +139,29 @@ runtime:
   instances: 1
   instance_id: ""          # 留空自动生成，用于日志与任务归属
 
+# ---------------------------------------------------------------- 模块启停
+modules:
+  # 留空 = 全部启用。列出后即为白名单，启用项会自动补齐依赖，未知模块名启动即失败。
+  # 常驻模块（auth / config / dict / notice）不可关闭。
+  #
+  # 也可以在管理端「运维中心 → 配置中心 → 业务模块」勾选，值存进覆盖表并优先生效；
+  # 该项只能在启动时装配，所以保存后需要重启才生效。想回到本文件的设置，
+  # 在管理端点「恢复配置文件值」删掉覆盖行即可。
+  #
+  # 关闭一个模块会同时生效于：API 路由、侧边栏菜单（置为停用）、专属数据表、
+  # 定时任务、后台循环。已建的表与数据不删除，重新启用后原样恢复，管理员
+  # 改过的菜单名称与排序也不会丢。
+  #
+  # 示例：只保留后台管理与运维控制台，去掉演示业务
+  # enabled: [auth, config, dict, notice, user, role, menu, dept, dashboard,
+  #           job, file, audit, monitor, routemanage, cacheadmin,
+  #           maintenance, configcenter, cluster]
+  enabled: []
+
 micro:
   mode: mono               # mono / gateway / service
   modules: []              # service 模式下启用的模块，空表示全部
   timeout: 5s
-
-# ---------------------------------------------------------------- 业务模块启停
-# 不配置（默认）：全部 18 个模块挂载；配置后只挂载列出的模块，自动补齐依赖。
-# 基础模块 auth/config/dict/notice 常驻（公开路由依赖），不可裁剪。
-# 与 micro.modules 区别：micro.modules 仅在 service 模式生效，本项在 mono 也能裁剪。
-# modules:
-#   enabled: [dashboard, user, news]
   retries: 2
   registry:
     type: static

@@ -37,6 +37,25 @@ type Config struct {
 	Backup    Backup    `mapstructure:"backup"`
 	OAuth     OAuth     `mapstructure:"oauth"`
 	Docs      Docs      `mapstructure:"docs"`
+	Cluster   Cluster   `mapstructure:"cluster"`
+}
+
+// Cluster 多节点协同参数。
+//
+// 节点身份用于在共享数据库里登记自己，重启后必须保持不变，因此默认取
+// runtime.instance_id，留空时用 hostname:port 推导。所有节点必须连接
+// 同一个数据库；SQLite 部署会自动退化为单节点（无跨进程协调能力）。
+type Cluster struct {
+	Enabled       bool          `mapstructure:"enabled"`
+	Name          string        `mapstructure:"name"`
+	AdvertiseAddr string        `mapstructure:"advertise_addr"`
+	Heartbeat     time.Duration `mapstructure:"heartbeat"`
+	OfflineAfter  time.Duration `mapstructure:"offline_after"`
+}
+
+// UseCluster 判断是否启用节点登记与指令下发。
+func (c *Config) UseCluster() bool {
+	return c.Cluster.Enabled && !strings.EqualFold(strings.TrimSpace(c.DB.ResolveDriver()), "sqlite")
 }
 
 // I18n 语言协商参数。
@@ -490,18 +509,68 @@ type Breaker struct {
 }
 
 // Holder 保存配置实例，支持并发读取与热更新回调。
+//
+// cfg 指针在进程生命周期内保持不变：热更新时直接覆盖结构体字段，
+// 这样所有持有 *Config 的组件（认证、文件、监控等）无需重新装配即可
+// 读到新值。代价是字段写入与业务读取之间没有锁保护，只适用于
+// 标量/短字符串这类可以整体替换的字段（本文件注册的覆盖项满足该条件）。
 type Holder struct {
-	mu      sync.RWMutex
-	cfg     *Config
-	v       *viper.Viper
-	path    string
-	onApply []func(*Config)
+	mu        sync.RWMutex
+	cfg       *Config
+	v         *viper.Viper
+	path      string
+	overrides map[string]any
+	onApply   []func(*Config)
 }
 
 var holder = &Holder{}
 
 // Load 加载配置；文件不存在时使用内置默认值，保证开箱即用。
 func Load(path string) (*Config, error) {
+	v, cfg, err := build(path, nil)
+	if err != nil {
+		return nil, err
+	}
+	holder.mu.Lock()
+	holder.cfg, holder.v, holder.path, holder.overrides = cfg, v, path, nil
+	holder.mu.Unlock()
+	return cfg, nil
+}
+
+// Apply 用运行时覆盖值重建配置并立即生效。
+//
+// overrides 的键是 mapstructure 点分路径（如 security.captcha_enabled），
+// 值可以是 string / bool / int / float64 / []string。覆盖值优先级高于
+// 配置文件与默认值，低于显式环境变量绑定之外的部分——管理端可编辑项
+// 不应同时用环境变量固定，否则以环境变量为准的部署约定会被打破。
+func Apply(overrides map[string]any) (*Config, error) {
+	holder.mu.RLock()
+	path := holder.path
+	holder.mu.RUnlock()
+	_, cfg, err := build(path, overrides)
+	if err != nil {
+		return nil, err
+	}
+	holder.mu.Lock()
+	if holder.cfg == nil {
+		holder.cfg = cfg
+	} else {
+		*holder.cfg = *cfg
+		cfg = holder.cfg
+	}
+	// 不替换 holder.v：文件监听绑定在 Load 时的 viper 实例上，
+	// 换成新实例会让 Watch 静默失效。重建配置只需要 overrides。
+	holder.overrides = overrides
+	cbs := append([]func(*Config){}, holder.onApply...)
+	holder.mu.Unlock()
+	for _, cb := range cbs {
+		cb(cfg)
+	}
+	return cfg, nil
+}
+
+// build 构建一份独立配置：默认值 -> 配置文件 -> 环境变量 -> 运行时覆盖。
+func build(path string, overrides map[string]any) (*viper.Viper, *Config, error) {
 	v := viper.New()
 	setDefaults(v)
 	if path != "" {
@@ -509,7 +578,7 @@ func Load(path string) (*Config, error) {
 		if err := v.ReadInConfig(); err != nil {
 			var nf viper.ConfigFileNotFoundError
 			if !errors.As(err, &nf) {
-				return nil, fmt.Errorf("读取配置文件失败: %w", err)
+				return nil, nil, fmt.Errorf("读取配置文件失败: %w", err)
 			}
 		}
 	}
@@ -532,26 +601,28 @@ func Load(path string) (*Config, error) {
 		"backup.enabled", "backup.dir", "backup.retain", "backup.compress", "backup.allow_restore",
 		"oauth.enabled", "oauth.callback_base", "oauth.frontend_path", "oauth.state_ttl",
 		"docs.enabled", "docs.path",
+		"cluster.enabled", "cluster.name", "cluster.advertise_addr",
 	} {
 		_ = v.BindEnv(key)
 	}
 
 	cfg := &Config{}
+	for k, val := range overrides {
+		// viper 的 Set 支持点分路径，且优先级高于配置文件与环境变量。
+		// 管理端覆盖项只包含非部署类参数，部署类（DB/Redis/端口/密钥）
+		// 不在可编辑清单内，因此不会与容器环境变量约定冲突。
+		v.Set(k, val)
+	}
 	if err := v.Unmarshal(cfg); err != nil {
-		return nil, fmt.Errorf("解析配置失败: %w", err)
+		return nil, nil, fmt.Errorf("解析配置失败: %w", err)
 	}
 	applyEnvFallbacks(cfg)
 	applyMicroRoutesEnv(cfg)
 	applyOAuthEnvOverrides(cfg)
 	if err := cfg.Validate(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	holder.mu.Lock()
-	holder.cfg = cfg
-	holder.v = v
-	holder.path = path
-	holder.mu.Unlock()
-	return cfg, nil
+	return v, cfg, nil
 }
 
 // Get 返回当前配置。
@@ -577,15 +648,22 @@ func Watch() {
 		return
 	}
 	v.OnConfigChange(func(_ fsnotify.Event) {
-		cfg := &Config{}
-		if err := v.Unmarshal(cfg); err != nil {
-			return
-		}
-		if cfg.Validate() != nil {
+		holder.mu.RLock()
+		overrides := holder.overrides
+		holder.mu.RUnlock()
+		// 文件变化后仍叠加运行时覆盖：管理端配置的优先级高于本地文件，
+		// 否则改一次文件就会把管理端设置悄悄打回。
+		_, cfg, err := build(path, overrides)
+		if err != nil {
 			return
 		}
 		holder.mu.Lock()
-		holder.cfg = cfg
+		if holder.cfg == nil {
+			holder.cfg = cfg
+		} else {
+			*holder.cfg = *cfg
+			cfg = holder.cfg
+		}
 		cbs := append([]func(*Config){}, holder.onApply...)
 		holder.mu.Unlock()
 		for _, cb := range cbs {
@@ -784,6 +862,13 @@ func (c *Config) Validate() error {
 	if c.Server.ShutdownTimeout <= 0 {
 		c.Server.ShutdownTimeout = 15 * time.Second
 	}
+	if c.Cluster.Heartbeat <= 0 {
+		c.Cluster.Heartbeat = 15 * time.Second
+	}
+	if c.Cluster.OfflineAfter <= c.Cluster.Heartbeat {
+		// 离线阈值必须显著大于心跳间隔，否则一次网络抖动就会把节点误判为离线。
+		c.Cluster.OfflineAfter = c.Cluster.Heartbeat * 3
+	}
 	return nil
 }
 
@@ -908,4 +993,8 @@ func setDefaults(v *viper.Viper) {
 
 	// docs.enabled 不设默认值：保持 nil 三态，由环境（dev/prod）自动判断
 	v.SetDefault("docs.path", "/docs")
+
+	v.SetDefault("cluster.enabled", true)
+	v.SetDefault("cluster.heartbeat", "15s")
+	v.SetDefault("cluster.offline_after", "45s")
 }

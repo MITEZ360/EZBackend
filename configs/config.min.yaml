@@ -1,0 +1,43 @@
+# Keel 最小部署配置
+#
+# 只保留"进程启动必需"的参数：监听地址、数据库、Redis（可选）与签发密钥。
+# 其余参数（登录策略、限流、存储、邮件、备份、集群心跳等）启动后到
+# 「运维中心 → 配置中心」调整：标记为热生效的保存即生效，标记为需重启的
+# 会提示，并可在「危险操作」页统一下发重启。
+#
+# 敏感值建议用环境变量注入，优先级高于本文件：
+#   KEEL_DB_DSN、KEEL_REDIS_ADDR、KEEL_REDIS_PASSWORD、KEEL_JWT_SECRET
+#
+# 启动：./bin/keel -config configs/config.min.yaml
+
+app:
+  name: Keel 企业管理平台
+  env: prod
+
+server:
+  host: 0.0.0.0
+  port: 9000
+
+db:
+  # driver 留空时按 DSN 自动推断；MySQL 用下面的标准 DSN 格式
+  driver: mysql
+  dsn: "keel:password@tcp(127.0.0.1:3306)/keel?charset=utf8mb4&parseTime=True&loc=Local"
+  seed: true
+
+# 多节点部署必须配置 Redis，否则每个实例的会话与限流各自独立。
+# 单机可整段删除，程序会退回进程内缓存。
+redis:
+  addr: 127.0.0.1:6379
+  password: ""
+
+jwt:
+  # 生产环境必须替换为不少于 32 位的随机字符串，否则启动会被拒绝
+  secret: "please-change-this-to-a-random-string-of-32-chars"
+
+migration:
+  mode: versioned
+
+cluster:
+  enabled: true
+  # 单机留空即可；多节点时填本机对外地址，便于在节点列表里区分机器
+  advertise_addr: ""

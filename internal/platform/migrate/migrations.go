@@ -159,5 +159,23 @@ func (r *Runner) definitions() []definition {
 				return nil
 			},
 		},
+		{
+			// 版本号跳过 7：该号已被 CN 分支的支付配置迁移占用，
+			// 两个分支合并后必须保持版本号唯一且递增。
+			Version: 8,
+			Name:    "runtime_config_and_cluster",
+			// 配置中心与集群协同：运行时配置覆盖、节点心跳、运维指令及其明细。
+			// 四张表都只由本程序写入，AutoMigrate 足以覆盖建表与后续加列。
+			Up: func(ctx context.Context, db *gorm.DB) error {
+				return db.WithContext(ctx).AutoMigrate(
+					&model.RuntimeConfig{}, &model.ClusterNode{},
+					&model.ClusterCommand{}, &model.ClusterCommandTarget{})
+			},
+			Down: func(ctx context.Context, db *gorm.DB) error {
+				return db.WithContext(ctx).Migrator().DropTable(
+					&model.ClusterCommandTarget{}, &model.ClusterCommand{},
+					&model.ClusterNode{}, &model.RuntimeConfig{})
+			},
+		},
 	}
 }

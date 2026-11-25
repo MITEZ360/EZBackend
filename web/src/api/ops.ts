@@ -1,5 +1,12 @@
 import { api } from './client'
 import type {
+  CacheKeyPage,
+  CacheOverview,
+  ClusterCommand,
+  ClusterCommandsResult,
+  ClusterNodesResult,
+  ConfigApplyResult,
+  ConfigListResult,
   FileRow,
   JobLogRow,
   JobRow,
@@ -9,6 +16,7 @@ import type {
   OperationLogRow,
   PageResult,
   RouteInfo,
+  RoutePage,
   SystemInfo,
 } from './types'
 
@@ -58,9 +66,40 @@ export const logApi = {
   kick: (id: string) => api.del<void>(`/online/sessions/${id}`),
 }
 
+/* -------------------------------------------------------------- 路由目录 */
+export const routeApi = {
+  list: (query: ListQuery & { method?: string; group?: string }) =>
+    api.get<RoutePage>('/routes', query),
+}
+
+/* -------------------------------------------------------------- 缓存管理 */
+export const cacheApi = {
+  overview: () => api.get<CacheOverview>('/cache/overview'),
+  keys: (query: ListQuery & { namespace?: string }) => api.get<CacheKeyPage>('/cache/keys', query),
+  remove: (keys: string[]) => api.del<{ deleted: number }>('/cache/keys', { keys }),
+  flush: (namespace: string) =>
+    api.post<{ deleted: number }>('/cache/flush', { namespace, confirm: true }),
+}
+
 /* ------------------------------------------------------------------ 监控 */
 export const monitorApi = {
   system: () => api.get<SystemInfo>('/monitor/system'),
   routes: () => api.get<RouteInfo[]>('/monitor/routes'),
   restart: () => api.post<void>('/monitor/restart'),
+}
+
+/* -------------------------------------------------------------- 配置中心 */
+export const configApi = {
+  items: () => api.get<ConfigListResult>('/ops/config/items'),
+  save: (items: { key: string; value: string }[]) =>
+    api.put<ConfigApplyResult>('/ops/config/items', { items }),
+  reload: () => api.post<ConfigApplyResult>('/ops/config/reload'),
+}
+
+/* ---------------------------------------------------------------- 集群 */
+export const clusterApi = {
+  nodes: () => api.get<ClusterNodesResult>('/ops/cluster/nodes'),
+  dispatch: (payload: { action: 'restart' | 'reload-config'; scope: 'all' | 'selected'; nodeIds?: string[] }) =>
+    api.post<ClusterCommand>('/ops/cluster/dispatch', payload),
+  commands: () => api.get<ClusterCommandsResult>('/ops/cluster/commands'),
 }

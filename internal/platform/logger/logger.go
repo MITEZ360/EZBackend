@@ -26,9 +26,29 @@ type Options struct {
 	Version string
 }
 
+// level 保存当前日志级别，供管理端运行期调整。
+//
+// zap 的 AtomicLevel 会同步更新所有引用它的 core，因此不需要重建 logger。
+var level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
+
+// SetLevel 运行期调整日志级别，返回 false 表示级别名非法。
+func SetLevel(s string) bool {
+	l, err := zapcore.ParseLevel(s)
+	if err != nil {
+		return false
+	}
+	level.SetLevel(l)
+	return true
+}
+
+// Level 返回当前日志级别名。
+func Level() string { return level.Level().String() }
+
 // New 创建日志器。文件输出为 JSON（便于采集），控制台按 format 决定是否彩色。
 func New(o Options) (*zap.Logger, error) {
-	lvl := zap.NewAtomicLevelAt(parseLevel(o.Config.Level))
+	// 复用全局 AtomicLevel：管理端热改级别后，重建 logger 也不会丢设置。
+	lvl := level
+	lvl.SetLevel(parseLevel(o.Config.Level))
 
 	consoleEnc := newEncoder(o.Config.Format == "console")
 	fileEnc := newEncoder(false)

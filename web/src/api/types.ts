@@ -344,6 +344,66 @@ export interface RouteInfo {
   name?: string
 }
 
+/** 路由目录条目：运行时路由 + 作用/备注/示例 */
+export interface RouteEntry {
+  method: string
+  path: string
+  name?: string
+  group: string
+  title: string
+  desc: string
+  perm: string
+  public: boolean
+  auth: string
+  example: string
+  registered: boolean
+}
+
+export interface RoutePage {
+  list: RouteEntry[]
+  total: number
+  page: number
+  pageSize: number
+  registered: number
+  unregistered: number
+  groups: { name: string; count: number }[]
+}
+
+/** 缓存概况：Redis 的命中数与内存为实例级统计 */
+export interface CacheOverview {
+  kind: string
+  prefix: string
+  version: string
+  dbKeys: number
+  usedMemory: number
+  hits: number
+  misses: number
+  capacity: number
+  keys: number
+  expiring: number
+  persistent: number
+  keyBytes: number
+  truncated: boolean
+  namespaces: { name: string; count: number }[]
+}
+
+/** 缓存键：ttl 单位为秒，-1 永不过期，-2 已不存在 */
+export interface CacheKey {
+  key: string
+  namespace: string
+  type: string
+  size: number
+  ttl: number
+}
+
+export interface CacheKeyPage {
+  list: CacheKey[]
+  total: number
+  page: number
+  pageSize: number
+  truncated: boolean
+}
+
 /* -------------------------------------------------------------- 站内消息 */
 export type MessageType = 'notice' | 'announcement' | 'warning' | 'system'
 
@@ -472,4 +532,120 @@ export interface NewsStats {
   categories: NewsCount[]
   sources: NewsCount[]
   retentionDays: number
+}
+
+/* -------------------------------------------------------------- 配置中心 */
+export interface ConfigChoice {
+  value: string
+  label: string
+  description?: string
+  /** 依赖项，勾选时会一并选中 */
+  dependsOn?: string[]
+  /** 常驻项，不可取消 */
+  locked?: boolean
+}
+
+export interface ConfigItem {
+  key: string
+  group: string
+  name: string
+  description: string
+  type: 'string' | 'text' | 'bool' | 'int' | 'float' | 'duration' | 'list' | 'secret'
+  unit?: string
+  options?: string[]
+  choices?: ConfigChoice[]
+  default: string
+  hot: boolean
+  restart: boolean
+  secret: boolean
+  min?: number
+  max?: number
+  value: string
+  source: 'db' | 'file' | 'default'
+  overridden: boolean
+  editable: boolean
+  /** 运行期实际生效值（仅 modules.enabled） */
+  running?: string[]
+  runningSource?: string
+}
+
+export interface ConfigGroup {
+  name: string
+  label: string
+  description: string
+  items: ConfigItem[]
+}
+
+export interface DeployItem {
+  key: string
+  name: string
+  value: string
+  description: string
+}
+
+export interface ConfigDeploy {
+  items: DeployItem[]
+  note: string
+}
+
+export interface ConfigListResult {
+  groups: ConfigGroup[]
+  deploy: ConfigDeploy
+}
+
+export interface ConfigApplyResult {
+  applied: string[]
+  needRestart: string[]
+  changed: number
+  configVersion: number
+  message: string
+}
+
+/* ---------------------------------------------------------------- 集群 */
+export interface ClusterNode {
+  id: string
+  name: string
+  host: string
+  port: number
+  version: string
+  configVersion: number
+  status: 'online' | 'offline'
+  online: boolean
+  self: boolean
+  leader: boolean
+  lagging: boolean
+  startedAt: string
+  lastSeen: string
+}
+
+export interface ClusterNodesResult {
+  mode: 'cluster' | 'standalone' | 'disabled'
+  nodeId: string
+  nodes: ClusterNode[]
+}
+
+export interface ClusterTarget {
+  nodeId: string
+  nodeName: string
+  status: string
+  message: string
+  startedAt?: string
+  finishedAt?: string
+}
+
+export interface ClusterCommand {
+  id: string
+  action: 'restart' | 'reload-config'
+  scope: 'all' | 'selected'
+  status: string
+  total: number
+  succeeded: number
+  failed: number
+  operator: string
+  createdAt: string
+  targets: ClusterTarget[]
+}
+
+export interface ClusterCommandsResult {
+  list: ClusterCommand[]
 }

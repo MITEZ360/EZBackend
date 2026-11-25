@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
@@ -171,24 +172,32 @@ type localCache struct {
 	lru *lru.LRU[string, localItem]
 	mu  sync.Mutex
 	ctr map[string]int64
+	// size 是构造时的容量，管理端展示用；hits/misses 便于计算命中率。
+	size   int
+	hits   atomic.Int64
+	misses atomic.Int64
 }
 
 func newLocal(size int) *localCache {
 	return &localCache{
-		lru: lru.NewLRU[string, localItem](size, nil, 0),
-		ctr: make(map[string]int64),
+		lru:  lru.NewLRU[string, localItem](size, nil, 0),
+		ctr:  make(map[string]int64),
+		size: size,
 	}
 }
 
 func (l *localCache) Get(_ context.Context, key string) ([]byte, error) {
 	v, ok := l.lru.Get(key)
 	if !ok {
+		l.misses.Add(1)
 		return nil, ErrMiss
 	}
 	if v.exp > 0 && v.exp <= time.Now().UnixMilli() {
 		l.lru.Remove(key)
+		l.misses.Add(1)
 		return nil, ErrMiss
 	}
+	l.hits.Add(1)
 	return v.val, nil
 }
 

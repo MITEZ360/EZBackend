@@ -413,13 +413,24 @@ X-API-Key: ak_s_8fQ2mN...
 | GET | `/files/:id/download` | 下载（支持 `?inline=1` 预览） | `ops:file:list` |
 | DELETE | `/files/:id` | 删除（同时删物理文件） | `ops:file:delete` |
 
-### 4.14 监控
+### 4.14 监控与缓存管理
 
 | 方法 | 路径 | 说明 | 权限点 |
 | --- | --- | --- | --- |
 | GET | `/monitor/system` | 运行时/内存/GC/连接池/缓存/路由数 | `ops:monitor:view` |
 | GET | `/monitor/routes` | 全部注册路由 | `ops:monitor:view` |
+| GET | `/routes` | 路由目录：运行时路由 + 作用/备注/权限/请求示例，支持分页与筛选 | `ops:route:list` |
 | POST | `/monitor/restart` | 触发服务原地重启（高危操作） | `ops:monitor:restart` |
+| GET | `/cache/overview` | 缓存后端、键分布、内存与命中率 | `ops:cache:list` |
+| GET | `/cache/keys` | 缓存键分页：前缀（支持 `*`）+ 命名空间筛选 | `ops:cache:list` |
+| DELETE | `/cache/keys` | 删除指定键，请求体 `{"keys":["dict:notice_type"]}` | `ops:cache:delete` |
+| POST | `/cache/flush` | 按命名空间清空，`namespace` 为空表示当前应用前缀下全部；需 `confirm: true` | `ops:cache:flush` |
+| GET | `/ops/config/items` | 配置中心：分组配置项、当前值/来源、热生效与需重启标记、只读部署参数 | `ops:config:view` |
+| PUT | `/ops/config/items` | 保存配置，热项立即生效，需重启项在 `needRestart` 中返回 | `ops:config:update` |
+| POST | `/ops/config/reload` | 从覆盖表重新加载并应用，用于多节点手工拉齐 | `ops:config:reload` |
+| GET | `/ops/cluster/nodes` | 节点列表：在线状态、版本、配置版本、最后心跳 | `ops:cluster:view` |
+| POST | `/ops/cluster/dispatch` | 下发 `restart` / `reload-config`，`scope=all` 表示全部在线节点 | `ops:cluster:operate` |
+| GET | `/ops/cluster/commands` | 最近运维指令及各节点执行明细 | `ops:cluster:view` |
 
 ### 4.15 公开接口（无需登录）
 

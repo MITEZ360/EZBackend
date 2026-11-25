@@ -4,9 +4,11 @@ import {
   Bell,
   ChatDotRound,
   Clock,
+  Coin,
   Connection,
   Document,
   Folder,
+  Guide,
   Grid,
   Key,
   Menu as MenuIcon,
@@ -20,6 +22,7 @@ import {
   Trophy,
   TrendCharts,
   User,
+  Warning,
   UserFilled,
 } from '@element-plus/icons-vue'
 
@@ -47,6 +50,10 @@ export const menuIcons: Record<string, Component> = {
   'file-text': Document,
   wifi: Connection,
   activity: TrendCharts,
+  route: Guide,
+  cache: Coin,
+  cluster: Connection,
+  alert: Warning,
 }
 
 export function resolveIcon(name?: string): Component {

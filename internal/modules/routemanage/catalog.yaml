@@ -1,0 +1,215 @@
+# 路由元数据目录。
+#
+# 与运行时注册的路由按 method + path 对应；管理端「路由管理」按此展示
+# 作用、备注与完整请求示例。新增路由后在这里补一条，缺失项会在列表中标为「未登记」。
+#
+# 字段：
+#   method  请求方法
+#   path    完整路径（含 /api/v1 前缀）
+#   group   分组，用于筛选
+#   title   作用（一句话）
+#   desc    备注：行为、限制、注意事项
+#   perm    需要的权限点；空表示登录即可
+#   public  是否无需登录
+#   query   查询参数示例（不含 ?）
+#   body    请求体示例（JSON 文本）
+#   auth    api_key 表示用 API 密钥认证，缺省为用户令牌
+
+- {method: GET, path: "/api/open/v1/whoami", group: 开放接口, title: 当前密钥身份, perm: "", auth: api_key, desc: "返回当前 API 密钥的名称、作用域与配额，用于接入方自检"}
+- {method: GET, path: "/api/open/v1/news/meta", group: 开放接口, title: 开放接口元信息, perm: news:read, auth: api_key, desc: "返回资讯分类与数据源等枚举，供接入方映射字段"}
+- {method: GET, path: "/api/open/v1/news", group: 开放接口, title: 开放接口资讯列表, perm: news:read, auth: api_key, query: "page=1&page_size=20&category=tech", desc: "面向程序调用方的资讯分页查询，仅返回已发布内容"}
+- {method: GET, path: "/api/open/v1/news/:id", group: 开放接口, title: 开放接口资讯详情, perm: news:read, auth: api_key, desc: "按资讯 ID 查询详情，包含正文与来源信息"}
+- {method: POST, path: "/api/open/v1/news/batch", group: 开放接口, title: 批量导入资讯, perm: news:ingest, auth: api_key, body: '{"items":[{"title":"示例标题","url":"https://example.com/a","source":"example","publishedAt":"2026-01-01T08:00:00Z"}]}', desc: "单次最多 100 条；按 url 去重，重复条目计入 skipped"}
+
+- {method: GET, path: "/api/v1/api-keys", group: API 密钥, title: 密钥列表, perm: system:apikey:list, query: "page=1&page_size=20", desc: "分页查询机器身份凭证，密钥明文只在签发时返回一次"}
+- {method: GET, path: "/api/v1/api-keys/scopes", group: API 密钥, title: 可用权限范围, perm: system:apikey:list, desc: "返回可授予密钥的作用域清单，签发时从中选择"}
+- {method: POST, path: "/api/v1/api-keys", group: API 密钥, title: 签发密钥, perm: system:apikey:create, body: '{"name":"采集服务","scopes":["news:ingest","news:read"],"expiresAt":null}', desc: "响应中的 secret 仅出现一次，丢失只能轮换"}
+- {method: PUT, path: "/api/v1/api-keys/:id", group: API 密钥, title: 更新密钥, perm: system:apikey:update, body: '{"name":"采集服务","scopes":["news:read"],"remark":"仅读"}', desc: "修改名称、作用域与备注，不影响已签发的密钥本体"}
+- {method: POST, path: "/api/v1/api-keys/:id/rotate", group: API 密钥, title: 轮换密钥, perm: system:apikey:rotate, desc: "生成新密钥并立即让旧密钥失效，调用方需同步更新"}
+- {method: PATCH, path: "/api/v1/api-keys/:id/status", group: API 密钥, title: 启用或禁用密钥, perm: system:apikey:update, body: '{"status":1}', desc: "status=1 启用，0 禁用；禁用后调用直接返回 401"}
+- {method: DELETE, path: "/api/v1/api-keys/:id", group: API 密钥, title: 删除密钥, perm: system:apikey:delete, desc: "物理删除，调用方随即失效，不可恢复"}
+
+- {method: GET, path: "/api/v1/auth/captcha", group: 认证授权, title: 获取图形验证码, public: true, desc: "公开接口；返回 captchaId 与图片，登录开启验证码时需要"}
+- {method: POST, path: "/api/v1/auth/login", group: 认证授权, title: 账号密码登录, public: true, body: '{"username":"admin","password":"Admin@123456","captchaId":"","captchaCode":""}', desc: "公开接口；连续失败达上限会锁定账号，返回 accessToken/refreshToken"}
+- {method: POST, path: "/api/v1/auth/refresh", group: 认证授权, title: 刷新令牌, public: true, body: '{"refreshToken":"<refresh_token>"}', desc: "公开接口；用刷新令牌换取新的访问令牌，旧刷新令牌按策略轮换"}
+- {method: POST, path: "/api/v1/auth/logout", group: 认证授权, title: 退出登录, desc: "注销当前会话并吊销令牌，幂等"}
+- {method: GET, path: "/api/v1/auth/profile", group: 认证授权, title: 我的资料, desc: "返回当前登录用户的资料、角色与权限码"}
+- {method: PUT, path: "/api/v1/auth/profile", group: 认证授权, title: 更新我的资料, body: '{"nickname":"张三","email":"zhangsan@example.com","phone":"13800000000"}', desc: "只允许修改本人可编辑字段，用户名与部门不可自助修改"}
+- {method: PUT, path: "/api/v1/auth/preferences", group: 认证授权, title: 更新语言与时区, body: '{"locale":"zh-CN","timezone":"Asia/Shanghai"}', desc: "影响后续请求的界面语言与时间展示，登录态内即时生效"}
+- {method: PUT, path: "/api/v1/auth/password", group: 认证授权, title: 修改我的密码, body: '{"oldPassword":"Admin@123456","newPassword":"NewPass@2026"}', desc: "需校验原密码；修改后其他会话按配置决定是否强制下线"}
+- {method: GET, path: "/api/v1/auth/sessions", group: 认证授权, title: 我的登录会话, desc: "列出当前账号的有效会话，含登录 IP、时间与设备"}
+- {method: DELETE, path: "/api/v1/auth/sessions/:id", group: 认证授权, title: 下线指定会话, desc: "吊销指定会话的令牌；不能下线他人会话"}
+
+- {method: POST, path: "/api/v1/auth/totp/setup", group: 认证授权, title: 初始化两步验证, desc: "生成 TOTP 密钥与二维码，尚未启用，需再调用 enable 确认"}
+- {method: POST, path: "/api/v1/auth/totp/enable", group: 认证授权, title: 启用两步验证, body: '{"code":"123456"}', desc: "校验一次动态码后启用，同时返回恢复码（仅展示一次）"}
+- {method: POST, path: "/api/v1/auth/totp/disable", group: 认证授权, title: 关闭两步验证, body: '{"password":"Admin@123456"}', desc: "需校验登录密码，关闭后仅凭密码即可登录"}
+- {method: POST, path: "/api/v1/auth/totp/recovery", group: 认证授权, title: 重新生成恢复码, body: '{"password":"Admin@123456"}', desc: "旧恢复码立即作废，新恢复码仅返回一次"}
+
+- {method: GET, path: "/api/v1/oauth/providers", group: 第三方登录, title: 已启用的登录渠道, public: true, desc: "公开接口；按 oauth.providers 配置返回渠道标识与显示名"}
+- {method: GET, path: "/api/v1/oauth/authorize/:name", group: 第三方登录, title: 发起第三方授权, public: true, desc: "公开接口；name 为渠道标识，302 跳转到提供方授权页"}
+- {method: GET, path: "/api/v1/oauth/callback/:name", group: 第三方登录, title: 第三方授权回调, public: true, query: "code=xxx&state=xxx", desc: "公开接口；校验 state 后换取令牌、绑定或登录，最终跳回前端"}
+- {method: GET, path: "/api/v1/oauth/bindings", group: 第三方登录, title: 我的第三方绑定, desc: "列出当前账号已绑定的第三方渠道"}
+- {method: POST, path: "/api/v1/oauth/bind/:name", group: 第三方登录, title: 绑定第三方账号, desc: "发起绑定流程；该渠道已被其他账号占用时返回冲突"}
+- {method: DELETE, path: "/api/v1/oauth/bindings/:name", group: 第三方登录, title: 解绑第三方账号, desc: "解绑后该渠道不能再登录本账号；建议保留至少一种可登录方式"}
+
+- {method: GET, path: "/api/v1/public/config", group: 公开接口, title: 站点公开配置, public: true, desc: "公开接口；登录页与侧边栏使用的站点名、版本、注册开关等"}
+- {method: GET, path: "/api/v1/public/configs", group: 公开接口, title: 公开参数集合, public: true, desc: "公开接口；返回 public=true 的系统参数，结果缓存 5 分钟"}
+- {method: GET, path: "/api/v1/public/dicts/:code", group: 公开接口, title: 公开字典数据, public: true, desc: "公开接口；按字典编码返回启用项，前端下拉直接使用"}
+- {method: GET, path: "/api/v1/public/notices", group: 公开接口, title: 最新公告, public: true, query: "limit=5", desc: "公开接口；返回已发布的最新公告，首页展示用"}
+
+- {method: GET, path: "/api/v1/users", group: 用户管理, title: 用户列表, perm: system:user:list, query: "page=1&page_size=20&keyword=zhang&status=1", desc: "分页查询用户，支持关键字、状态、部门与创建时间筛选"}
+- {method: POST, path: "/api/v1/users", group: 用户管理, title: 新增用户, perm: system:user:create, body: '{"username":"zhangsan","password":"Passw0rd!","nickname":"张三","deptId":"d_tech","roleIds":["r_user"],"status":1}', desc: "用户名与手机号唯一；密码需满足强度策略"}
+- {method: GET, path: "/api/v1/users/:id", group: 用户管理, title: 用户详情, perm: system:user:list, desc: "返回用户资料、所属部门、角色与会员状态"}
+- {method: PUT, path: "/api/v1/users/:id", group: 用户管理, title: 更新用户, perm: system:user:update, body: '{"nickname":"张三","email":"zhangsan@example.com","deptId":"d_tech","remark":"技术中心"}', desc: "不包含密码与状态；这两项有独立接口"}
+- {method: DELETE, path: "/api/v1/users/:id", group: 用户管理, title: 删除用户, perm: system:user:delete, desc: "内置超管不可删除；删除后其会话立即失效"}
+- {method: PUT, path: "/api/v1/users/:id/status", group: 用户管理, title: 启用或禁用用户, perm: system:user:update, body: '{"status":0}', desc: "status=1 启用，0 禁用；禁用会强制该用户下线"}
+- {method: PUT, path: "/api/v1/users/:id/password", group: 用户管理, title: 重置用户密码, perm: system:user:reset, body: '{"password":"Reset@2026"}', desc: "管理员重置无需原密码；重置后按策略吊销该用户会话"}
+- {method: DELETE, path: "/api/v1/users/:id/totp", group: 用户管理, title: 重置用户两步验证, perm: system:user:reset-totp, desc: "清除该用户的 TOTP 绑定，用于丢失设备后的兜底恢复"}
+- {method: PUT, path: "/api/v1/users/:id/roles", group: 用户管理, title: 分配用户角色, perm: system:user:update, body: '{"roleIds":["r_user","r_ops"]}', desc: "全量覆盖，传空数组表示清空角色"}
+- {method: POST, path: "/api/v1/users/batch-delete", group: 用户管理, title: 批量删除用户, perm: system:user:delete, body: '{"ids":["u_1","u_2"]}', desc: "单次上限 200 个；包含内置超管时整批拒绝"}
+- {method: GET, path: "/api/v1/options/users", group: 用户管理, title: 用户下拉选项, perm: system:user:list, query: "keyword=zhang&limit=20", desc: "轻量选项接口，只返回 id、名称与部门，供选择器使用"}
+- {method: GET, path: "/api/v1/exports/users", group: 用户管理, title: 导出用户, perm: system:user:export, query: "keyword=&status=1", desc: "按当前筛选导出 XLSX，敏感字段不落表"}
+- {method: GET, path: "/api/v1/imports/users/template", group: 用户管理, title: 下载导入模板, perm: system:user:create, desc: "返回带表头与示例行的 XLSX 模板"}
+- {method: POST, path: "/api/v1/imports/users", group: 用户管理, title: 导入用户, perm: system:user:create, body: '{"file":"https://example.com/users.xlsx"}', desc: "支持部分成功；返回每条记录的失败原因，重复用户名计入跳过"}
+
+- {method: GET, path: "/api/v1/roles", group: 角色权限, title: 角色列表, perm: system:role:list, query: "page=1&page_size=20&keyword=", desc: "分页查询角色，含数据范围与关联用户数"}
+- {method: POST, path: "/api/v1/roles", group: 角色权限, title: 新增角色, perm: system:role:create, body: '{"name":"运营","code":"ops","dataScope":1,"remark":"运营人员","status":1}', desc: "角色编码唯一；dataScope 取值见 data_scope 字典"}
+- {method: GET, path: "/api/v1/roles/:id", group: 角色权限, title: 角色详情, perm: system:role:list, desc: "返回角色基础信息与已授权菜单"}
+- {method: PUT, path: "/api/v1/roles/:id", group: 角色权限, title: 更新角色, perm: system:role:update, body: '{"name":"运营","dataScope":2,"remark":"仅本部门","status":1}', desc: "内置超管角色不可改名或改数据范围"}
+- {method: DELETE, path: "/api/v1/roles/:id", group: 角色权限, title: 删除角色, perm: system:role:delete, desc: "仍有用户关联时拒绝删除；内置角色不可删"}
+- {method: GET, path: "/api/v1/roles/:id/menus", group: 角色权限, title: 角色已授权菜单, perm: system:role:list, desc: "返回该角色勾选的菜单与按钮 ID 集合"}
+- {method: PUT, path: "/api/v1/roles/:id/menus", group: 角色权限, title: 分配角色权限, perm: system:role:assign, body: '{"menuIds":["m_dashboard","m_user","m_user_add"]}', desc: "全量覆盖；保存后相关用户的权限缓存立即失效"}
+- {method: GET, path: "/api/v1/options/roles", group: 角色权限, title: 角色下拉选项, desc: "登录用户均可读取，用于用户分配角色时的选择器"}
+
+- {method: GET, path: "/api/v1/menus", group: 菜单管理, title: 菜单列表, perm: system:menu:list, desc: "平铺返回全部菜单与按钮，含父级、排序与权限点"}
+- {method: GET, path: "/api/v1/menus/tree", group: 菜单管理, title: 菜单树, perm: system:menu:list, desc: "按父子关系组装成树，角色授权与侧边栏渲染使用"}
+- {method: POST, path: "/api/v1/menus", group: 菜单管理, title: 新增菜单, perm: system:menu:create, body: '{"parentId":"m_ops","name":"路由管理","type":"page","path":"/ops/routes","icon":"route","perm":"ops:route:list","sort":8}', desc: "type 为 dir/page/button；按钮类型不显示在侧边栏"}
+- {method: PUT, path: "/api/v1/menus/:id", group: 菜单管理, title: 更新菜单, perm: system:menu:update, body: '{"name":"路由管理","sort":8,"visible":true,"status":1}', desc: "调整父级时会校验环路；改名不影响已授权角色"}
+- {method: DELETE, path: "/api/v1/menus/:id", group: 菜单管理, title: 删除菜单, perm: system:menu:delete, desc: "存在子节点时拒绝删除；删除后同步清理角色授权关系"}
+
+- {method: GET, path: "/api/v1/depts/tree", group: 组织架构, title: 部门树, perm: system:dept:list, desc: "返回完整部门树，含负责人与用户数"}
+- {method: POST, path: "/api/v1/depts", group: 组织架构, title: 新增部门, perm: system:dept:create, body: '{"parentId":"d_root","name":"研发一组","leader":"张工","sort":1}', desc: "同级重名会拒绝；parentId 为 0 表示根部门"}
+- {method: PUT, path: "/api/v1/depts/:id", group: 组织架构, title: 更新部门, perm: system:dept:update, body: '{"name":"研发一组","leader":"张工","sort":2}', desc: "调整父级时禁止把部门挂到自己的子节点下"}
+- {method: DELETE, path: "/api/v1/depts/:id", group: 组织架构, title: 删除部门, perm: system:dept:delete, desc: "存在子部门或在职用户时拒绝删除"}
+- {method: GET, path: "/api/v1/options/depts", group: 组织架构, title: 部门下拉选项, desc: "登录用户均可读取，用于筛选器与表单选择部门"}
+
+- {method: GET, path: "/api/v1/dicts/types", group: 数据字典, title: 字典类型列表, perm: system:dict:list, query: "page=1&page_size=20&keyword=", desc: "分页查询字典类型，含编码、名称与项数量"}
+- {method: POST, path: "/api/v1/dicts/types", group: 数据字典, title: 新增字典类型, perm: system:dict:create, body: '{"code":"pay_channel","name":"支付渠道","remark":"收银台可选渠道"}', desc: "编码唯一且创建后不建议修改"}
+- {method: PUT, path: "/api/v1/dicts/types/:id", group: 数据字典, title: 更新字典类型, perm: system:dict:update, body: '{"name":"支付渠道","remark":"收银台可选渠道"}', desc: "编码不可修改，避免引用方失效"}
+- {method: DELETE, path: "/api/v1/dicts/types/:id", group: 数据字典, title: 删除字典类型, perm: system:dict:delete, desc: "级联删除其下所有字典项，操作前请确认引用情况"}
+- {method: GET, path: "/api/v1/dicts/types/:code/items", group: 数据字典, title: 字典项列表, perm: system:dict:list, desc: "按字典编码返回全部项，含标签、值、排序与样式"}
+- {method: POST, path: "/api/v1/dicts/items", group: 数据字典, title: 新增字典项, perm: system:dict:create, body: '{"typeCode":"pay_channel","label":"微信支付","value":"wechat","sort":1,"status":1}', desc: "同一类型下 value 唯一；可用于前端标签渲染"}
+- {method: PUT, path: "/api/v1/dicts/items/:id", group: 数据字典, title: 更新字典项, perm: system:dict:update, body: '{"label":"微信支付","value":"wechat","sort":2,"status":1}', desc: "修改 value 会让历史数据失去映射，谨慎操作"}
+- {method: DELETE, path: "/api/v1/dicts/items/:id", group: 数据字典, title: 删除字典项, perm: system:dict:delete, desc: "物理删除；已被业务引用的值不会自动清理"}
+
+- {method: GET, path: "/api/v1/configs", group: 参数配置, title: 参数列表, perm: system:config:list, query: "page=1&page_size=20&group=basic", desc: "分页查询系统参数；加密项的值以 ****** 返回"}
+- {method: POST, path: "/api/v1/configs", group: 参数配置, title: 新增参数, perm: system:config:update, body: '{"key":"site.icp","value":"京ICP备00000000号","name":"备案号","group":"basic","public":true}', desc: "键唯一；public=true 时进入公开参数集合"}
+- {method: PUT, path: "/api/v1/configs/:id", group: 参数配置, title: 更新参数, perm: system:config:update, body: '{"value":"京ICP备00000001号","name":"备案号","group":"basic","public":true}', desc: "value 提交 ****** 表示保持原值；保存后清空公开参数缓存"}
+- {method: DELETE, path: "/api/v1/configs/:id", group: 参数配置, title: 删除参数, perm: system:config:update, desc: "删除后读取该键的业务逻辑会回退默认值或报错"}
+
+- {method: GET, path: "/api/v1/notices", group: 通知公告, title: 公告列表, perm: system:notice:list, query: "page=1&page_size=20&type=notice", desc: "分页查询公告，含草稿与已发布"}
+- {method: GET, path: "/api/v1/notices/:id", group: 通知公告, title: 公告详情, perm: system:notice:list, desc: "返回公告正文与发布人信息"}
+- {method: POST, path: "/api/v1/notices", group: 通知公告, title: 发布公告, perm: system:notice:create, body: '{"title":"系统维护通知","content":"本周六 02:00 停机维护","type":"notice","status":1}', desc: "status=1 立即发布并投递站内信，0 存为草稿"}
+- {method: PUT, path: "/api/v1/notices/:id", group: 通知公告, title: 更新公告, perm: system:notice:update, body: '{"title":"系统维护通知","content":"维护时间调整为周日 02:00","type":"notice","status":1}', desc: "已发布公告修改后会再次投递；转为草稿会撤回站内信"}
+- {method: DELETE, path: "/api/v1/notices/:id", group: 通知公告, title: 删除公告, perm: system:notice:delete, desc: "同时撤回已投递的站内信"}
+
+- {method: GET, path: "/api/v1/messages", group: 站内消息, title: 我的收件箱, query: "page=1&page_size=20&read=false", desc: "当前用户的消息分页，任何角色都可查看自己的消息"}
+- {method: GET, path: "/api/v1/messages/unread-count", group: 站内消息, title: 未读数量, desc: "返回未读条数，侧边栏红点轮询使用"}
+- {method: GET, path: "/api/v1/messages/recent", group: 站内消息, title: 最近消息, query: "limit=5", desc: "返回最近若干条消息，消息浮层使用"}
+- {method: PUT, path: "/api/v1/messages/read-all", group: 站内消息, title: 全部标为已读, desc: "把当前用户所有未读消息置为已读，幂等"}
+- {method: DELETE, path: "/api/v1/messages/read", group: 站内消息, title: 清空已读消息, desc: "只删除自己已读的消息，不影响未读"}
+- {method: POST, path: "/api/v1/messages/batch-delete", group: 站内消息, title: 批量删除我的消息, body: '{"ids":["msg_1","msg_2"]}', desc: "只能删除自己的消息；越权 ID 会被忽略"}
+- {method: POST, path: "/api/v1/messages/send", group: 站内消息, title: 发送站内信, perm: system:message:send, body: '{"title":"账号变更提醒","content":"你的密码已重置","receiverIds":["u_1"],"type":"notice"}', desc: "管理动作；收件人可为用户 ID 列表或全员"}
+- {method: GET, path: "/api/v1/messages/sent", group: 站内消息, title: 发送记录, perm: system:message:list, query: "page=1&page_size=20", desc: "分页查询管理端发出的消息及已读情况"}
+- {method: DELETE, path: "/api/v1/messages/sent/:id", group: 站内消息, title: 撤回已发消息, perm: system:message:delete, desc: "撤回后收件人不再可见，已读记录同步清理"}
+- {method: GET, path: "/api/v1/messages/:id", group: 站内消息, title: 消息详情, desc: "只能读取自己的消息；管理员查看发送记录请用 /messages/sent"}
+- {method: PUT, path: "/api/v1/messages/:id/read", group: 站内消息, title: 标记单条已读, desc: "只能操作自己的消息"}
+- {method: DELETE, path: "/api/v1/messages/:id", group: 站内消息, title: 删除我的消息, desc: "只能删除自己的消息，物理删除"}
+
+- {method: GET, path: "/api/v1/membership/me", group: 会员体系, title: 我的会员状态, desc: "返回当前用户等级、到期时间与权益，登录即可访问"}
+- {method: GET, path: "/api/v1/membership/catalog", group: 会员体系, title: 在售等级目录, desc: "返回所有启用的会员等级与权益，供个人中心对比与升级"}
+- {method: GET, path: "/api/v1/membership/levels", group: 会员体系, title: 会员等级列表, perm: system:membership:list, query: "page=1&page_size=20", desc: "分页查询等级配置，含排序、默认天数与售价"}
+- {method: POST, path: "/api/v1/membership/levels", group: 会员体系, title: 新增会员等级, perm: system:membership:create, body: '{"code":"gold","name":"黄金会员","rank":20,"defaultDays":365,"color":"#C08A2E","benefits":[{"key":"project.max","label":"项目数量","value":"50"}]}', desc: "编码唯一；rank 决定等级高低，权益为键值对列表"}
+- {method: PUT, path: "/api/v1/membership/levels/:id", group: 会员体系, title: 更新会员等级, perm: system:membership:update, body: '{"name":"黄金会员","rank":20,"defaultDays":365,"color":"#C08A2E","status":1}', desc: "调整 rank 会影响升级判断；已发放的会员不追溯"}
+- {method: DELETE, path: "/api/v1/membership/levels/:id", group: 会员体系, title: 删除会员等级, perm: system:membership:delete, desc: "仍有用户处于该等级时拒绝删除"}
+- {method: PUT, path: "/api/v1/users/:id/membership", group: 会员体系, title: 开通或续期会员, perm: system:user:grant-membership, body: '{"levelId":"lv_gold","days":365,"remark":"活动赠送"}', desc: "管理员手工发放；与充值回调共用同一发放逻辑"}
+- {method: DELETE, path: "/api/v1/users/:id/membership", group: 会员体系, title: 撤销用户会员, perm: system:user:grant-membership, desc: "立即失效并降级为默认等级，历史充值订单不受影响"}
+
+- {method: GET, path: "/api/v1/news/stats", group: 资讯中心, title: 资讯统计, perm: content:news:list, query: "days=7", desc: "按天返回新增与来源分布，用于资讯看板"}
+- {method: GET, path: "/api/v1/news", group: 资讯中心, title: 资讯列表, perm: content:news:list, query: "page=1&page_size=20&keyword=&category=&source=", desc: "分页查询资讯，支持关键字、分类、来源与时间范围"}
+- {method: GET, path: "/api/v1/news/:id", group: 资讯中心, title: 资讯详情, perm: content:news:view, desc: "返回正文、封面、来源与分类"}
+- {method: DELETE, path: "/api/v1/news/:id", group: 资讯中心, title: 删除资讯, perm: content:news:delete, desc: "物理删除；关联的采集记录一并清理"}
+- {method: POST, path: "/api/v1/news/cleanup", group: 资讯中心, title: 手动清理过期资讯, perm: content:news:cleanup, body: '{"days":30}', desc: "按保留天数删除旧资讯；不传 days 时使用 news.retention_days"}
+- {method: GET, path: "/api/v1/news-sources", group: 资讯中心, title: 数据源列表, perm: content:news:list, desc: "返回 RSS/API 采集源及最近抓取状态"}
+- {method: POST, path: "/api/v1/news-sources", group: 资讯中心, title: 新增数据源, perm: content:news:source, body: '{"name":"示例源","type":"rss","url":"https://example.com/rss","enabled":true}', desc: "同一 URL 不可重复登记；type 支持 rss / api"}
+- {method: PUT, path: "/api/v1/news-sources/:id", group: 资讯中心, title: 更新数据源, perm: content:news:source, body: '{"name":"示例源","url":"https://example.com/rss2","enabled":false}', desc: "停用后不再参与定时抓取"}
+- {method: DELETE, path: "/api/v1/news-sources/:id", group: 资讯中心, title: 删除数据源, perm: content:news:delete, desc: "已采集的资讯保留，仅移除采集配置"}
+- {method: GET, path: "/api/v1/news-categories", group: 资讯中心, title: 资讯分类列表, perm: content:news:list, desc: "返回分类树，含每类资讯数量"}
+- {method: POST, path: "/api/v1/news-categories", group: 资讯中心, title: 新增资讯分类, perm: content:news:category, body: '{"name":"科技","parentId":"0","sort":1}', desc: "同级重名拒绝；parentId 为 0 表示顶级分类"}
+- {method: PUT, path: "/api/v1/news-categories/:id", group: 资讯中心, title: 更新资讯分类, perm: content:news:category, body: '{"name":"科技前沿","sort":2}', desc: "调整父级时禁止挂到自己的子节点"}
+- {method: DELETE, path: "/api/v1/news-categories/:id", group: 资讯中心, title: 删除资讯分类, perm: content:news:delete, desc: "存在子分类或关联资讯时拒绝删除"}
+
+- {method: GET, path: "/api/v1/dashboard/overview", group: 工作台, title: 工作台概览, perm: dashboard:view, desc: "返回用户、资讯、任务与访问趋势等聚合指标"}
+
+- {method: GET, path: "/api/v1/jobs", group: 定时任务, title: 任务列表, perm: ops:job:list, query: "page=1&page_size=20&status=1", desc: "分页查询定时任务，含 cron、上次执行结果与下次执行时间"}
+- {method: GET, path: "/api/v1/jobs/handlers", group: 定时任务, title: 可用任务处理器, perm: ops:job:list, desc: "返回代码中注册的 handler 清单，创建任务时选择"}
+- {method: POST, path: "/api/v1/jobs", group: 定时任务, title: 新增任务, perm: ops:job:create, body: '{"name":"清理过期日志","cron":"0 3 * * *","handler":"log.cleanup","params":"{\"days\":30}","status":1}', desc: "cron 为 5 段表达式；handler 必须在内置清单中"}
+- {method: PUT, path: "/api/v1/jobs/:id", group: 定时任务, title: 更新任务, perm: ops:job:update, body: '{"name":"清理过期日志","cron":"0 4 * * *","handler":"log.cleanup","params":"{\"days\":30}","status":1}', desc: "修改 cron 后立即重新排期，无需重启"}
+- {method: DELETE, path: "/api/v1/jobs/:id", group: 定时任务, title: 删除任务, perm: ops:job:delete, desc: "先停止调度再删除；历史执行日志保留"}
+- {method: PUT, path: "/api/v1/jobs/:id/status", group: 定时任务, title: 启停任务, perm: ops:job:update, body: '{"status":0}', desc: "status=1 启动调度，0 停止；停止不中断正在执行的一次"}
+- {method: POST, path: "/api/v1/jobs/:id/run", group: 定时任务, title: 手动执行任务, perm: ops:job:run, desc: "立即触发一次异步执行，不影响原有排期"}
+- {method: GET, path: "/api/v1/jobs/logs", group: 定时任务, title: 任务执行日志, perm: ops:job:list, query: "page=1&page_size=20&jobId=", desc: "分页查询执行记录，含耗时、结果与错误信息"}
+
+- {method: GET, path: "/api/v1/files", group: 文件管理, title: 文件列表, perm: ops:file:list, query: "page=1&page_size=20&keyword=", desc: "分页查询上传记录，含大小、类型与访问地址"}
+- {method: POST, path: "/api/v1/files", group: 文件管理, title: 上传文件, perm: ops:file:upload, desc: "multipart/form-data，字段名 file；受允许扩展名与大小上限约束"}
+- {method: GET, path: "/api/v1/files/:id/download", group: 文件管理, title: 下载文件, perm: ops:file:list, desc: "返回文件流；本地存储直接读盘，对象存储做签名跳转"}
+- {method: DELETE, path: "/api/v1/files/:id", group: 文件管理, title: 删除文件, perm: ops:file:delete, desc: "同时删除存储实体；已被业务引用的地址将失效"}
+
+- {method: GET, path: "/api/v1/logs/login", group: 审计日志, title: 登录日志, perm: ops:loginlog:list, query: "page=1&page_size=20&keyword=&status=", desc: "分页查询登录记录，含 IP、地区、结果与失败原因"}
+- {method: DELETE, path: "/api/v1/logs/login", group: 审计日志, title: 清理登录日志, perm: ops:loginlog:list, query: "days=30", desc: "删除 N 天前的登录日志；不传 days 时清空全部，谨慎使用"}
+- {method: GET, path: "/api/v1/logs/operation", group: 审计日志, title: 操作日志, perm: ops:oplog:list, query: "page=1&page_size=20&keyword=&method=", desc: "分页查询写操作审计，含操作人、路径、耗时与结果"}
+- {method: GET, path: "/api/v1/logs/operation/:id", group: 审计日志, title: 操作日志详情, perm: ops:oplog:list, desc: "返回请求参数、响应摘要与错误堆栈"}
+- {method: DELETE, path: "/api/v1/logs/operation", group: 审计日志, title: 清理操作日志, perm: ops:oplog:list, query: "days=30", desc: "删除 N 天前的操作日志；不传 days 时清空全部"}
+
+- {method: GET, path: "/api/v1/online/sessions", group: 在线会话, title: 在线用户, perm: ops:online:list, query: "page=1&page_size=20&keyword=", desc: "列出当前有效会话，含用户、IP、登录时间与最后活跃"}
+- {method: DELETE, path: "/api/v1/online/sessions/:id", group: 在线会话, title: 强制下线, perm: ops:online:list, desc: "吊销指定会话令牌，用户下次请求即跳登录页"}
+
+- {method: GET, path: "/api/v1/routes", group: 运维监控, title: 路由目录, perm: ops:route:list, query: "page=1&page_size=20&keyword=&method=&group=", desc: "分页返回运行时路由与目录元数据（作用、备注、权限、请求示例），并给出已登记与未登记数量"}
+- {method: GET, path: "/api/v1/monitor/system", group: 运维监控, title: 系统运行信息, perm: ops:monitor:view, desc: "返回版本、运行时内存、Goroutine、数据库连接池与缓存类型"}
+- {method: GET, path: "/api/v1/monitor/routes", group: 运维监控, title: 运行时路由快照, perm: ops:monitor:view, desc: "返回 Gin 已注册的全部 method + path，用于快速核对实际挂载情况"}
+- {method: POST, path: "/api/v1/monitor/restart", group: 运维监控, title: 重启服务, perm: ops:monitor:restart, desc: "先返回应答再优雅停机并原地重启（Unix 保持 PID）；高危操作，会中断当前请求"}
+
+- {method: GET, path: "/api/v1/cache/overview", group: 缓存管理, title: 缓存概况, perm: ops:cache:list, desc: "返回缓存后端（Redis / 进程内 LRU）、键数量、过期与常驻分布、内存与命中率，并给出命名空间占比"}
+- {method: GET, path: "/api/v1/cache/keys", group: 缓存管理, title: 缓存键列表, perm: ops:cache:list, query: "page=1&page_size=20&keyword=sess&namespace=", desc: "按前缀（支持 * 通配）与命名空间分页扫描键，含类型、体积与剩余 TTL；单次最多扫描 5000 个键"}
+- {method: DELETE, path: "/api/v1/cache/keys", group: 缓存管理, title: 删除缓存键, perm: ops:cache:delete, body: '{"keys":["dict:notice_type"]}', desc: "按完整键名删除，返回实际删除数量；删除会话键会导致对应用户退出登录"}
+- {method: POST, path: "/api/v1/cache/flush", group: 缓存管理, title: 清空缓存, perm: ops:cache:flush, body: '{"namespace":"dict","confirm":true}', desc: "清空指定命名空间（namespace 为空则清空当前应用前缀下全部键）；必须显式传 confirm=true，不可恢复"}
+
+- {method: GET, path: "/api/v1/ops/config/items", group: 配置中心, title: 配置项清单, perm: ops:config:view, desc: "按分组返回可管理配置项：当前值、来源（db/file/default）、是否热生效、是否需重启，并附带只读的部署参数"}
+- {method: PUT, path: "/api/v1/ops/config/items", group: 配置中心, title: 保存配置, perm: ops:config:update, body: '{"items":[{"key":"security.captcha_enabled","value":"true"}]}', desc: "校验后写入覆盖表并立即应用；热项即时生效，需重启的项在响应 needRestart 中返回，value 传空表示恢复配置文件取值"}
+- {method: POST, path: "/api/v1/ops/config/reload", group: 配置中心, title: 重新加载配置, perm: ops:config:reload, desc: "从覆盖表重新读取并应用，用于多节点场景下手工拉齐；节点也会每 10 秒自动检测版本变化"}
+
+- {method: GET, path: "/api/v1/ops/cluster/nodes", group: 集群, title: 节点列表, perm: ops:cluster:view, desc: "返回全部已登记节点的在线状态、版本、配置版本与最后心跳；同时给出 cluster / standalone / disabled 运行模式"}
+- {method: POST, path: "/api/v1/ops/cluster/dispatch", group: 集群, title: 下发运维指令, perm: ops:cluster:operate, body: '{"action":"restart","scope":"all"}', desc: "向选中或全部在线节点下发 restart / reload-config；节点每 3 秒领取指令，重启会中断该节点当前请求"}
+- {method: GET, path: "/api/v1/ops/cluster/commands", group: 集群, title: 指令记录, perm: ops:cluster:view, desc: "返回最近 20 条运维指令及每个节点的执行状态与说明"}
+
+- {method: GET, path: "/api/v1/maintenance/backups", group: 备份迁移, title: 备份列表, perm: ops:backup:list, desc: "列出备份文件，含大小、创建时间与校验状态"}
+- {method: POST, path: "/api/v1/maintenance/backups", group: 备份迁移, title: 立即备份, perm: ops:backup:create, body: '{"remark":"发版前备份"}', desc: "同步执行转储；大库建议在低峰期操作"}
+- {method: GET, path: "/api/v1/maintenance/backups/:name/meta", group: 备份迁移, title: 备份元信息, perm: ops:backup:list, desc: "返回备份的库类型、表数量、字节数与校验和"}
+- {method: GET, path: "/api/v1/maintenance/backups/:name/download", group: 备份迁移, title: 下载备份, perm: ops:backup:list, desc: "以附件流下载备份文件，路径参数受白名单校验"}
+- {method: POST, path: "/api/v1/maintenance/backups/:name/verify", group: 备份迁移, title: 校验备份, perm: ops:backup:list, desc: "重新计算校验和，判断文件是否损坏或被篡改"}
+- {method: POST, path: "/api/v1/maintenance/backups/:name/restore", group: 备份迁移, title: 恢复备份, perm: ops:backup:restore, desc: "覆盖当前数据库；需 backup.allow_restore=true，高危操作"}
+- {method: DELETE, path: "/api/v1/maintenance/backups/:name", group: 备份迁移, title: 删除备份, perm: ops:backup:delete, desc: "删除指定备份文件，不可恢复"}
+- {method: GET, path: "/api/v1/maintenance/prune-plan", group: 备份迁移, title: 清理计划预览, perm: ops:backup:list, desc: "按 backup.retain 计算将被清理的备份，仅预览不删除"}
+- {method: GET, path: "/api/v1/maintenance/migrations", group: 备份迁移, title: 迁移状态, perm: ops:backup:list, desc: "返回当前版本、已应用与待应用的迁移列表"}
+- {method: POST, path: "/api/v1/maintenance/migrations/up", group: 备份迁移, title: 执行迁移到最新, perm: ops:backup:restore, desc: "按顺序应用待执行迁移；生产环境建议先备份"}
+- {method: POST, path: "/api/v1/maintenance/migrations/down", group: 备份迁移, title: 回滚一步迁移, perm: ops:backup:restore, desc: "回滚最近一次迁移，存在数据丢失风险"}
+
+- {method: GET, path: "/healthz", group: 系统内置, title: 存活探针, public: true, desc: "进程可用即返回 200，供容器 livenessProbe 使用"}
+- {method: GET, path: "/readyz", group: 系统内置, title: 就绪探针, public: true, desc: "数据库等依赖可用才返回 200，供 readinessProbe 使用"}
+- {method: GET, path: "/metrics", group: 系统内置, title: Prometheus 指标, public: true, desc: "请求量、耗时与业务计数；配置了 token 时需带 Bearer"}
+- {method: GET, path: "/assets/*filepath", group: 系统内置, title: 前端静态资源, public: true, desc: "SPA 构建产物的 JS/CSS/图片，带长缓存响应头"}
+- {method: GET, path: "/docs/*any", group: 系统内置, title: 接口文档页面, public: true, desc: "自动生成的 Swagger UI；生产环境默认关闭"}
+- {method: GET, path: "/favicon.ico", group: 系统内置, title: 站点图标, public: true, desc: "浏览器标签页图标"}
+- {method: GET, path: "/favicon.svg", group: 系统内置, title: 站点图标（SVG）, public: true, desc: "矢量图标，优先于 ico 使用"}
+- {method: GET, path: "/uploads/*filepath", group: 系统内置, title: 本地文件访问, public: true, desc: "本地存储模式下的上传目录公开只读访问；对象存储模式不挂载"}
+- {method: HEAD, path: "/uploads/*filepath", group: 系统内置, title: 本地文件探测, public: true, desc: "与 GET 同源，仅返回响应头，用于探测文件是否存在"}

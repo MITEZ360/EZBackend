@@ -185,8 +185,8 @@ export const api = {
     request<T>({ ...cfg, url, method: 'PUT', data }),
   patch: <T>(url: string, data?: unknown, cfg?: AxiosRequestConfig) =>
     request<T>({ ...cfg, url, method: 'PATCH', data }),
-  del: <T>(url: string, cfg?: AxiosRequestConfig) =>
-    request<T>({ ...cfg, url, method: 'DELETE' }),
+  del: <T>(url: string, data?: unknown, cfg?: AxiosRequestConfig) =>
+    request<T>({ ...cfg, url, method: 'DELETE', data }),
   /** 文件下载：返回 Blob */
   async download(url: string, params?: Record<string, unknown>): Promise<Blob> {
     const res = await http.request<Blob>({

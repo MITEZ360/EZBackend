@@ -157,6 +157,36 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '备份与迁移' },
       },
       {
+        path: 'ops/routes',
+        name: 'ops-routes',
+        component: () => import('@/pages/ops/routes/index.vue'),
+        meta: { title: '路由管理' },
+      },
+      {
+        path: 'ops/cache',
+        name: 'ops-cache',
+        component: () => import('@/pages/ops/cache/index.vue'),
+        meta: { title: '缓存管理' },
+      },
+      {
+        path: 'ops/config',
+        name: 'ops-config-center',
+        component: () => import('@/pages/ops/config/index.vue'),
+        meta: { title: '配置中心' },
+      },
+      {
+        path: 'ops/cluster',
+        name: 'ops-cluster',
+        component: () => import('@/pages/ops/cluster/index.vue'),
+        meta: { title: '集群管理' },
+      },
+      {
+        path: 'ops/danger',
+        name: 'ops-danger',
+        component: () => import('@/pages/ops/danger/index.vue'),
+        meta: { title: '危险操作' },
+      },
+      {
         path: 'profile',
         name: 'profile',
         component: () => import('@/pages/profile/index.vue'),

@@ -4,6 +4,7 @@ package authn
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -32,6 +33,7 @@ type Claims struct {
 
 // Manager 负责签发与解析访问令牌。
 type Manager struct {
+	mu         sync.RWMutex
 	secret     []byte
 	issuer     string
 	accessTTL  time.Duration
@@ -48,24 +50,46 @@ func NewManager(cfg config.JWT) *Manager {
 	}
 }
 
+// Update 运行期更新令牌参数。密钥与签发者变化会让旧令牌立即失效，
+// 因此管理端把它们归为需要重启/全体重新登录的配置项。
+func (m *Manager) Update(cfg config.JWT) {
+	m.mu.Lock()
+	m.secret = []byte(cfg.Secret)
+	m.issuer = cfg.Issuer
+	m.accessTTL = cfg.AccessTTL
+	m.refreshTTL = cfg.RefreshTTL
+	m.mu.Unlock()
+}
+
 // AccessTTL 返回访问令牌有效期。
-func (m *Manager) AccessTTL() time.Duration { return m.accessTTL }
+func (m *Manager) AccessTTL() time.Duration {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.accessTTL
+}
 
 // RefreshTTL 返回刷新令牌有效期。
-func (m *Manager) RefreshTTL() time.Duration { return m.refreshTTL }
+func (m *Manager) RefreshTTL() time.Duration {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.refreshTTL
+}
 
 // Issue 签发访问令牌。
 func (m *Manager) Issue(c Claims) (string, time.Time, error) {
+	m.mu.RLock()
+	secret, issuer, ttl := m.secret, m.issuer, m.accessTTL
+	m.mu.RUnlock()
 	now := time.Now()
-	exp := now.Add(m.accessTTL)
+	exp := now.Add(ttl)
 	c.TokenType = "access"
-	c.Issuer = m.issuer
+	c.Issuer = issuer
 	c.IssuedAt = jwt.NewNumericDate(now)
 	c.NotBefore = jwt.NewNumericDate(now.Add(-5 * time.Second))
 	c.ExpiresAt = jwt.NewNumericDate(exp)
 	c.ID = c.SessionID
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
-	s, err := token.SignedString(m.secret)
+	s, err := token.SignedString(secret)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("签发令牌失败: %w", err)
 	}
@@ -74,13 +98,16 @@ func (m *Manager) Issue(c Claims) (string, time.Time, error) {
 
 // Parse 解析并校验令牌（签名算法、签发者、有效期）。
 func (m *Manager) Parse(tokenStr string) (*Claims, error) {
+	m.mu.RLock()
+	secret, issuer := m.secret, m.issuer
+	m.mu.RUnlock()
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("非法签名算法: %v", t.Header["alg"])
 		}
-		return m.secret, nil
-	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer(m.issuer), jwt.WithExpirationRequired())
+		return secret, nil
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer(issuer), jwt.WithExpirationRequired())
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return nil, ErrTokenExpired

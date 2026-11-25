@@ -154,6 +154,38 @@ func RateLimit(cfg config.RateLimit, lim cache.Limiter, trustProxy bool) gin.Han
 	}
 }
 
+// RateLimitDynamic 与 RateLimit 行为一致，但每次请求都读取当前配置，
+// 用于管理端热更新限流阈值。byUser 为 false 时强制按 IP 限流（公开接口）。
+func RateLimitDynamic(lim cache.Limiter, trustProxy, byUser bool) gin.HandlerFunc {
+	if lim == nil {
+		return func(c *gin.Context) { c.Next() }
+	}
+	return func(c *gin.Context) {
+		cfg := config.Get().RateLimit
+		if !cfg.Enabled {
+			c.Next()
+			return
+		}
+		key := utils.ClientIP(c, trustProxy)
+		if byUser && cfg.ByUser {
+			if uid := c.GetString("user_id"); uid != "" {
+				key = "u:" + uid
+			}
+		}
+		allowed, err := lim.Allow(c.Request.Context(), key)
+		if err != nil {
+			c.Next()
+			return
+		}
+		if !allowed {
+			c.Header("Retry-After", "1")
+			response.FailMsg(c, http.StatusTooManyRequests, 42900, "请求过于频繁，请稍后再试")
+			return
+		}
+		c.Next()
+	}
+}
+
 // NoCache 禁用接口缓存。
 func NoCache() gin.HandlerFunc {
 	return func(c *gin.Context) {

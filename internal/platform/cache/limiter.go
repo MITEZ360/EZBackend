@@ -15,6 +15,8 @@ import (
 type Limiter interface {
 	Allow(ctx context.Context, key string) (bool, error)
 	Kind() string
+	// SetRate 运行期调整速率与桶容量，用于管理端热更新限流参数。
+	SetRate(rps float64, burst int)
 }
 
 // NewLimiter 依据缓存实现创建限流器：Redis 缓存对应分布式限流。
@@ -63,6 +65,7 @@ return allowed
 `
 
 type redisLimiter struct {
+	mu    sync.RWMutex
 	rc    *redisCache
 	rps   float64
 	burst int
@@ -70,11 +73,30 @@ type redisLimiter struct {
 
 func (l *redisLimiter) Kind() string { return "redis" }
 
+// SetRate 更新速率。已有令牌桶会在下一次调用时按新参数计算，无需清理。
+func (l *redisLimiter) SetRate(rps float64, burst int) {
+	if rps <= 0 {
+		return
+	}
+	if burst <= 0 {
+		burst = int(rps * 2)
+		if burst < 1 {
+			burst = 1
+		}
+	}
+	l.mu.Lock()
+	l.rps, l.burst = rps, burst
+	l.mu.Unlock()
+}
+
 func (l *redisLimiter) Allow(ctx context.Context, key string) (bool, error) {
+	l.mu.RLock()
+	rps, burst := l.rps, l.burst
+	l.mu.RUnlock()
 	// 桶空闲到足够回满的时间即可回收，再加 1 秒余量
-	ttl := int64(float64(l.burst)/l.rps*1000) + 1000
+	ttl := int64(float64(burst)/rps*1000) + 1000
 	n, err := l.rc.rdb.Eval(ctx, limiterScript, []string{l.rc.key("rl:" + key)},
-		l.rps, l.burst, time.Now().UnixMilli(), ttl).Int()
+		rps, burst, time.Now().UnixMilli(), ttl).Int()
 	if err != nil {
 		// 限流组件故障不应阻断业务：放行并让调用方记录日志
 		return true, err
@@ -107,6 +129,24 @@ func newLocalLimiter(rps float64, burst int) *localLimiter {
 }
 
 func (l *localLimiter) Kind() string { return "local" }
+
+// SetRate 更新速率。令牌桶的速率不可变，这里直接重建全部桶；
+// 代价是本次调整会重置各 key 的瞬时配额，属于管理端操作的预期行为。
+func (l *localLimiter) SetRate(rps float64, burst int) {
+	if rps <= 0 {
+		return
+	}
+	if burst <= 0 {
+		burst = int(rps * 2)
+		if burst < 1 {
+			burst = 1
+		}
+	}
+	l.mu.Lock()
+	l.rps, l.burst = rate.Limit(rps), burst
+	l.buckets = make(map[string]*localBucket)
+	l.mu.Unlock()
+}
 
 func (l *localLimiter) Allow(_ context.Context, key string) (bool, error) {
 	l.mu.Lock()

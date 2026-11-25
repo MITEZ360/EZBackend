@@ -30,17 +30,19 @@ var jobSeeds = []struct {
 	Handler string
 	Params  string
 	Remark  string
+	// Module 为空表示常驻任务；模块关闭后对应任务不再补种。
+	Module string
 }{
 	{Name: "清理过期日志", Cron: "0 3 * * *", Handler: "log.cleanup", Params: `{"days":30}`,
-		Remark: "每天 03:00 清理 30 天前的登录日志与操作日志"},
+		Remark: "每天 03:00 清理 30 天前的登录日志与操作日志", Module: "audit"},
 	{Name: "清理过期会话", Cron: "0 * * * *", Handler: "session.cleanup", Params: `{"days":7}`,
 		Remark: "每小时回收已过期的登录会话"},
 	{Name: "清理历史消息", Cron: "0 4 * * *", Handler: "message.cleanup", Params: `{"days":180}`,
-		Remark: "每天 04:00 清理 180 天前已读的收件记录"},
+		Remark: "每天 04:00 清理 180 天前已读的收件记录", Module: "message"},
 	{Name: "清理过期资讯", Cron: "15 * * * *", Handler: "news.cleanup", Params: `{}`,
-		Remark: "每小时清理超过 news.retention_days 的资讯；任务参数可单独覆盖天数"},
+		Remark: "每小时清理超过 news.retention_days 的资讯；任务参数可单独覆盖天数", Module: "news"},
 	{Name: "数据库备份", Cron: "0 2 * * *", Handler: "db.backup", Params: `{}`,
-		Remark: "每天 02:00 生成数据库快照，按 backup.retain 保留最近 N 份；backup.enabled=false 时跳过"},
+		Remark: "每天 02:00 生成数据库快照，按 backup.retain 保留最近 N 份；backup.enabled=false 时跳过", Module: "maintenance"},
 }
 
 var menuSeeds = []menuSeed{
@@ -136,6 +138,19 @@ var menuSeeds = []menuSeed{
 			{ID: "m_maintenance_restore", Name: "恢复与回滚", Type: model.MenuButton, Perm: "ops:backup:restore"},
 			{ID: "m_maintenance_del", Name: "删除备份", Type: model.MenuButton, Perm: "ops:backup:delete"},
 		}},
+		{ID: "m_route", Name: "路由管理", Type: model.MenuPage, Path: "/ops/routes", Icon: "route", Perm: "ops:route:list", Sort: 8},
+		{ID: "m_cache", Name: "缓存管理", Type: model.MenuPage, Path: "/ops/cache", Icon: "cache", Perm: "ops:cache:list", Sort: 9, Children: []menuSeed{
+			{ID: "m_cache_delete", Name: "删除缓存键", Type: model.MenuButton, Perm: "ops:cache:delete"},
+			{ID: "m_cache_flush", Name: "清空缓存", Type: model.MenuButton, Perm: "ops:cache:flush"},
+		}},
+		{ID: "m_ops_config", Name: "配置中心", Type: model.MenuPage, Path: "/ops/config", Icon: "sliders", Perm: "ops:config:view", Sort: 10, Children: []menuSeed{
+			{ID: "m_ops_config_update", Name: "保存配置", Type: model.MenuButton, Perm: "ops:config:update"},
+			{ID: "m_ops_config_reload", Name: "刷新配置", Type: model.MenuButton, Perm: "ops:config:reload"},
+		}},
+		{ID: "m_cluster", Name: "集群管理", Type: model.MenuPage, Path: "/ops/cluster", Icon: "cluster", Perm: "ops:cluster:view", Sort: 11, Children: []menuSeed{
+			{ID: "m_cluster_operate", Name: "节点运维", Type: model.MenuButton, Perm: "ops:cluster:operate"},
+		}},
+		{ID: "m_danger", Name: "危险操作", Type: model.MenuPage, Path: "/ops/danger", Icon: "alert", Perm: "ops:danger:view", Sort: 12},
 	}},
 }
 
@@ -200,7 +215,8 @@ var configSeeds = []struct {
 
 // syncBuiltinMenus 幂等补齐缺失的内置菜单，并给内置超管角色授权。
 // 只新增、不修改已有节点，管理员对名称、排序、图标的调整不会被打回。
-func syncBuiltinMenus(db *gorm.DB, log *zap.Logger) error {
+func syncBuiltinMenus(db *gorm.DB, log *zap.Logger, reg *ModuleRegistry) error {
+	seeds := filterMenus(menuSeeds, reg.Enabled)
 	created := 0
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var walk func(items []menuSeed, parent string) error
@@ -250,7 +266,7 @@ func syncBuiltinMenus(db *gorm.DB, log *zap.Logger) error {
 			}
 			return nil
 		}
-		return walk(menuSeeds, "0")
+		return walk(seeds, "0")
 	})
 	if err != nil {
 		return err
@@ -261,11 +277,62 @@ func syncBuiltinMenus(db *gorm.DB, log *zap.Logger) error {
 	return nil
 }
 
+// syncModuleScopedMenus 让内置菜单的启停跟随模块开关。
+//
+// 只处理「内置菜单」：管理员自建的菜单不在这里，不受影响。
+// 关闭时置为停用而不是删除，重新启用后菜单、角色授权、管理员改过的
+// 名称与排序都还在。
+func syncModuleScopedMenus(db *gorm.DB, log *zap.Logger, reg *ModuleRegistry) error {
+	keep := make(map[string]bool, len(menuSeeds))
+	var markKeep func(items []menuSeed)
+	markKeep = func(items []menuSeed) {
+		for _, it := range items {
+			keep[it.ID] = true
+			markKeep(it.Children)
+		}
+	}
+	markKeep(filterMenus(menuSeeds, reg.Enabled))
+
+	var on, off []string
+	var walk func(items []menuSeed)
+	walk = func(items []menuSeed) {
+		for _, it := range items {
+			if keep[it.ID] {
+				on = append(on, it.ID)
+			} else {
+				off = append(off, it.ID)
+			}
+			walk(it.Children)
+		}
+	}
+	walk(menuSeeds)
+
+	if len(off) > 0 {
+		if err := db.Model(&model.Menu{}).Where("id IN ?", off).
+			Update("status", model.StatusDisabled).Error; err != nil {
+			return err
+		}
+	}
+	if len(on) > 0 {
+		if err := db.Model(&model.Menu{}).Where("id IN ?", on).
+			Update("status", model.StatusEnabled).Error; err != nil {
+			return err
+		}
+	}
+	if len(off) > 0 {
+		log.Info("已按模块开关停用内置菜单", zap.Int("disabled", len(off)))
+	}
+	return nil
+}
+
 // syncBuiltinJobs 幂等补齐内置定时任务。按 handler 判重，
 // 管理员改过 cron 或停用后不会被重置回默认值。
-func syncBuiltinJobs(db *gorm.DB, log *zap.Logger) error {
+func syncBuiltinJobs(db *gorm.DB, log *zap.Logger, reg *ModuleRegistry) error {
 	created := 0
 	for _, j := range jobSeeds {
+		if j.Module != "" && !reg.On(j.Module) {
+			continue
+		}
 		var exists int64
 		if err := db.Unscoped().Model(&model.Job{}).Where("handler = ?", j.Handler).Count(&exists).Error; err != nil {
 			return err
@@ -388,7 +455,7 @@ func syncBuiltinCategories(db *gorm.DB, log *zap.Logger) error {
 }
 
 // seed 初始化基础数据；已有用户则跳过，保证幂等。
-func seed(db *gorm.DB, log *zap.Logger) error {
+func seed(db *gorm.DB, log *zap.Logger, reg *ModuleRegistry) error {
 	var count int64
 	if err := db.Model(&model.User{}).Count(&count).Error; err != nil {
 		return err
@@ -396,14 +463,22 @@ func seed(db *gorm.DB, log *zap.Logger) error {
 	if count > 0 {
 		// 已初始化的库也要能拿到后续版本新增的内置菜单，否则升级后功能
 		// 有接口却没有入口。
-		if err := syncBuiltinMenus(db, log); err != nil {
+		if err := syncBuiltinMenus(db, log, reg); err != nil {
 			return err
 		}
-		if err := syncBuiltinJobs(db, log); err != nil {
+		if err := syncModuleScopedMenus(db, log, reg); err != nil {
 			return err
 		}
-		if err := syncBuiltinLevels(db, log); err != nil {
+		if err := syncBuiltinJobs(db, log, reg); err != nil {
 			return err
+		}
+		if reg.On("membership") {
+			if err := syncBuiltinLevels(db, log); err != nil {
+				return err
+			}
+		}
+		if !reg.On("news") {
+			return nil
 		}
 		return syncBuiltinCategories(db, log)
 	}
@@ -445,7 +520,7 @@ func seed(db *gorm.DB, log *zap.Logger) error {
 			}
 			return nil
 		}
-		if err := insertMenu(menuSeeds, "0"); err != nil {
+		if err := insertMenu(filterMenus(menuSeeds, reg.Enabled), "0"); err != nil {
 			return err
 		}
 
@@ -464,12 +539,16 @@ func seed(db *gorm.DB, log *zap.Logger) error {
 				return err
 			}
 		}
-		if err := tx.Create(&model.RoleMenu{RoleID: "r_user", MenuID: "m_dashboard"}).Error; err != nil {
-			return err
+		if reg.On("dashboard") {
+			if err := tx.Create(&model.RoleMenu{RoleID: "r_user", MenuID: "m_dashboard"}).Error; err != nil {
+				return err
+			}
 		}
 		// 收件箱是全员能力，普通角色也应有入口（管理动作另行按权限点控制）。
-		if err := tx.Create(&model.RoleMenu{RoleID: "r_user", MenuID: "m_message"}).Error; err != nil {
-			return err
+		if reg.On("message") {
+			if err := tx.Create(&model.RoleMenu{RoleID: "r_user", MenuID: "m_message"}).Error; err != nil {
+				return err
+			}
 		}
 
 		adminPwd, err := authn.HashPassword("Admin@123456")
@@ -524,6 +603,9 @@ func seed(db *gorm.DB, log *zap.Logger) error {
 		}
 
 		for _, j := range jobSeeds {
+			if j.Module != "" && !reg.On(j.Module) {
+				continue
+			}
 			job := model.Job{Name: j.Name, Cron: j.Cron, Handler: j.Handler,
 				Params: j.Params, Remark: j.Remark, Status: model.StatusEnabled}
 			job.CreatedAt, job.UpdatedAt = now, now
@@ -546,8 +628,13 @@ func seed(db *gorm.DB, log *zap.Logger) error {
 	if err != nil {
 		return err
 	}
-	if err := syncBuiltinLevels(db, log); err != nil {
-		return err
+	if reg.On("membership") {
+		if err := syncBuiltinLevels(db, log); err != nil {
+			return err
+		}
+	}
+	if !reg.On("news") {
+		return nil
 	}
 	return syncBuiltinCategories(db, log)
 }

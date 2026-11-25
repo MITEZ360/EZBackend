@@ -25,6 +25,9 @@ import (
 	"github.com/keel-framework/keel/internal/modules/apikey"
 	"github.com/keel-framework/keel/internal/modules/audit"
 	"github.com/keel-framework/keel/internal/modules/auth"
+	"github.com/keel-framework/keel/internal/modules/cacheadmin"
+	"github.com/keel-framework/keel/internal/modules/cluster"
+	"github.com/keel-framework/keel/internal/modules/configcenter"
 	"github.com/keel-framework/keel/internal/modules/dashboard"
 	"github.com/keel-framework/keel/internal/modules/dept"
 	"github.com/keel-framework/keel/internal/modules/file"
@@ -36,6 +39,7 @@ import (
 	"github.com/keel-framework/keel/internal/modules/monitor"
 	"github.com/keel-framework/keel/internal/modules/news"
 	"github.com/keel-framework/keel/internal/modules/role"
+	"github.com/keel-framework/keel/internal/modules/routemanage"
 	"github.com/keel-framework/keel/internal/modules/system"
 	"github.com/keel-framework/keel/internal/modules/user"
 	"github.com/keel-framework/keel/internal/platform/authn"
@@ -88,7 +92,12 @@ type Deps struct {
 	File        *file.Handler
 	Dashboard   *dashboard.Handler
 	Monitor     *monitor.Handler
+	Route       *routemanage.Handler
+	CacheAdmin  *cacheadmin.Handler
 	Maintenance *maintenance.Handler
+	// ConfigCenter 运行时配置中心；Cluster 多节点协同。
+	ConfigCenter *configcenter.Handler
+	Cluster      *cluster.Handler
 }
 
 // New 创建 HTTP 引擎。
@@ -164,15 +173,14 @@ func New(d Deps) *gin.Engine {
 	}
 
 	// ---- 公开接口：按 IP 限流，避免登录爆破把服务打满 ----
+	// 使用动态版本：管理端调整限流阈值后无需重启即可生效。
 	v1 := e.Group("/api/v1")
-	publicLimit := d.Cfg.RateLimit
-	publicLimit.ByUser = false
-	public := v1.Group("", middleware.RateLimit(publicLimit, limiter, d.Cfg.Server.TrustProxy))
+	public := v1.Group("", middleware.RateLimitDynamic(limiter, d.Cfg.Server.TrustProxy, false))
 	d.publicRoutes(public)
 
 	// ---- 登录后接口：认证之后按用户维度限流 ----
 	authed := v1.Group("", authMW,
-		middleware.RateLimit(d.Cfg.RateLimit, limiter, d.Cfg.Server.TrustProxy),
+		middleware.RateLimitDynamic(limiter, d.Cfg.Server.TrustProxy, true),
 		middleware.Audit(d.AuditSvc, d.Events))
 	d.authRoutes(authed)
 	if d.on("dashboard") {
@@ -223,8 +231,20 @@ func New(d Deps) *gin.Engine {
 	if d.on("monitor") {
 		d.monitorRoutes(authed)
 	}
+	if d.on("routemanage") && d.Route != nil {
+		d.routeManageRoutes(authed)
+	}
+	if d.on("cacheadmin") && d.CacheAdmin != nil {
+		d.cacheAdminRoutes(authed)
+	}
 	if d.on("maintenance") && d.Maintenance != nil {
 		d.maintenanceRoutes(authed)
+	}
+	if d.on("configcenter") && d.ConfigCenter != nil {
+		d.configCenterRoutes(authed)
+	}
+	if d.on("cluster") && d.Cluster != nil {
+		d.clusterRoutes(authed)
 	}
 
 	// ---- 开放接口：面向程序调用方，用 API 密钥认证，不经过用户会话 ----

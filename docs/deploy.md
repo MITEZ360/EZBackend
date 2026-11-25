@@ -35,11 +35,19 @@ cp keel configs/config.yaml .
 export KEEL_APP_ENV=prod
 export KEEL_JWT_SECRET="$(openssl rand -base64 48)"
 export KEEL_SECURITY_INTERNAL_TOKEN="$(openssl rand -hex 24)"
-export KEEL_SECURITY_CAPTCHA_ENABLED=true
 
 # 3. 前台试跑
 ./keel -config configs/config.yaml
 ```
+
+也可以从最小配置起步：`configs/config.min.yaml` 只包含监听端口、数据库、
+Redis、JWT 密钥与节点地址，其余参数（验证码、锁定策略、限流、上传限制、
+邮件、备份、集群心跳）在启动后到「运维中心 → 配置中心」设置。
+热生效项保存即生效，需重启项会明确提示，并可在「危险操作」页统一重启。
+
+多节点部署时所有节点共用一个数据库，并为每个节点配置 `cluster.advertise_addr`；
+节点通过共享库登记心跳并领取运维指令，「集群管理」页可以一次重启全部节点或
+下发配置重载。SQLite 不支持多实例写入，会自动退化为单机模式。
 
 systemd 单元：
 
