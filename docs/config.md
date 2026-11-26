@@ -273,6 +273,26 @@ storage:
 TENON_GATEWAY_ROUTES="/api/v1=tenon-core,/uploads=tenon-file"
 ```
 
+### 12.0 治理订阅（gov）
+
+数据面订阅治理控制面时才需要这一段；`enabled: false` 或 `control_url` 留空表示
+纯静态路由。
+
+| 键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `enabled` | `true` | 订阅开关；关闭后完全不访问控制面 |
+| `control_url` | 空 | 控制面地址，必须是 `http(s)://host[:port]`，写错启动即失败 |
+| `poll_interval` | `5s` | SSE 断连后的兜底轮询；要求 ≥ `100ms`（写裸数字会被当成纳秒） |
+| `snapshot_file` | `data/gov-snapshot.json` | 本地快照，控制面不可用时靠它启动 |
+| `service_name` | `tenon-gateway` | 数据面在服务目录里的名字（标识符，≤64） |
+| `self_service` | `tenon-core` | 控制面自身登记用的服务名（标识符，≤64） |
+| `announce` | `true` | 是否把自己注册为实例 |
+| `advertise_addr` | 空 | 对外声明的主机名；留空取主机名 |
+
+启动期还会校验 `micro.mode`（mono/gateway/service）、`server.mode`
+（debug/release/test）、`log.level` 与 `app.timezone`：这些值写错的后果都是
+"启动成功但行为不对"，因此统一在 `Config.Validate` 里 fail-fast。
+
 ---
 
 ## 12.1 modules（业务模块启停）
@@ -369,6 +389,7 @@ Go 里裁剪有两条独立路径，别混在一起：
 ```bash
 make dist-list                                    # 看有哪些模块、谁依赖谁；+ 为默认不装
 make dist-base                                    # Base：只要后台管理基础功能
+make dist-gov                                     # 治理面：Base + 注册发现/动态路由/配置中心
 make dist MODULES="user configcenter cluster"     # 组装并编译
 make dist MODULES="user news"                     # 带资讯中心的系统
 make dist MODULES=all                             # 全量（含默认不装的模块）
@@ -379,6 +400,12 @@ make dist-default                                 # 删掉定制清单，回到�
 产物为 `bin/tenon-base`，发行版名 `Base`（`internal/distribution/profile.go`
 里的 `const Name`）。它不含会员、资讯、充值、自助注册、开放密钥、集群协同，
 前端也以 `VITE_EDITION=base` 构建，可选模块页面不生成 chunk。
+
+`make dist-gov` 是另一个预置组合（`GOV_MODULES` / `GOV_NAME`），产物
+`bin/tenon-gov`，发行版名 `Gov`：Base 的后台能力 + `registry` `route` `configcenter`，
+去掉 `routemanage`，共 19 个模块。它是一台可独立部署的治理控制台，配套配置
+`configs/config.gov.yaml`（端口 9020、库 `data/tenon-gov.db`、`gov.self_service: tenon-gov`），
+详见 [governance.md](governance.md) §12.1。
 
 发行版名不只是一个标签：启动横幅、`-version` 输出都会带上它，便于在机器上
 区分同时部署的多个版本：

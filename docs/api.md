@@ -44,6 +44,7 @@
 | `40400` | 404 | 资源不存在 |
 | `40500` | 405 | 方法不允许 |
 | `40900` | 409 | 资源冲突（如用户名已存在） |
+| `41300` | 413 | 请求体超过 `server.max_body_size` |
 | `42900` | 429 | 触发限流 |
 | `50000` | 500 | 服务器内部错误 |
 | `50100` | 501 | 未实现 |
@@ -747,7 +748,87 @@ curl -s -X POST http://localhost:9000/api/v1/flow-instances \
 
 `flowKey` 是流程定义的业务键，`variables` 供条件跳过与表单回填使用。
 
-### 4.24 自动接口文档
+### 4.24 服务治理（服务目录 / 动态路由 / 配置中心）
+
+自研治理面，不依赖 Nacos/Consul。三个模块共用同一个全局版本号 `revision`：
+每次发布自增一次，数据面按这个号决定是否重新拉快照。设计与不变量见
+`docs/governance.md`。
+
+#### 服务目录（`registry` 模块）
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| GET | `/gov/services` | 服务列表（含实例数/在线数/版本数） | `registry:service:list` |
+| POST | `/gov/services` | 新建服务 | `registry:service:create` |
+| PUT | `/gov/services/:id` | 编辑服务与健康检查策略 | `registry:service:update` |
+| DELETE | `/gov/services/:id` | 删除服务（连同实例登记，物理删除） | `registry:service:delete` |
+| GET | `/gov/instances` | 实例列表，`service` / `status` 可过滤 | `registry:service:list` |
+| PUT | `/gov/instances/:id/status` | 摘流 / 恢复 / 下线（`online` `draining` `offline`） | `registry:instance:update` |
+| GET | `/gov/versions` | 在线实例的版本分布 | `registry:service:list` |
+| POST | `/gov/instances/register` | 实例注册（内部令牌，服务不存在自动建档） | — |
+| POST | `/gov/instances/heartbeat` | 心跳续约（内部令牌，顺便上报已应用版本） | — |
+| DELETE | `/gov/instances/:id` | 进程退出时注销（内部令牌） | — |
+
+注册与心跳走 `X-Internal-Token`，不用用户会话：
+
+```bash
+curl -X POST http://127.0.0.1:9000/api/v1/gov/instances/register \
+  -H 'X-Internal-Token: <security.internal_token>' -H 'Content-Type: application/json' \
+  -d '{"service":"order-svc","host":"10.0.0.7","port":8080,"version":"1.4.2","configVersion":7}'
+```
+
+`instanceId` 留空时服务端取 `host:port`；它是跨重启的稳定标识，数据面做失败
+摘除与灰度定位都靠它，不要随进程重启变化。
+
+#### 动态路由（`route` 模块）
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| GET | `/gov/routes` | 规则列表 | `route:rule:list` |
+| POST | `/gov/routes` | 新建规则（草稿） | `route:rule:create` |
+| PUT | `/gov/routes/:id` | 编辑规则（已发布的规则改后回到草稿） | `route:rule:update` |
+| DELETE | `/gov/routes/:id` | 删除规则（需重新发布才从数据面下线） | `route:rule:delete` |
+| POST | `/gov/routes/compile` | 只校验并返回编译后的匹配顺序 | `route:rule:list` |
+| POST | `/gov/routes/publish` | 发布；`targets` 非空即灰度 | `route:rule:publish` |
+| GET | `/gov/releases` | 发布历史（默认 `domain=route`） | `route:release:list` |
+| POST | `/gov/releases/:id/promote` | 灰度批次转全量 | `route:rule:publish` |
+| POST | `/gov/releases/:id/rollback` | 按旧内容生成新版本 | `route:release:rollback` |
+
+`status` 的含义是"是否包含在上一次发布里"：`draft` 未发布、`published` 已发布、
+`archived` 已下线。回滚不会复用旧版本号，而是产生一个更大的新版本——数据面只
+接受更新的版本，复用会让它拒绝应用。
+
+#### 配置中心（`configcenter` 模块）
+
+| 方法 | 路径 | 说明 | 权限点 |
+| --- | --- | --- | --- |
+| GET | `/gov/config/namespaces` | 命名空间列表 | `configcenter:config:list` |
+| POST | `/gov/config/namespaces` | 新建命名空间 | `configcenter:config:update` |
+| DELETE | `/gov/config/namespaces/:id` | 删除命名空间及其配置项 | `configcenter:config:update` |
+| GET | `/gov/config/items?namespace=` | 配置项（加密项回显掩码） | `configcenter:config:list` |
+| POST | `/gov/config/items` | 批量 upsert | `configcenter:config:update` |
+| DELETE | `/gov/config/items/:id` | 删除配置项 | `configcenter:config:update` |
+| POST | `/gov/config/publish` | 发布命名空间 | `configcenter:config:publish` |
+| GET | `/gov/config/releases?namespace=` | 发布历史 | `configcenter:config:list` |
+| POST | `/gov/config/releases/:id/rollback` | 回滚并回写配置项 | `configcenter:config:rollback` |
+
+加密项需要服务端配置 `TENON_MASTER_KEY`（AES-256-GCM，密钥经 SHA-256 派生）。
+未配置时明文配置照常工作，保存加密项会返回明确错误。回传 `******` 表示"保持原值"。
+
+#### 数据面内部接口（`/internal/gov`，`X-Internal-Token`）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/snapshot` | 拉取快照；带 `fp`（内容指纹）且内容未变时返回 304 |
+| GET | `/watch` | SSE 变更通知，只推 `{"globalRev":N}`，不推载荷 |
+| POST | `/ack` | 上报已应用版本（可选，数据面通常用心跳回报） |
+| POST | `/reload` | 触发数据面强制重拉全量 |
+
+网关形态（`micro.mode=gateway`）不连数据库，只订阅这几个接口；`gov.announce=true`
+时它会把自己登记为 `gov.service_name`（默认 `tenon-gateway`）的实例，并把已应用
+版本随心跳回报，因此服务目录里能直接看出哪个网关还没跟上。
+
+### 4.25 自动接口文档
 
 `docs.enabled` 未配置时，开发环境自动开启、生产环境自动关闭，路径由 `docs.path`
 指定（默认 `/docs`）。

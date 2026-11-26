@@ -278,6 +278,7 @@ SSR 只会把 Node 重新塞回运行时。
 | `service` | 全部基础设施，仅暴露 `micro.modules` 指定的模块 | 拆分热点模块独立扩容 |
 
 三者共用同一套中间件、错误模型与前端，业务代码零改动。详见 [microservices.md](microservices.md)。
+服务注册、实例健康、动态路由与配置中心的设计见 [governance.md](governance.md)。
 
 ---
 

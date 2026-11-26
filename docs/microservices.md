@@ -140,6 +140,9 @@ type Registry interface {
 
 然后在 `pkg/discovery.New` 里加一个分支即可，网关与客户端无需改动。
 
+> 这两类注册源是**兜底能力**，不是最终形态。服务注册、实例健康、动态路由与配置中心的完整方案见
+> [governance.md](governance.md)：注册表落 `gov_instance`，`static/dns` 只在控制面不可用时兜底。
+
 ---
 
 ## 6. 服务间调用

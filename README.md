@@ -171,6 +171,7 @@ make docker     # 构建镜像
 make compose    # MySQL + Redis + Tenon 一键编排
 make dist-list  # 列出可组装的模块与依赖（+ 表示默认发行版不含）
 make dist-base             # Base 发行版：只要后台管理基础功能，产物 bin/tenon-base
+make dist-gov              # 治理面发行版：Base + 注册发现/动态路由/配置中心，产物 bin/tenon-gov
 make dist MODULES="user configcenter cluster"  # 只编入这些模块
 make dist MODULES=all      # 全量：含默认不装的资讯、注册/短信、充值模块
 make dist-default          # 回到默认发行版
@@ -204,6 +205,46 @@ make help       # 查看全部目标
 ./bin/tenon-base -version                           # Tenon Base 1.0.0 (dev ...)
 ```
 
+### 治理面发行版
+
+`make dist-gov` 产出 `bin/tenon-gov`，是一台可以独立部署、独立运营的治理控制台：
+Base 的全部后台能力（登录、用户、角色、菜单、审计、任务、备份、文件）都在，
+再加上服务治理三个模块。
+
+| 范围 | 模块 |
+| --- | --- |
+| 后台基础 | 与 Base 相同，但**不含 `routemanage`**（静态路由清单，已被动态路由取代） |
+| 注册发现 | `registry` |
+| 动态路由 | `route` |
+| 配置中心 | `configcenter`（运行参数 + 业务配置发布/回滚） |
+
+共 19 个模块、166 条路由。相比 Base 多出 `registry` 与 `route`（10 + 10 条接口），
+少掉 `routemanage`。业务模块（资讯、会员、充值、自助注册、开放密钥、工作流、集群协同）
+一个都不进二进制，对应接口直接 404。
+
+它自带一套独立的库与端口，与被治理的业务系统互不影响：
+
+```bash
+export TENON_MASTER_KEY='<32 位以上随机串>'          # 不配则配置中心无法保存加密项
+./bin/tenon-gov -config configs/config.gov.yaml      # 端口 9020，库 data/tenon-gov.db
+./bin/tenon-gov -version                             # Tenon Gov 1.0.0 (dev ...)
+```
+
+启动后打开 `http://127.0.0.1:9020`，「服务治理」下有服务目录、动态路由、发布记录、
+配置中心四项。控制面会把自身登记为 `tenon-gov` 实例（`gov.self_service` 控制），
+所以空库启动也能立刻在服务目录里看到自己，而不是一个不存在的 `tenon-core`。
+
+数据面（网关 / 领域服务）按 `gov.control_url` 指向这台进程即可：
+
+```yaml
+gov:
+  enabled: true
+  control_url: "http://127.0.0.1:9020"
+  service_name: "tenon-gateway"
+```
+
+治理面本身是控制面，`gov.enabled` 保持 `false`——它不需要订阅自己。
+
 ---
 
 ## 7. 性能参考
@@ -229,6 +270,7 @@ make help       # 查看全部目标
 | [docs/config.md](docs/config.md) | 全量配置项、环境变量映射、热更新 |
 | [docs/api.md](docs/api.md) | 统一响应、错误码、分页/过滤/排序约定、接口清单 |
 | [docs/microservices.md](docs/microservices.md) | 三种形态、服务发现、网关、服务间调用 |
+| [docs/governance.md](docs/governance.md) | 服务治理面设计：注册发现、动态路由、配置中心、revision 与快照模型 |
 | [docs/deploy.md](docs/deploy.md) | 二进制/Docker/Compose/K8s 部署、可观测、备份、扩容 |
 | [docs/development.md](docs/development.md) | 新增业务模块的完整步骤、分支模型、提交规范、测试分层与踩坑记录 |
 | [docs/engineering-practices.md](docs/engineering-practices.md) | 外部项目调研结论、改进路线与验收标准（P0/P1 已落地，P2 待办） |
