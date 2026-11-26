@@ -2,6 +2,7 @@
 // 各页面分片由 partials/ 汇总，避免单文件过大。
 import cn from './partials/cn'
 import content from './partials/content'
+import gov from './partials/gov'
 import opsLogs from './partials/ops-logs'
 import opsMisc from './partials/ops-misc'
 import shell from './partials/shell'
@@ -176,6 +177,7 @@ const messages: Record<string, string> = Object.assign(
   base,
   cn,
   content,
+  gov,
   opsLogs,
   opsMisc,
   shell,

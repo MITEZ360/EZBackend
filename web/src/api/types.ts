@@ -621,7 +621,8 @@ export interface ClusterNode {
 }
 
 export interface ClusterNodesResult {
-  mode: 'cluster' | 'standalone' | 'disabled'
+  /** cluster.enabled 决定是否登记节点；不存在中间的单机降级态 */
+  mode: 'cluster' | 'disabled'
   nodeId: string
   nodes: ClusterNode[]
 }

@@ -25,8 +25,6 @@ const modeHint = computed(() => {
   switch (mode.value) {
     case 'cluster':
       return t('多节点部署：可选择单个节点，也可以一次重启全部在线节点')
-    case 'standalone':
-      return t('当前使用 SQLite，只能操作本节点；多节点需改用 MySQL 或 PostgreSQL')
     default:
       return t('集群协同已关闭，仅能使用原有的单节点重启接口')
   }

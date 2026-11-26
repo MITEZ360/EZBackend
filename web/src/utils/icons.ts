@@ -55,6 +55,8 @@ export const menuIcons: Record<string, Component> = {
   cache: Coin,
   cluster: Connection,
   flow: Share,
+  share: Share,
+  history: Clock,
   alert: Warning,
 }
 

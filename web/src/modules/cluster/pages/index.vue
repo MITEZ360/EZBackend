@@ -24,8 +24,6 @@ const modeLabel = computed(() => {
   switch (data.value?.mode) {
     case 'cluster':
       return t('集群模式')
-    case 'standalone':
-      return t('单机模式')
     default:
       return t('未启用')
   }
@@ -34,8 +32,6 @@ const modeHint = computed(() => {
   switch (data.value?.mode) {
     case 'cluster':
       return t('节点通过共享数据库协调，指令由各节点自行领取')
-    case 'standalone':
-      return t('当前使用 SQLite，只能管理本节点；多节点需改用 MySQL 或 PostgreSQL')
     default:
       return t('cluster.enabled=false，节点不会登记心跳')
   }
