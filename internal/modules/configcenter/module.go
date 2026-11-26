@@ -7,10 +7,12 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/MITEZ360/tenon/internal/govserver"
 	"github.com/MITEZ360/tenon/internal/middleware"
 	"github.com/MITEZ360/tenon/internal/model"
 	"github.com/MITEZ360/tenon/internal/platform/config"
 	"github.com/MITEZ360/tenon/internal/platform/modulekit"
+	"github.com/MITEZ360/tenon/pkg/gov"
 )
 
 func init() {
@@ -31,12 +33,22 @@ func init() {
 		Desc:  "运行时配置的管理端入口。关闭后本页消失，只能改配置文件或直接改数据库里的覆盖表",
 		// 覆盖表是模块开关自己的存储位置，必须无条件建表，因此 RuntimeConfig
 		// 不在 Models 里声明，而是由框架的底座表维护。
+		Models: []any{
+			&model.GovConfigNamespace{}, &model.GovConfigItem{}, &model.GovRelease{},
+		},
 		Menus: []modulekit.Menu{
 			modulekit.DirOps,
-			{ID: "m_ops_config", Parent: "m_ops", Name: "配置中心", Type: model.MenuPage, Path: "/ops/config",
+			{ID: "m_ops_config", Parent: "m_ops", Name: "运行参数", Type: model.MenuPage, Path: "/ops/config",
 				Icon: "sliders", Perm: "ops:config:view", Sort: 10},
 			{ID: "m_ops_config_update", Parent: "m_ops_config", Name: "保存配置", Type: model.MenuButton, Perm: "ops:config:update"},
 			{ID: "m_ops_config_reload", Parent: "m_ops_config", Name: "刷新配置", Type: model.MenuButton, Perm: "ops:config:reload"},
+
+			modulekit.DirGov,
+			{ID: "m_gov_config", Parent: "m_gov", Name: "配置中心", Type: model.MenuPage,
+				Path: "/gov/config", Icon: "sliders", Perm: "configcenter:config:list", Sort: 4},
+			{ID: "m_gov_config_update", Parent: "m_gov_config", Name: "编辑配置", Type: model.MenuButton, Perm: "configcenter:config:update"},
+			{ID: "m_gov_config_publish", Parent: "m_gov_config", Name: "发布配置", Type: model.MenuButton, Perm: "configcenter:config:publish"},
+			{ID: "m_gov_config_rollback", Parent: "m_gov_config", Name: "回滚配置", Type: model.MenuButton, Perm: "configcenter:config:rollback"},
 		},
 		Setup: setup,
 	})
@@ -56,6 +68,29 @@ func setup(c *modulekit.Context) error {
 		g.GET("/ops/config/items", middleware.RequirePerm("ops:config:view"), h.List)
 		g.PUT("/ops/config/items", middleware.RequirePerm("ops:config:update"), h.Save)
 		g.POST("/ops/config/reload", middleware.RequirePerm("ops:config:reload"), h.Reload)
+	})
+
+	// 业务配置中心：与运行参数分开，走发布/回滚流程。
+	govSrv, _ := modulekit.Need[*govserver.Server](c, "govserver")
+	store := NewConfigStore(c.DB, c.Log, govSrv)
+	c.Provide("configstore", store)
+	if gov.MasterKey() == "" {
+		// 没有主密钥不影响明文配置，但加密项会在保存时失败；提前说清楚，
+		// 免得运维在页面上点了"加密存储"才收到报错。
+		c.Log.Warn("未配置 TENON_MASTER_KEY，配置中心的加密项不可用",
+			zap.String("hint", "导出 TENON_MASTER_KEY=<随机长字符串> 后重启"))
+	}
+	sh := NewStoreHandler(store)
+	c.Authed(func(g *gin.RouterGroup) {
+		g.GET("/gov/config/namespaces", middleware.RequirePerm("configcenter:config:list"), sh.Namespaces)
+		g.POST("/gov/config/namespaces", middleware.RequirePerm("configcenter:config:update"), sh.CreateNamespace)
+		g.DELETE("/gov/config/namespaces/:id", middleware.RequirePerm("configcenter:config:update"), sh.DeleteNamespace)
+		g.GET("/gov/config/items", middleware.RequirePerm("configcenter:config:list"), sh.Items)
+		g.POST("/gov/config/items", middleware.RequirePerm("configcenter:config:update"), sh.SaveItems)
+		g.DELETE("/gov/config/items/:id", middleware.RequirePerm("configcenter:config:update"), sh.DeleteItem)
+		g.POST("/gov/config/publish", middleware.RequirePerm("configcenter:config:publish"), sh.Publish)
+		g.GET("/gov/config/releases", middleware.RequirePerm("configcenter:config:list"), sh.Releases)
+		g.POST("/gov/config/releases/:id/rollback", middleware.RequirePerm("configcenter:config:rollback"), sh.Rollback)
 	})
 	return nil
 }

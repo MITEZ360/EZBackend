@@ -1,0 +1,270 @@
+# ============================================================================
+# Tenon 治理面 - 独立运营版配置
+# 对应构建：make dist-gov（产物 bin/tenon-gov，发行版名 Gov）
+#
+# 它是可以单独部署的一台治理控制台：登录鉴权、用户角色、菜单、审计、任务、
+# 备份等后台能力齐全，外加服务注册发现、动态路由、配置中心三个治理模块。
+# 不含任何业务模块（资讯、会员、充值、工作流），被裁掉的模块连代码都不在
+# 二进制里，因此不存在"接口还在但没启用"的中间状态。
+#
+# 启动：TENON_MASTER_KEY=<32位以上随机串> ./bin/tenon-gov -config configs/config.gov.yaml
+# 控制台：http://127.0.0.1:9020
+# ============================================================================
+app:
+  name: Tenon 治理面
+  env: dev                 # dev / test / prod
+  version: 1.0.0
+  # IANA 时区名，影响 GORM 时间戳、定时任务、备份文件名等所有时间语义
+  timezone: Asia/Shanghai
+
+# 语言协商：客户端可用 X-Locale 或 Accept-Language 指定，未指定时用 default_locale
+# 支持 zh-CN / en；未收录译文的文案自动降级为中文原文
+i18n:
+  default_locale: zh-CN
+
+server:
+  host: 0.0.0.0
+  port: 9020
+  mode: release            # debug / release
+  read_timeout: 30s
+  write_timeout: 60s
+  idle_timeout: 120s
+  shutdown_timeout: 15s
+  max_body_size: 33554432  # 32MB
+  trust_proxy: false       # 仅在确认请求来自可信网关时开启，否则 X-Forwarded-For 可被伪造
+  web_dir: web
+
+log:
+  level: info              # debug / info / warn / error
+  format: json             # json（便于采集）/ console
+  dir: logs
+  filename: tenon-gov.log
+  max_size_mb: 64
+  max_age_days: 14
+  max_backups: 30
+  compress: true
+  console: true
+  caller: true
+
+db:
+  # driver 留空时按 dsn 自动推断：sqlite / mysql / postgres
+  driver: ""
+  # 治理面自带一套独立库：服务目录、路由规则、配置项与发布历史都在这里，
+  # 与被治理的业务系统分库保存，治理面自身故障不会污染业务数据。
+  dsn: data/tenon-gov.db
+  # MySQL 示例（driver 可省略，DSN 含 @tcp( 即识别为 mysql）：
+  # dsn: tenon:Tenon@123456@tcp(127.0.0.1:3306)/tenon?charset=utf8mb4
+  # PostgreSQL 示例（driver 可省略，DSN 以 postgres:// 或含 host= 即识别）：
+  # dsn: host=127.0.0.1 user=tenon password=Tenon@123456 dbname=tenon port=5432 sslmode=disable TimeZone=Asia/Shanghai
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: 1h
+  conn_max_idle_time: 10m
+  slow_threshold: 200ms
+  log_level: warn
+  auto_migrate: true
+  seed: true               # 首次启动写入内置数据
+
+redis:
+  # 留空使用进程内 LRU 缓存；填写地址即自动启用 Redis（多实例部署必须）
+  addr: ""
+  # enabled: false         # 可选，显式关闭；不写则按 addr 是否为空自动判断
+  # optional: true         # 可选，Redis 连不上时降级为进程内缓存（默认 false 直接失败）
+  password: ""
+  db: 0
+  pool_size: 32
+  prefix: tenon
+  dial_timeout: 3s
+  read_timeout: 3s
+  local_size: 100000
+
+jwt:
+  secret: "请务必在生产环境替换为至少32位的随机字符串-tenon-default-secret"
+  issuer: tenon
+  access_ttl: 2h
+  refresh_ttl: 168h
+
+security:
+  captcha_enabled: false   # 生产建议开启
+  max_login_fail: 5
+  lock_duration: 15m
+  password_min_len: 8
+  password_strength: 2     # 1 长度 / 2 字母+数字 / 3 四类字符
+  data_encrypt_key: ""     # 为空则复用 jwt.secret，用于加密 TOTP 密钥与敏感配置
+  session_single: false    # 是否只允许单处登录
+  internal_token: "tenon-internal-token-change-me"
+
+storage:
+  # auto：配置了 s3.bucket 与 endpoint 就用对象存储，否则本地磁盘
+  type: auto
+  local_dir: data/uploads
+  base_url: /uploads
+  max_size: 20971520       # 20MB
+  allow_ext: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".pdf", ".doc", ".docx",
+              ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".md", ".zip", ".rar", ".7z",
+              ".mp4", ".mp3"]
+  # 对象存储示例（MinIO / 阿里云 OSS / AWS S3 / 腾讯云 COS）
+  s3:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    access_key: ""
+    secret_key: ""
+    use_ssl: true
+    public_url: ""         # 留空时按 endpoint/bucket 拼接
+
+mail:
+  # host 留空即关闭；填写 SMTP 地址自动启用
+  host: ""
+  # enabled: false         # 可选，显式关闭
+  port: 587
+  username: ""
+  password: ""
+  from: noreply@example.com
+  tls: true
+
+cors:
+  allow_origins: ["*"]
+  allow_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+  allow_headers: ["Origin", "Content-Type", "Authorization", "X-Requested-With", "X-Trace-Id"]
+  expose_headers: ["X-Trace-Id", "Content-Disposition"]
+  allow_credentials: false
+  max_age: 86400
+
+rate_limit:
+  enabled: true
+  rps: 200
+  burst: 400
+  by_user: true
+
+metrics:
+  enabled: true
+  path: /metrics
+  token: ""
+
+runtime:
+  # 多实例无状态校验：auto 仅告警 / strict 拒绝启动 / off 不检查
+  stateless: auto
+  # 计划运行的实例数，>1 时 auto 策略会检查本地缓存、本地磁盘、SQLite
+  instances: 1
+  instance_id: ""          # 留空自动生成，用于日志与任务归属
+
+# ---------------------------------------------------------------- 模块启停
+modules:
+  # 留空 = 全部启用。列出后即为白名单，启用项会自动补齐依赖，未知模块名启动即失败。
+  # 常驻模块（auth / config / dict / notice）不可关闭。
+  #
+  # 也可以在管理端「运维中心 → 配置中心 → 业务模块」勾选，值存进覆盖表并优先生效；
+  # 该项只能在启动时装配，所以保存后需要重启才生效。想回到本文件的设置，
+  # 在管理端点「恢复配置文件值」删掉覆盖行即可。
+  #
+  # 关闭一个模块会同时生效于：API 路由、侧边栏菜单（置为停用）、专属数据表、
+  # 定时任务、后台循环。已建的表与数据不删除，重新启用后原样恢复，管理员
+  # 改过的菜单名称与排序也不会丢。
+  #
+  # 本发行版编译进去的模块就这些，留空即全部启用：
+  #   dashboard user role dept message audit monitor job file maintenance
+  #   cacheadmin configcenter registry route
+  # 想在部署时进一步收窄（例如只留治理三件套、关掉工作台与消息），
+  # 在这里列白名单即可；被关掉的模块其 API、菜单、任务同时停用，表与数据保留。
+  #
+  # 示例：只留治理能力，关掉工作台/消息/任务/文件
+  # enabled: [user, role, dept, audit, monitor, maintenance, cacheadmin,
+  #           configcenter, registry, route]
+  enabled: []
+
+micro:
+  mode: mono               # mono / gateway / service
+  modules: []              # service 模式下启用的模块，空表示全部
+  timeout: 5s
+  retries: 2
+  registry:
+    type: static
+    endpoints: []
+    dns_suffix: ""
+    interval: 30s
+  routes: []
+  breaker:
+    enabled: true
+    max_failed: 10
+    interval: 30
+    timeout: 15
+
+# ---------------------------------------------------------------- 服务治理
+gov:
+  # 数据面订阅开关。本进程是控制面本身，不需要订阅自己，因此关闭；
+  # 网关 / 领域服务形态才把它打开并指向本控制面地址。
+  enabled: false
+  # 控制面自身登记到服务目录时用的服务名。独立部署时与内核区分开，
+  # 否则运维会在服务列表里看到两个都叫 tenon-core 的条目。
+  self_service: tenon-gov
+  # 对外声明的 host，留空取主机名。跨机部署建议显式填内网 IP 或域名。
+  advertise_addr: ""
+
+# ---------------------------------------------------------------- 数据库结构变更
+migration:
+  # versioned（默认）：按版本号执行迁移，支持回滚与数据回填，版本表 tenon_schema_migrations
+  # auto：沿用 GORM AutoMigrate（只增不减，适合本地快速迭代）
+  # off：启动时不动表结构，由 CI / DBA 执行 `tenon migrate up`
+  mode: versioned
+  table_name: tenon_schema_migrations
+
+# ---------------------------------------------------------------- 数据库备份与恢复
+backup:
+  enabled: true          # 定时任务 db.backup 是否真正执行备份
+  dir: data/backups      # 备份产物目录
+  retain: 7              # 兜底：保留最近 N 份（GFS 四档全为 0 时生效）
+  # GFS 分档保留（推荐）：按小时/天/周/月的槽位各留 N 份，断档时不会误删唯一备份。
+  # 任一项 >0 即启用分档；无论哪档都永不删除最新一份。
+  retain_hourly: 24
+  retain_daily: 14
+  retain_weekly: 8
+  retain_monthly: 12
+  compress: true         # gzip 压缩（备份为 tar 容器，含数据库快照与 files/ 文件资产）
+  # 在线恢复默认关闭：恢复会覆盖当前数据，MySQL/PostgreSQL 需显式开启；
+  # SQLite 必须停机后用 `tenon restore <文件>` 替换数据文件。
+  allow_restore: false
+  mysql_dump: mysqldump
+  mysql_restore: mysql
+  pg_dump: pg_dump
+  pg_restore: psql
+
+# ---------------------------------------------------------------- 第三方登录（配置化）
+oauth:
+  # enabled=true 且至少有一个完整 provider 时，登录页才会出现第三方登录按钮
+  enabled: false
+  # 部署在网关 / 域名后面时必填，如 https://console.example.com；留空按请求 Host 推断
+  callback_base: ""
+  frontend_path: /oauth/callback
+  state_ttl: 10m
+  providers: []
+  # 新增渠道只需在下面加一段，代码无需改动。凭据建议用环境变量注入，避免落盘：
+  #   TENON_OAUTH_GITHUB_CLIENT_ID / TENON_OAUTH_GITHUB_CLIENT_SECRET
+  # providers:
+  #   - name: github
+  #     label: GitHub 登录
+  #     icon: ""                # 可选，按钮图标 URL
+  #     enabled: true
+  #     client_id: ""
+  #     client_secret: ""
+  #     auth_url: https://github.com/login/oauth/authorize
+  #     token_url: https://github.com/login/oauth/access_token
+  #     user_info_url: https://api.github.com/user
+  #     email_url: https://api.github.com/user/emails
+  #     scopes: [read:user, user:email]
+  #     field_map:             # 用户信息字段 -> 系统字段，支持点路径与逗号分隔的候选
+  #       id: id
+  #       username: login
+  #       nickname: name
+  #       avatar: avatar_url
+  #     link_existing: true    # 允许按已验证邮箱关联已有本地账号
+  #     match_by: email        # email / username
+  #     auto_register: false   # 匹配不到时自动注册（随机密码 + default_roles）
+  #     default_roles: []      # 自动注册时分配的角色编码
+  #     auth_style: auto       # auto / in_header / in_params
+
+# ---------------------------------------------------------------- 自动接口文档
+docs:
+  # 不配置时：dev 自动开启、prod 自动关闭；显式 true/false 可覆盖
+  # enabled: true
+  path: /docs             # Swagger UI 与 swagger.json 的挂载前缀

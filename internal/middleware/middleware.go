@@ -15,6 +15,7 @@ import (
 
 	"github.com/MITEZ360/tenon/internal/platform/cache"
 	"github.com/MITEZ360/tenon/internal/platform/config"
+	"github.com/MITEZ360/tenon/pkg/errs"
 	"github.com/MITEZ360/tenon/pkg/response"
 	"github.com/MITEZ360/tenon/pkg/utils"
 )
@@ -210,6 +211,14 @@ func InternalOnly(token string) gin.HandlerFunc {
 func BodyLimit(max int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if max > 0 {
+			// 先看声明的长度：能直接判定超限就立刻 413，不必等 JSON 解码到
+			// 一半才失败。解码中途超限时标准库只会给出 "unexpected EOF"，
+			// 与"JSON 没写完整"无法区分，最终被报成 400。
+			if c.Request.ContentLength > max {
+				response.Fail(c, errs.PayloadTooLarge("请求体超过大小限制"))
+				c.Abort()
+				return
+			}
 			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, max)
 		}
 		c.Next()

@@ -116,3 +116,26 @@ func Is(err error, code int) bool {
 	}
 	return false
 }
+
+// CodePayloadTooLarge 请求体超过服务端限制。
+//
+// 与 CodeBadRequest 分开：这类请求无论怎么改 JSON 结构都不会成功，
+// 前端应当提示"内容过大"而不是"格式错误"。
+const CodePayloadTooLarge = 41300
+
+// PayloadTooLarge 请求体超限。
+func PayloadTooLarge(msg string) *Error {
+	return New(http.StatusRequestEntityTooLarge, CodePayloadTooLarge, msg)
+}
+
+// BindError 把参数绑定错误映射成对外错误。
+//
+// http.MaxBytesReader 触发时返回的是 *http.MaxBytesError，若统一按
+// "请求参数格式错误"处理，调用方会以为是自己 JSON 写错了，反复微调也没用。
+func BindError(err error) *Error {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		return PayloadTooLarge("请求体超过大小限制").WithCause(err)
+	}
+	return Validation("请求参数格式错误").WithCause(err)
+}

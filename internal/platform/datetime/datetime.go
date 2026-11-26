@@ -13,6 +13,10 @@ import (
 
 // Configure 按 IANA 时区名设置进程的 time.Local。
 // 空字符串表示沿用系统默认，不做改动。
+//
+// 只在值真的不同时才写：time.Local 是进程级全局变量，运行时改写与并发调用
+// time.Now() 本身就是竞争（标准库只保证启动期一次性赋值的用法）。同一进程里
+// 装配多个 App、或测试里反复装配时，第二次起都是空操作，不会再去碰全局状态。
 func Configure(name string) error {
 	if name == "" {
 		return nil
@@ -20,6 +24,9 @@ func Configure(name string) error {
 	loc, err := time.LoadLocation(name)
 	if err != nil {
 		return fmt.Errorf("无效的时区 %q: %w", name, err)
+	}
+	if time.Local.String() == loc.String() {
+		return nil
 	}
 	time.Local = loc
 	return nil

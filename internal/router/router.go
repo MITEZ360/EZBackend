@@ -23,6 +23,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/MITEZ360/tenon/internal/apidocs"
+	"github.com/MITEZ360/tenon/internal/govserver"
 	"github.com/MITEZ360/tenon/internal/micro"
 	"github.com/MITEZ360/tenon/internal/middleware"
 	"github.com/MITEZ360/tenon/internal/platform/authn"
@@ -50,6 +51,10 @@ type Deps struct {
 	Authz   *authz.Loader
 	// Gateway 非空时按网关模式装配：仅保留健康检查、指标、静态资源与转发规则。
 	Gateway *micro.Gateway
+	// Gov 是治理面控制服务；mono/service 形态由框架注入，gateway 形态为 nil。
+	Gov *govserver.Server
+	// GovReload 是数据面的手动刷新回调；gateway 形态由快照客户端提供。
+	GovReload func() error
 	// Modules 是模块装配上下文：路由闭包、会话校验器与审计器都由模块提供。
 	Modules *modulekit.Context
 }
@@ -99,6 +104,27 @@ func New(d Deps) *gin.Engine {
 	d.healthRoutes(e)
 	if d.Cfg.Metrics.Enabled {
 		e.GET(d.Cfg.Metrics.Path, middleware.MetricsHandler(d.Cfg.Metrics.Token))
+	}
+
+	// ---- 治理面内部接口 ----
+	// 控制面（mono/service）提供快照与订阅；数据面（gateway）提供手动刷新入口。
+	// 这组接口不经过用户会话，用内置令牌鉴权，也不进 swagger。
+	if d.Gov != nil {
+		d.Gov.Register(e.Group("/internal/gov"))
+	}
+	if d.GovReload != nil {
+		e.POST("/internal/gov/reload", func(c *gin.Context) {
+			if token := d.Cfg.Security.InternalToken; token != "" && c.GetHeader("X-Internal-Token") != token {
+				response.Fail(c, errs.Unauthorized("内部令牌无效"))
+				return
+			}
+			if err := d.GovReload(); err != nil {
+				c.Error(err)
+				response.Fail(c, errs.Internal("刷新治理配置失败").WithCause(err))
+				return
+			}
+			response.OK(c, gin.H{"reloaded": true})
+		})
 	}
 
 	// ---- 静态资源与单页应用 ----

@@ -102,13 +102,13 @@ func (s *Service) NodeID() string { return s.nodeID }
 // Enabled 判断当前部署是否支持多节点协同。
 func (s *Service) Enabled() bool { return s.cfg.Cluster.Enabled }
 
-// Mode 返回 cluster / standalone，供页面提示。
+// Mode 返回 cluster / disabled，供页面提示。
+//
+// 集群协同只取决于 cluster.enabled：数据库是否支持多写入由配置决定，
+// 不再隐式按驱动类型降级，避免"配了多节点却不知道自己跑在单机"。
 func (s *Service) Mode() string {
 	if !s.cfg.Cluster.Enabled {
 		return "disabled"
-	}
-	if !s.cfg.UseCluster() {
-		return "standalone"
 	}
 	return "cluster"
 }
@@ -118,9 +118,6 @@ func (s *Service) Start(ctx context.Context) {
 	if !s.cfg.Cluster.Enabled {
 		s.log.Info("集群协同已关闭（cluster.enabled=false）")
 		return
-	}
-	if !s.cfg.UseCluster() {
-		s.log.Info("当前使用 SQLite，集群协同退化为单机模式")
 	}
 	if !s.db.Migrator().HasTable(&model.ClusterNode{}) {
 		// migration.mode=off 且未执行建表时，后台循环只会反复报错。

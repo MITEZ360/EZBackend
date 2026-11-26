@@ -27,7 +27,7 @@ func TestLocalPutOpenDelete(t *testing.T) {
 	m := newTestStore(t)
 	ctx := context.Background()
 
-	url, err := m.Put(ctx, "2026/11/03/abc.txt", strings.NewReader("hello tenon"), 10, "text/plain")
+	url, err := m.Put(ctx, "2026/11/03/abc.txt", strings.NewReader("hello tenon"), int64(len("hello tenon")), "text/plain")
 	if err != nil {
 		t.Fatalf("写入失败: %v", err)
 	}

@@ -26,6 +26,13 @@ type env struct {
 
 func newEnv(t testing.TB) *env {
 	t.Helper()
+	return newEnvWithServer(t, "")
+}
+
+// newEnvWithServer 允许在 server 段追加配置行（已带缩进的 YAML），
+// 用于验证 body 上限这类必须改启动参数的行为。
+func newEnvWithServer(t testing.TB, extraServerLines string) *env {
+	t.Helper()
 	dir := t.TempDir()
 	cfg := fmt.Sprintf(`
 app:
@@ -35,6 +42,7 @@ server:
   host: 127.0.0.1
   port: 18080
   mode: release
+%s
 log:
   level: warn
   format: json
@@ -62,7 +70,7 @@ storage:
   max_size: 1048576
 micro:
   mode: mono
-`, dir, filepath.Join(dir, "tenon.db"), dir)
+`, extraServerLines, dir, filepath.Join(dir, "tenon.db"), dir)
 
 	cfgPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {

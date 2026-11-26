@@ -66,7 +66,7 @@ func (h *Handler) Save(c *gin.Context) {
 		Items []Update `json:"items"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		response.Fail(c, errs.Validation("请求参数格式错误"))
+		response.Fail(c, errs.BindError(err))
 		return
 	}
 	operator := c.GetString("username")

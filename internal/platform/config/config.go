@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -30,6 +31,8 @@ type Config struct {
 	RateLimit RateLimit `mapstructure:"rate_limit"`
 	Metrics   Metrics   `mapstructure:"metrics"`
 	Micro     Micro     `mapstructure:"micro"`
+	// Gov 是治理面数据面（网关/服务实例）的订阅参数。
+	Gov       Gov       `mapstructure:"gov"`
 	Modules   Modules   `mapstructure:"modules"`
 	Runtime   Runtime   `mapstructure:"runtime"`
 	News      News      `mapstructure:"news"`
@@ -60,8 +63,11 @@ type Cluster struct {
 }
 
 // UseCluster 判断是否启用节点登记与指令下发。
+//
+// 不再按 SQLite 禁用：单实例也需要在集群页看到自己，否则"节点列表为空"
+// 会被误判成故障。单机下没有可下发的其它节点，指令下发自然退化为一条记录。
 func (c *Config) UseCluster() bool {
-	return c.Cluster.Enabled && !strings.EqualFold(strings.TrimSpace(c.DB.ResolveDriver()), "sqlite")
+	return c.Cluster.Enabled
 }
 
 // I18n 语言协商参数。
@@ -510,6 +516,36 @@ type Micro struct {
 	Breaker  Breaker       `mapstructure:"breaker"`
 }
 
+// Gov 是治理面数据面的订阅参数。
+//
+// 控制面地址与网关形态的 micro.registry 相互独立：micro.registry 是启动兜底，
+// gov.control_url 才是常态配置源。
+type Gov struct {
+	// ControlURL 控制面地址，如 http://127.0.0.1:9000。
+	ControlURL string `mapstructure:"control_url"`
+	// PollInterval 版本轮询间隔；SSE 不可用时它决定最大收敛延迟。
+	PollInterval time.Duration `mapstructure:"poll_interval"`
+	// SnapshotFile 本地快照路径，控制面不可用时靠它启动。
+	SnapshotFile string `mapstructure:"snapshot_file"`
+	// Enabled 关闭后数据面完全不访问控制面，只用配置文件路由。
+	Enabled bool `mapstructure:"enabled"`
+	// ServiceName 数据面注册到服务目录时用的服务名。
+	//
+	// 不能直接取 app.name：那是给人看的显示名（可含中文与空格），
+	// 而服务名是路由与实例上报告的主键。
+	ServiceName string `mapstructure:"service_name"`
+	// AdvertiseAddr 数据面对外声明的 host，留空时取主机名。
+	AdvertiseAddr string `mapstructure:"advertise_addr"`
+	// Announce 是否把自己登记为服务实例；关闭后只在控制面被动观测不到它。
+	Announce bool `mapstructure:"announce"`
+	// SelfService 控制面把自身登记为哪个服务的实例。
+	//
+	// 与 ServiceName 的区别：ServiceName 是数据面（gateway）上报的身份，
+	// SelfService 是控制面进程自己出现在服务目录里的身份。独立部署治理面时
+	// 它应设成该发行版的服务名，否则所有形态都会显示成同一个 tenon-core。
+	SelfService string `mapstructure:"self_service"`
+}
+
 // Registry 服务发现参数。
 type Registry struct {
 	Type      string        `mapstructure:"type"` // static / dns
@@ -836,6 +872,31 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("migration.mode 非法: %s（可选 versioned / auto / off）", c.Migration.Mode)
 	}
+	// 形态写错（gatway / gatewayy）不会报错，只会静默按单体运行：
+	// 少了一层网关，路由转发全部落到主服务上，排查时很难想到是拼写问题。
+	switch mode := strings.ToLower(strings.TrimSpace(c.Micro.Mode)); mode {
+	case "", "mono", "gateway", "service":
+	default:
+		return fmt.Errorf("micro.mode 非法: %s（可选 mono / gateway / service）", c.Micro.Mode)
+	}
+	// gin.SetMode 收到未知值会 panic，与其让人看堆栈，不如在这里说清楚。
+	switch mode := strings.ToLower(strings.TrimSpace(c.Server.Mode)); mode {
+	case "", "debug", "release", "test":
+	default:
+		return fmt.Errorf("server.mode 非法: %s（可选 debug / release / test）", c.Server.Mode)
+	}
+	if err := validateLogLevel(c.Log.Level); err != nil {
+		return err
+	}
+	// 时区错会让日志、cron、备份全部偏掉，启动时就该拒绝。
+	if tz := strings.TrimSpace(c.App.Timezone); tz != "" {
+		if _, err := time.LoadLocation(tz); err != nil {
+			return fmt.Errorf("app.timezone 非法: %s", tz)
+		}
+	}
+	if err := validateGov(c.Gov); err != nil {
+		return err
+	}
 	if c.Backup.Retain <= 0 {
 		// 未配置时补默认值，兼容直接构造 Config 的调用方（如单测）
 		c.Backup.Retain = 7
@@ -951,6 +1012,69 @@ func (c *Config) Validate() error {
 		c.Cluster.OfflineAfter = c.Cluster.Heartbeat * 3
 	}
 	return nil
+}
+
+// validateLogLevel 校验日志级别。级别名写错时 logger 会静默沿用 info，
+// 生产上就会出现"我明明设了 warn 却还在刷 info"。
+func validateLogLevel(level string) error {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "", "debug", "info", "warn", "warning", "error", "dpanic", "panic", "fatal":
+		return nil
+	default:
+		return fmt.Errorf("log.level 非法: %s（可选 debug / info / warn / error）", level)
+	}
+}
+
+// validateGov 校验治理面订阅参数。
+//
+// 这些值错了不会崩，只会让数据面永远连不上控制面、每 5 秒打一条 debug 日志，
+// 表现为"路由改了不生效但服务一切正常"——必须挡在启动前。
+func validateGov(g Gov) error {
+	if u := strings.TrimSpace(g.ControlURL); u != "" {
+		parsed, err := url.Parse(u)
+		if err != nil || parsed.Host == "" ||
+			(parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return fmt.Errorf("gov.control_url 非法: %s（需为 http(s)://host[:port]）", u)
+		}
+	}
+	switch {
+	case g.PollInterval < 0:
+		return fmt.Errorf("gov.poll_interval 不能为负数")
+	case g.PollInterval > 0 && g.PollInterval < 100*time.Millisecond:
+		// 顺带挡住"写成裸数字"的配置：poll_interval: 5 会被解析成 5ns。
+		return fmt.Errorf("gov.poll_interval 过小: %v（最小 100ms，写裸数字会被当成纳秒）", g.PollInterval)
+	}
+	for label, name := range map[string]string{
+		"gov.service_name": g.ServiceName,
+		"gov.self_service": g.SelfService,
+	} {
+		if name = strings.TrimSpace(name); name == "" {
+			continue
+		}
+		if len(name) > 64 || !isIdentifier(name) {
+			return fmt.Errorf("%s 非法: %s（只能包含字母、数字、中划线、下划线与点，且不超过 64 字符）", label, name)
+		}
+	}
+	return nil
+}
+
+// isIdentifier 判断是否为标识符形态：字母或数字开头，其余为字母数字与 . _ -。
+func isIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '.' || r == '_' || r == '-':
+			if i == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // IsProd 判断是否生产环境。
@@ -1076,6 +1200,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("docs.path", "/docs")
 
 	v.SetDefault("cluster.enabled", true)
+	v.SetDefault("gov.enabled", true)
+	v.SetDefault("gov.poll_interval", 5*time.Second)
+	v.SetDefault("gov.snapshot_file", "data/gov-snapshot.json")
+	v.SetDefault("gov.service_name", "tenon-gateway")
+	v.SetDefault("gov.self_service", "tenon-core")
+	v.SetDefault("gov.announce", true)
 	v.SetDefault("cluster.heartbeat", "15s")
 	v.SetDefault("cluster.offline_after", "45s")
 

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,7 @@ import (
 	"github.com/MITEZ360/tenon/internal/platform/config"
 	"github.com/MITEZ360/tenon/pkg/discovery"
 	"github.com/MITEZ360/tenon/pkg/errs"
+	"github.com/MITEZ360/tenon/pkg/gov"
 	"github.com/MITEZ360/tenon/pkg/response"
 )
 
@@ -30,30 +32,43 @@ type Route struct {
 	Strip   bool
 }
 
+// routeTable 是数据面的路由视图，整体原子替换。
+type routeTable struct {
+	matcher  *gov.CompiledRoutes
+	services map[string][]gov.Instance
+}
+
 // Gateway 是 API 网关。
+//
+// 路由有两个来源：治理面下发的快照（优先）与启动时读取的配置文件（兜底）。
+// 两者都编译成同一套执行结构，请求路径上没有分支判断。
 type Gateway struct {
 	routes    []*Route // 按前缀长度倒序，保证最长匹配
 	registry  discovery.Registry
 	balancer  *discovery.Balancer
+	govBal    *gov.Balancer
 	transport http.RoundTripper
 	log       *zap.Logger
 	retries   int
 	timeout   time.Duration
 	token     string
 	caller    string
+	table     atomic.Pointer[routeTable]
 }
 
 // New 根据配置构建网关。
+//
+// 允许 micro.routes 为空：纯治理模式（gov.enabled）下路由全部来自控制面快照，
+// 静态规则只是冷启动兜底。是否"两样都没有"属于配置错误，由装配层判断——
+// 网关本身不该知道治理订阅的存在。
 func New(cfg config.Micro, registry discovery.Registry, internalToken, caller string, log *zap.Logger) (*Gateway, error) {
-	if len(cfg.Routes) == 0 {
-		return nil, errors.New("网关模式必须配置 micro.routes 转发规则")
-	}
 	if log == nil {
 		log = zap.NewNop()
 	}
 	g := &Gateway{
 		registry: registry,
 		balancer: discovery.NewBalancer(5 * time.Second),
+		govBal:   gov.NewBalancer(5 * time.Second),
 		log:      log,
 		retries:  cfg.Retries,
 		timeout:  cfg.Timeout,
@@ -110,14 +125,169 @@ func (g *Gateway) Routes() []string {
 }
 
 // Handler 返回网关主处理函数。
+//
+// 一旦治理快照就位，路由**只**以快照为准：没命中就是 404，不再回落到
+// 配置文件。否则配置文件里的 /api/v1 兜底会把所有路径都接走，动态路由
+// 永远无法下线一条规则，灰度也会被兜底绕过。
+// 快照未就绪时（首次启动、控制面不可用且无本地快照）才用配置文件路由。
 func (g *Gateway) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 判据是"快照是否就位"，不是"快照里有没有规则"：
+		// 空路由表意味着运维把规则全部下线，必须以 404 表达出来，
+		// 而不是悄悄回落到配置文件继续转发。
+		if tbl := g.table.Load(); tbl != nil {
+			rt := tbl.matcher.Match(c.Request.Method, c.Request.URL.Path, c.Request.Header, c.Request.URL.Query())
+			if rt == nil {
+				response.Fail(c, errs.NotFound("接口不存在"))
+				return
+			}
+			g.serveGov(c, tbl, rt)
+			return
+		}
 		rt := g.match(c.Request.URL.Path)
 		if rt == nil {
 			response.Fail(c, errs.NotFound("接口不存在"))
 			return
 		}
 		g.serve(c, rt)
+	}
+}
+
+// ApplySnapshot 用新快照原子替换路由视图。
+//
+// 解码与编译在切换前完成：任何一步失败都保留旧视图，网关继续按旧规则转发。
+func (g *Gateway) ApplySnapshot(snap *gov.Snapshot) error {
+	if snap == nil {
+		return nil
+	}
+	rp, ok := snap.Routes()
+	if !ok {
+		return errors.New("快照缺少路由分区")
+	}
+	reg, _ := snap.Registry()
+	next := &routeTable{
+		matcher:  gov.Compile(rp.Routes),
+		services: make(map[string][]gov.Instance, len(reg.Services)),
+	}
+	for name, svc := range reg.Services {
+		next.services[name] = svc.Instances
+	}
+	g.table.Store(next)
+	g.log.Info("治理快照已应用到网关",
+		zap.Int64("globalRev", snap.GlobalRev),
+		zap.Int("routes", next.matcher.Len()),
+		zap.Int("services", len(next.services)))
+	return nil
+}
+
+// serveGov 按快照规则转发；重试只在响应未写出时进行。
+func (g *Gateway) serveGov(c *gin.Context, tbl *routeTable, rt *gov.Route) {
+	list := tbl.services[rt.Service]
+	if rt.Version != "" {
+		filtered := make([]gov.Instance, 0, len(list))
+		for _, ins := range list {
+			if ins.Version == rt.Version {
+				filtered = append(filtered, ins)
+			}
+		}
+		list = filtered
+	}
+	if len(list) == 0 {
+		response.Fail(c, errs.Unavailable("服务 "+rt.Service+" 无可用实例"))
+		return
+	}
+
+	if rt.TimeoutMs > 0 {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), time.Duration(rt.TimeoutMs)*time.Millisecond)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+	}
+
+	retries := rt.Retries
+	if retries < 0 {
+		retries = 0
+	}
+	if retries > 3 {
+		retries = 3
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= retries; attempt++ {
+		ins, ok := g.govBal.Pick(rt.Service, list, "")
+		if !ok {
+			response.Fail(c, errs.Unavailable("服务 "+rt.Service+" 无可用实例"))
+			return
+		}
+		failed := false
+		proxy := g.newProxyFor(rt, ins.Addr)
+		proxy.ErrorHandler = func(_ http.ResponseWriter, _ *http.Request, e error) {
+			failed = true
+			lastErr = e
+		}
+		proxy.ServeHTTP(c.Writer, c.Request)
+		if !failed {
+			g.govBal.Success(ins.ID)
+			return
+		}
+		g.govBal.Fail(ins.ID)
+		if c.Writer.Written() {
+			break
+		}
+		if attempt < retries {
+			g.log.Warn("网关转发失败，准备重试",
+				zap.String("route", rt.Name), zap.String("target", ins.Addr),
+				zap.Int("attempt", attempt+1), zap.Error(lastErr))
+		}
+	}
+	msg := "网关转发失败"
+	if lastErr != nil {
+		msg += ": " + lastErr.Error()
+	}
+	response.Fail(c, errs.Unavailable(msg))
+}
+
+func (g *Gateway) newProxyFor(rt *gov.Route, addr string) *httputil.ReverseProxy {
+	u, err := url.Parse("http://" + stripScheme(addr))
+	if err != nil {
+		u = &url.URL{Scheme: "http"}
+	}
+	return &httputil.ReverseProxy{
+		Transport: g.transport,
+		Director: func(req *http.Request) {
+			req.URL.Scheme = u.Scheme
+			req.URL.Host = u.Host
+			if rt.Strip {
+				p := strings.TrimPrefix(req.URL.Path, rt.Prefix)
+				if p == "" {
+					p = "/"
+				}
+				if !strings.HasPrefix(p, "/") {
+					p = "/" + p
+				}
+				req.URL.Path = p
+				req.URL.RawPath = ""
+			}
+			g.inject(req)
+		},
+	}
+}
+
+func (g *Gateway) inject(req *http.Request) {
+	if _, ok := req.Header["User-Agent"]; !ok {
+		req.Header.Set("User-Agent", "tenon-gateway")
+	}
+	if g.token != "" {
+		req.Header.Set("X-Internal-Token", g.token)
+	}
+	if g.caller != "" {
+		req.Header.Set("X-Caller-Service", g.caller)
+	}
+	if req.Header.Get("X-Forwarded-Proto") == "" {
+		proto := "http"
+		if req.TLS != nil {
+			proto = "https"
+		}
+		req.Header.Set("X-Forwarded-Proto", proto)
 	}
 }
 

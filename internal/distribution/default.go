@@ -46,6 +46,10 @@ import (
 	// 集群协同，依赖配置中心。
 	_ "github.com/MITEZ360/tenon/internal/modules/cluster"
 
+	// 服务治理：服务目录、实例健康与动态路由。路由依赖 registry。
+	_ "github.com/MITEZ360/tenon/internal/modules/registry"
+	_ "github.com/MITEZ360/tenon/internal/modules/route"
+
 	// 通用业务能力：与具体行业无关，默认保留。
 	_ "github.com/MITEZ360/tenon/internal/modules/apikey"
 	_ "github.com/MITEZ360/tenon/internal/modules/flow"

@@ -66,8 +66,10 @@ func TestRouteMatchLongestPrefix(t *testing.T) {
 }
 
 func TestGatewayConfigValidation(t *testing.T) {
-	if _, err := New(config.Micro{}, nil, "", "", nil); err == nil {
-		t.Fatal("无转发规则应报错")
+	// 空规则集是合法的：纯治理模式下路由全部来自控制面快照。
+	// "两样都没有"由装配层拒绝，见 bootstrap.newGateway。
+	if _, err := New(config.Micro{}, nil, "", "", nil); err != nil {
+		t.Fatalf("空静态规则应被允许: %v", err)
 	}
 	if _, err := New(config.Micro{Routes: []config.ProxyRoute{{Prefix: "/a", Service: "x"}, {Prefix: "/a", Service: "y"}}}, nil, "", "", nil); err == nil {
 		t.Fatal("重复前缀应报错")

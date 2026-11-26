@@ -2,8 +2,10 @@ package migrate
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/MITEZ360/tenon/internal/model"
 )
@@ -241,6 +243,136 @@ func (r *Runner) definitions() []definition {
 				return db.WithContext(ctx).Model(&model.Job{}).
 					Where("handler = ? AND cron = ?", "flow.timeout", "*/5 * * * *").
 					Update("cron", "0 */5 * * * *").Error
+			},
+		},
+		{
+			Version: 12,
+			Name:    "governance_tables",
+			// 只在治理模块装进发行版时建表：baseline 已经 AutoMigrate 过一遍
+			// 启用模块的 Models，若 gov_service 仍不存在，说明这套发行版没有
+			// registry/route/configcenter，凭空建表只会留下空壳。
+			Up: func(ctx context.Context, db *gorm.DB) error {
+				// 只有当前发行版确实装了治理模块时才建表。
+				// 不能拿 gov_service 是否存在做判断：老库升级时 baseline 不会重跑，
+				// 那一刻任何 gov_* 表都还不存在，判断会永远为 false。
+				installed := false
+				for _, m := range models {
+					switch m.(type) {
+					case *model.GovRevision, *model.GovService, *model.GovRoute, *model.GovConfigNamespace:
+						installed = true
+					}
+				}
+				if !installed {
+					return nil
+				}
+				return db.WithContext(ctx).AutoMigrate(
+					&model.GovRevision{}, &model.GovService{}, &model.GovInstance{},
+					&model.GovRoute{}, &model.GovRelease{},
+					&model.GovConfigNamespace{}, &model.GovConfigItem{},
+					&model.GovCommand{}, &model.GovCommandTarget{},
+				)
+			},
+			Down: func(ctx context.Context, db *gorm.DB) error {
+				return db.WithContext(ctx).Migrator().DropTable(
+					&model.GovCommandTarget{}, &model.GovCommand{}, &model.GovConfigItem{},
+					&model.GovConfigNamespace{}, &model.GovRelease{}, &model.GovRoute{},
+					&model.GovInstance{}, &model.GovService{}, &model.GovRevision{},
+				)
+			},
+		},
+		{
+			Version: 13,
+			Name:    "governance_seed",
+			// ① 保证全局版本分配器有且只有一行；
+			// ② 把老集群节点搬进统一实例表（service_id=tenon-core），
+			//    搬迁只做一次，后来的心跳由 registry/cluster 各自维护。
+			Up: func(ctx context.Context, db *gorm.DB) error {
+				if !db.WithContext(ctx).Migrator().HasTable(&model.GovRevision{}) {
+					return nil
+				}
+				db = db.WithContext(ctx)
+				var count int64
+				if err := db.Model(&model.GovRevision{}).Where("id = 1").Count(&count).Error; err != nil {
+					return err
+				}
+				if count == 0 {
+					if err := db.Create(&model.GovRevision{ID: 1, GlobalRev: 0}).Error; err != nil {
+						return err
+					}
+				}
+				if !db.Migrator().HasTable(&model.ClusterNode{}) {
+					return nil
+				}
+				var nodes []model.ClusterNode
+				if err := db.Find(&nodes).Error; err != nil {
+					return err
+				}
+				now := time.Now()
+				for _, n := range nodes {
+					if n.Host == "" || n.Port == 0 {
+						continue
+					}
+					inst := model.GovInstance{
+						ServiceID:     "tenon-core",
+						InstanceID:    n.ID,
+						Name:          n.Name,
+						Host:          n.Host,
+						Port:          n.Port,
+						Version:       n.Version,
+						Weight:        100,
+						Status:        n.Status,
+						ConfigVersion: n.ConfigVersion,
+						LastSeen:      n.LastSeen,
+						StartedAt:     n.StartedAt,
+					}
+					if inst.LastSeen.IsZero() {
+						inst.LastSeen = now
+					}
+					// 唯一索引 (service_id, instance_id)：重复搬迁直接跳过。
+					if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&inst).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Down: func(ctx context.Context, db *gorm.DB) error {
+				// 未装配治理模块时 v12 不会建表，撤销也要先确认表存在，
+				// 否则"回滚到某个版本再升回来"的测试/运维动作会直接失败。
+				if !db.WithContext(ctx).Migrator().HasTable(&model.GovRevision{}) {
+					return nil
+				}
+				return db.WithContext(ctx).Where("id = 1").Delete(&model.GovRevision{}).Error
+			},
+		},
+		{
+			Version: 14,
+			Name:    "governance_revision",
+			// v12 早期的判断依赖 gov_service 是否已存在，老库升级那一刻它必然不存在，
+			// 版本分配器就被漏掉了。这里幂等补建治理面的公共表（含指令记录），
+			// 不碰任何业务数据。
+			Up: func(ctx context.Context, db *gorm.DB) error {
+				if !db.WithContext(ctx).Migrator().HasTable(&model.GovService{}) {
+					return nil
+				}
+				if err := db.WithContext(ctx).AutoMigrate(
+					&model.GovRevision{}, &model.GovCommand{}, &model.GovCommandTarget{},
+				); err != nil {
+					return err
+				}
+				var count int64
+				if err := db.WithContext(ctx).Model(&model.GovRevision{}).Where("id = 1").Count(&count).Error; err != nil {
+					return err
+				}
+				if count == 0 {
+					return db.WithContext(ctx).Create(&model.GovRevision{ID: 1, GlobalRev: 0}).Error
+				}
+				return nil
+			},
+			Down: func(ctx context.Context, db *gorm.DB) error {
+				if !db.WithContext(ctx).Migrator().HasTable(&model.GovCommand{}) {
+					return nil
+				}
+				return db.WithContext(ctx).Migrator().DropTable(&model.GovCommandTarget{}, &model.GovCommand{})
 			},
 		},
 	}

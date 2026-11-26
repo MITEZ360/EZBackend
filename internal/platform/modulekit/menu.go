@@ -13,6 +13,7 @@ type MenuNode struct {
 // 裁掉后目录不会出现，侧边栏不留空分组。
 var (
 	DirSystem = Menu{ID: "m_system", Name: "系统管理", Type: "dir", Path: "/system", Icon: "settings", Sort: 10}
+	DirGov    = Menu{ID: "m_gov", Name: "服务治理", Type: "dir", Path: "/gov", Icon: "share", Sort: 15}
 	DirOps    = Menu{ID: "m_ops", Name: "运维中心", Type: "dir", Path: "/ops", Icon: "server", Sort: 20}
 )
 

@@ -112,13 +112,40 @@ func fieldName(fe validator.FieldError, loc string) string {
 	return name
 }
 
+// validatorWrapper 把带翻译的校验器接进 Gin。
+//
+// 必须复刻 Gin 默认校验器的"剥指针 / 展开切片"逻辑：gin 把绑定结果
+// 原样交给 ValidateStruct，若只对结构体调用 validator.Struct，
+// 任何以数组为请求体的接口都会拿到 InvalidValidationError 而整体失败。
 type validatorWrapper struct{ v *validator.Validate }
 
 func (w *validatorWrapper) ValidateStruct(obj any) error {
 	if obj == nil {
 		return nil
 	}
-	return w.v.Struct(obj)
+	value := reflect.ValueOf(obj)
+	switch value.Kind() {
+	case reflect.Ptr:
+		if value.IsNil() {
+			return nil
+		}
+		return w.ValidateStruct(value.Elem().Interface())
+	case reflect.Struct:
+		return w.v.Struct(obj)
+	case reflect.Slice, reflect.Array:
+		errs := make(binding.SliceValidationError, 0, value.Len())
+		for i := 0; i < value.Len(); i++ {
+			if err := w.ValidateStruct(value.Index(i).Interface()); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if len(errs) == 0 {
+			return nil
+		}
+		return errs
+	default:
+		return nil
+	}
 }
 
 func (w *validatorWrapper) Engine() any { return w.v }

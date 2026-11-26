@@ -99,7 +99,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		Keys []string `json:"keys"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		response.Fail(c, errs.Validation("请求参数格式错误"))
+		response.Fail(c, errs.BindError(err))
 		return
 	}
 	n, err := h.svc.Delete(c.Request.Context(), body.Keys)
@@ -136,7 +136,7 @@ func (h *Handler) Flush(c *gin.Context) {
 		Confirm   bool   `json:"confirm"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		response.Fail(c, errs.Validation("请求参数格式错误"))
+		response.Fail(c, errs.BindError(err))
 		return
 	}
 	if !body.Confirm {

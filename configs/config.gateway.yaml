@@ -23,3 +23,17 @@ micro:
   routes:
     - prefix: /api/v1
       service: tenon-core
+# 治理面控制地址。留空则只用上面的静态路由；
+# 填了之后网关会订阅快照，动态路由与实例列表以控制面为准。
+gov:
+  enabled: true
+  control_url: "http://127.0.0.1:9000"
+  poll_interval: 5s
+  snapshot_file: "data/gov-snapshot-gateway.json"
+  # 注册到服务目录时用的服务名。不用 app.name：那是显示名，可以带中文。
+  service_name: "tenon-gateway"
+  # 是否把自己登记为实例并周期续约。自带网关多机部署时必须开，
+  # 否则控制面只看得到内核服务，看不到网关的版本收敛情况。
+  announce: true
+  # 对外声明的 host，留空取主机名。跨机部署或需要健康检查时改成真实可达地址。
+  advertise_addr: ""

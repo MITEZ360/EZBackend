@@ -20,6 +20,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/MITEZ360/tenon/internal/govserver"
 	"github.com/MITEZ360/tenon/internal/micro"
 	"github.com/MITEZ360/tenon/internal/middleware"
 	"github.com/MITEZ360/tenon/internal/platform/authn"
@@ -37,6 +38,7 @@ import (
 	"github.com/MITEZ360/tenon/internal/router"
 	"github.com/MITEZ360/tenon/pkg/discovery"
 	"github.com/MITEZ360/tenon/pkg/event"
+	"github.com/MITEZ360/tenon/pkg/gov"
 )
 
 // App 是应用容器。
@@ -62,6 +64,13 @@ type App struct {
 
 	server    *http.Server
 	restartCh chan struct{}
+	// bg 是后台订阅（治理快照轮询 / SSE）的生命周期上下文。
+	// 不给它一个可取消的 ctx，Shutdown 就只能看着 goroutine 和长连接留在那儿：
+	// 进程退出时看不出来，但测试里控制面的 httptest 会因为挂着的 SSE 关不掉。
+	bg     context.Context
+	stopBg context.CancelFunc
+	// closers 是装配期创建、停机期必须显式释放的资源（服务发现等）。
+	closers []func()
 }
 
 // RequestRestart 由管理端运维接口调用，触发进程原地重启。
@@ -255,6 +264,11 @@ func New(cfgPath string) (*App, error) {
 		},
 	})
 
+	// 治理面控制服务先于模块创建：模块在 Setup 里通过 Lookup("govserver")
+	// 取到它，数据变更后调用 Bump 广播新版本。
+	govSrv := govserver.New(db, cfg.Security.InternalToken, lg)
+	mods.Provide("govserver", govSrv)
+
 	// 依次装配模块。顺序由依赖图决定：被依赖的模块先 Setup 并 Provide 服务。
 	for _, spec := range registry.specs {
 		if spec.Setup == nil {
@@ -275,7 +289,7 @@ func New(cfgPath string) (*App, error) {
 
 	engine = router.New(router.Deps{
 		Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
-		JWT: jwtMgr, Authz: authzLoader, Modules: mods,
+		JWT: jwtMgr, Authz: authzLoader, Modules: mods, Gov: govSrv,
 	})
 
 	app = &App{Cfg: cfg, Log: lg, DB: db, Cache: ch, Limiter: limiter, Storage: store,
@@ -322,11 +336,45 @@ func resolveInstanceID(cfg *config.Config) string {
 	return fmt.Sprintf("%s-%d", host, os.Getpid())
 }
 
+// announceOf 组装数据面自注册参数。
+//
+// 实例标识取 host:port 而不是 hostname-pid：注册信息要跨重启保持稳定，
+// 否则每次重启都会在服务目录里留下一条再也不会心跳的僵尸实例。
+func announceOf(cfg *config.Config) *gov.AnnounceConfig {
+	if !cfg.Gov.Announce || cfg.Server.Port <= 0 {
+		return nil
+	}
+	host := strings.TrimSpace(cfg.Gov.AdvertiseAddr)
+	if host == "" {
+		if h, err := os.Hostname(); err == nil && h != "" {
+			host = h
+		} else {
+			host = "127.0.0.1"
+		}
+	}
+	service := strings.TrimSpace(cfg.Gov.ServiceName)
+	if service == "" {
+		service = "tenon-gateway"
+	}
+	return &gov.AnnounceConfig{
+		Service:    service,
+		InstanceID: fmt.Sprintf("%s:%d", host, cfg.Server.Port),
+		Host:       host,
+		Port:       cfg.Server.Port,
+		Version:    cfg.App.Version,
+		Zone:       cfg.Cluster.Name,
+		Labels:     map[string]string{"mode": cfg.Micro.Mode},
+	}
+}
+
 // Run 启动服务并阻塞，收到信号后优雅停机。
 func (a *App) Run() error {
 	// 后台循环（调度器、集群心跳）由模块在装配时注册，模块被裁掉时不存在。
-	for _, err := range a.mods.Start(context.Background()) {
-		a.Log.Warn("模块启动回调失败", zap.Error(err))
+	// 网关形态没有模块上下文，启动与停机回调都直接跳过。
+	if a.mods != nil {
+		for _, err := range a.mods.Start(context.Background()) {
+			a.Log.Warn("模块启动回调失败", zap.Error(err))
+		}
 	}
 
 	errCh := make(chan error, 1)
@@ -387,7 +435,12 @@ func (a *App) Run() error {
 // Shutdown 依次停止模块后台循环、HTTP、事件总线与存储连接。
 func (a *App) Shutdown(ctx context.Context) error {
 	var err error
-	// 先停后台循环，避免重启过程中又领到新指令。
+	// 先掐断后台订阅：治理快照的轮询与 SSE 长连接都挂在它上面，
+	// 不取消就会留下一条永远不关的 HTTP 连接（以及一个不断拉取的 goroutine）。
+	if a.stopBg != nil {
+		a.stopBg()
+	}
+	// 再停后台循环，避免重启过程中又领到新指令。
 	if a.mods != nil {
 		a.mods.Stop()
 	}
@@ -407,6 +460,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 		if sqlDB, e := a.DB.DB(); e == nil {
 			_ = sqlDB.Close()
 		}
+	}
+	for _, close := range a.closers {
+		close()
 	}
 	a.Log.Info("服务已退出")
 	_ = a.Log.Sync()
@@ -437,13 +493,56 @@ func newGateway(cfg *config.Config, lg *zap.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("初始化服务发现失败: %w", err)
 	}
+	// 网关至少要有一个路由来源：静态规则，或者治理面订阅。
+	// 两者都没有时启动即失败，而不是起一个全 404 的进程让人猜。
+	govSubscribed := cfg.Gov.Enabled && strings.TrimSpace(cfg.Gov.ControlURL) != ""
+	if len(cfg.Micro.Routes) == 0 && !govSubscribed {
+		_ = reg.Close()
+		return nil, errors.New("网关模式需要 micro.routes 静态规则或 gov 治理订阅，二者至少一个")
+	}
 	gw, err := micro.New(cfg.Micro, reg, cfg.Security.InternalToken, cfg.App.Name, lg)
 	if err != nil {
 		_ = reg.Close()
 		return nil, err
 	}
-	engine := router.New(router.Deps{Cfg: cfg, Log: lg, Gateway: gw})
-	app := &App{Cfg: cfg, Log: lg, Engine: engine, Gateway: gw, Started: time.Now()}
+	deps := router.Deps{Cfg: cfg, Log: lg, Gateway: gw}
+	bg, stopBg := context.WithCancel(context.Background())
+
+	// 数据面订阅控制面快照。控制面地址为空时保持纯静态路由，
+	// 这样只有 config.gateway.yaml 也能跑起来。
+	var govClient *gov.Client
+	if cfg.Gov.Enabled && strings.TrimSpace(cfg.Gov.ControlURL) != "" {
+		announce := announceOf(cfg)
+		govClient = gov.NewClient(gov.ClientConfig{
+			BaseURL:      cfg.Gov.ControlURL,
+			Token:        cfg.Security.InternalToken,
+			InstanceID:   resolveInstanceID(cfg),
+			Service:      cfg.Gov.ServiceName,
+			PollInterval: cfg.Gov.PollInterval,
+			SnapshotFile: cfg.Gov.SnapshotFile,
+			OnApply:      func(s *gov.Snapshot) { _ = gw.ApplySnapshot(s) },
+			Announce:     announce,
+			Logger:       lg,
+		})
+		govClient.Start(bg)
+		deps.GovReload = govClient.Reload
+		lg.Info("治理快照订阅已启动",
+			zap.String("control", cfg.Gov.ControlURL),
+			zap.Duration("poll", cfg.Gov.PollInterval),
+			zap.String("snapshot", cfg.Gov.SnapshotFile))
+		if announce != nil {
+			lg.Info("数据面自注册已启用",
+				zap.String("service", announce.Service), zap.String("instance", announce.InstanceID),
+				zap.String("addr", fmt.Sprintf("%s:%d", announce.Host, announce.Port)))
+		}
+	}
+
+	engine := router.New(deps)
+	app := &App{
+		Cfg: cfg, Log: lg, Engine: engine, Gateway: gw, Started: time.Now(),
+		bg: bg, stopBg: stopBg,
+		closers: []func(){func() { _ = reg.Close() }},
+	}
 	app.server = newServer(cfg, engine)
 
 	lg.Info("网关已装配",

@@ -22,6 +22,13 @@ PNPM       ?= pnpm
 BASE_NAME    := Base
 BASE_MODULES := dashboard user role dept message audit monitor job file maintenance cacheadmin routemanage configcenter
 
+# 治理面发行版：Base 的后台管理能力 + 服务治理三个模块（注册发现 / 动态路由 / 配置中心）。
+# 它是可独立运营的一台服务：Web 控制台、登录鉴权、审计、任务、备份全都在，
+# 但没有任何业务模块（资讯、会员、充值、工作流）。routemanage 不装——
+# 那是静态路由清单，与动态路由的 route 模块重复且语义更弱。
+GOV_NAME    := Gov
+GOV_MODULES := dashboard user role dept message audit monitor job file maintenance cacheadmin configcenter registry route
+
 # 交叉编译目标
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
@@ -176,6 +183,17 @@ dist-base: ## 组装 Base 发行版（仅后台管理基础功能），产物 bi
 	@echo "已生成 $(BASE_NAME) 发行版 $(BIN_DIR)/$(APP)-base（$$(du -h $(BIN_DIR)/$(APP)-base | cut -f1)）"
 	@# 前端产物目录是共用的：Base 的前端已随上面的 go build 打进二进制，
 	@# 这里再构建一次完整版，避免 web/dist 停留在 Base 状态、与 bin/tenon 不一致。
+	@$(MAKE) --no-print-directory web >/dev/null && echo "web/dist 已恢复为完整版前端"
+
+.PHONY: dist-gov
+dist-gov: ## 组装治理面发行版（Base + 注册发现 + 动态路由 + 配置中心），产物 bin/tenon-gov
+	@mkdir -p $(BIN_DIR)
+	go run ./cmd/distgen -modules "$(GOV_MODULES)" -name "$(GOV_NAME)"
+	@$(MAKE) --no-print-directory web MODULES="$(GOV_MODULES)" VITE_EDITION=gov
+	CGO_ENABLED=0 go build -tags profile -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP)-gov ./cmd/tenon
+	@echo "已生成 $(GOV_NAME) 发行版 $(BIN_DIR)/$(APP)-gov（$$(du -h $(BIN_DIR)/$(APP)-gov | cut -f1)）"
+	@# 前端产物目录是共用的：治理面的前端已随上面的 go build 打进二进制，
+	@# 这里再构建一次完整版，避免 web/dist 停留在裁剪状态、与 bin/tenon 不一致。
 	@$(MAKE) --no-print-directory web >/dev/null && echo "web/dist 已恢复为完整版前端"
 
 .PHONY: dist-default
